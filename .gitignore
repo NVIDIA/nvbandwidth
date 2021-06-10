@@ -1,0 +1,6 @@
+.vscode
+build
+*.o
+nvbandwidth
+.cache
+.idea

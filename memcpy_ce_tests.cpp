@@ -1,0 +1,463 @@
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <cuda.h>
+#include <iomanip>
+#include <algorithm>
+#include <iostream>
+
+#include "nvbw_os.h"
+#include "options.h"
+#include "stats.h"
+#include "mem_allocator.h"
+#include "mem_pattern.h"
+#include "memcpy_ce_tests.h"
+#include "spinKernel.h"
+
+const size_t WARMUP_COUNT = 32;
+const size_t START_COPY_MARKER_SIZE = 17;
+
+#ifdef max
+# undef max
+#endif
+
+#ifdef min
+# undef min
+#endif
+
+static void memcpyAsync(void* dst, void* src, unsigned long long size, unsigned long long* bandwidth, bool isPageable, unsigned long long loopCount = defaultLoopCount)
+{
+    CUstream stream;
+    CUevent startEvent;
+    CUevent endEvent;
+    volatile int *blockingVar = NULL;
+    void *markerDst = NULL, *markerSrc = NULL, *additionalMarkerLocation = NULL;
+
+    cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING); // ASSERT_DRV
+    cuEventCreate(&startEvent, CU_EVENT_DEFAULT); // ASSERT_DRV
+    cuEventCreate(&endEvent, CU_EVENT_DEFAULT); // ASSERT_DRV
+
+    // Pageable copies are (mostly) synchronous. Launching this kernel would deadlock the benchmark
+    // P2H2P copies heavily use GPFIFO, you can only launch a handful of iterations before it deadlocks.
+    if (!isPageable && !disableP2P) {
+        cuMemHostAlloc((void **)&blockingVar, sizeof(*blockingVar), CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
+        *blockingVar = 0;
+        launch_spin_kernel(blockingVar, stream, true); // ASSERT_DRV
+    }
+
+    if (enableCECopyStartMarker) {
+        unsigned int srcMemoryType;
+        cuPointerGetAttribute(&srcMemoryType, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (CUdeviceptr)src); // ASSERT_DRV
+
+        // If src is sysmem, then this is an H2D copy, so we need set the marker to be a D2H, and use device dst as source.
+        // H2D copies are always aligned and padded to 32B by the CE, so this is not possible to find the marker on the logic analyzer.
+        if (srcMemoryType == CU_MEMORYTYPE_HOST) {
+            cuMemHostAlloc((void **)&additionalMarkerLocation, START_COPY_MARKER_SIZE, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
+            
+            markerDst = additionalMarkerLocation;
+            markerSrc = dst;
+        }
+        else {
+            markerDst = dst;
+            markerSrc = src;
+        }
+    }
+
+    // Spend time on the GPU so we finish submitting everything before the benchmark starts
+    // Also events are tied to the last submission channel so we want to be sure it is copy and not compute
+    for (unsigned int n = 0; n < WARMUP_COUNT; n++) {
+        // As latency benchmarks do 1 byte copies, we have to ensure we're not doing 0 byte copies
+        cuMemcpyAsync((CUdeviceptr) dst, (CUdeviceptr) src, (size_t)((size + 7) / 8), stream); // ASSERT_DRV
+    }
+
+    if (enableCECopyStartMarker) {
+        cuMemcpyAsync((CUdeviceptr) markerDst, (CUdeviceptr) markerSrc, START_COPY_MARKER_SIZE, stream); // ASSERT_DRV
+    }
+
+    cuEventRecord(startEvent, stream); // ASSERT_DRV
+    for (unsigned int n = 0; n < loopCount; n++) {
+        cuMemcpyAsync((CUdeviceptr) dst, (CUdeviceptr) src, (size_t)size, stream); // ASSERT_DRV
+    }
+    cuEventRecord(endEvent, stream); // ASSERT_DRV
+
+    if (!isPageable && !disableP2P) {
+        *blockingVar = 1;
+    }
+
+    cuStreamSynchronize(stream); // ASSERT_DRV
+
+    float timeWithEvents = 0.0f;
+    cuEventElapsedTime(&timeWithEvents, startEvent, endEvent); // ASSERT_DRV
+    unsigned long long elapsedWithEventsInUs = (unsigned long long)(timeWithEvents * 1000.0f);
+    *bandwidth = (size * loopCount * 1000ull * 1000ull) / elapsedWithEventsInUs; // Bandwidth in Bytes per second
+
+    if (enableCECopyStartMarker) {
+        cuMemFreeHost(additionalMarkerLocation); // ASSERT_DRV
+    }
+
+    if (!isPageable && !disableP2P) {
+        cuMemFreeHost((void*)blockingVar); // ASSERT_DRV
+    }
+
+    cuCtxSynchronize(); // ASSERT_DRV
+}
+
+
+static void memcpyAsync_bidirectional(void* dst1, void* src1, CUcontext ctx1, void* dst2, void* src2, CUcontext ctx2, unsigned long long size, unsigned long long* bandwidth, unsigned long long loopCount = defaultLoopCount)
+{
+    volatile int *blockingVar = NULL;
+
+    int dev1, dev2;
+    bool wddmPacketScheduling = false;
+
+    CUstream stream_dir1;
+    CUevent startEvent_dir1;
+    CUevent endEvent_dir1;
+
+    CUstream stream_dir2;
+    CUevent startEvent_dir2;
+    CUevent endEvent_dir2;
+    
+    void *markerDst = NULL, *markerSrc = NULL, *additionalMarkerLocation = NULL;
+
+    cuCtxSetCurrent(ctx1); // ASSERT_DRV
+    cuCtxGetDevice(&dev1); // ASSERT_DRV
+    cuStreamCreate(&stream_dir1, CU_STREAM_NON_BLOCKING); // ASSERT_DRV
+    cuEventCreate(&startEvent_dir1, CU_EVENT_DEFAULT); // ASSERT_DRV
+    cuEventCreate(&endEvent_dir1, CU_EVENT_DEFAULT); // ASSERT_DRV
+
+    cuCtxSetCurrent(ctx2); // ASSERT_DRV
+    cuCtxGetDevice(&dev2); // ASSERT_DRV
+    cuStreamCreate(&stream_dir2, CU_STREAM_NON_BLOCKING); // ASSERT_DRV
+    cuEventCreate(&startEvent_dir2, CU_EVENT_DEFAULT); // ASSERT_DRV
+    cuEventCreate(&endEvent_dir2, CU_EVENT_DEFAULT); // ASSERT_DRV
+
+    // TODO : Internal or depended on internal: wddmPacketScheduling = is_wddm_packet_scheduling(dev1) || is_wddm_packet_scheduling(dev2);
+    
+    // P2H2P copies heavily use GPFIFO, you can only launch a handful of iterations before it deadlocks.
+    if (!disableP2P) {
+        cuMemHostAlloc((void **)&blockingVar, sizeof(*blockingVar), CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
+        *blockingVar = 0;
+        cuCtxSetCurrent(ctx1); // ASSERT_DRV
+        launch_spin_kernel(blockingVar, stream_dir1, true); // ASSERT_DRV
+        cuCtxSetCurrent(ctx2); // ASSERT_DRV
+        launch_spin_kernel(blockingVar, stream_dir2, true); // ASSERT_DRV
+    }
+
+    if (enableCECopyStartMarker) {
+        unsigned int srcMemoryType;
+        cuPointerGetAttribute(&srcMemoryType, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (CUdeviceptr)src1); // ASSERT_DRV
+
+        // If src is sysmem, then this is an H2D copy, so we need set the marker to be a D2H, and use device dst as source.
+        // H2D copies are always aligned and padded to 32B by the CE, so this is not possible to find the marker on the logic analyzer.
+        if (srcMemoryType == CU_MEMORYTYPE_HOST) {
+            cuMemHostAlloc((void **)&additionalMarkerLocation, START_COPY_MARKER_SIZE, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
+            
+            markerDst = additionalMarkerLocation;
+            markerSrc = dst1;
+        }
+        else {
+            markerDst = dst1;
+            markerSrc = src1;
+        }
+    }
+
+    // Spend time on the GPU so we finish submitting everything before the benchmark starts
+    // Also events are tied to the last submission channel so we want to be sure it is copy and not compute
+    for (unsigned int n = 0; n < WARMUP_COUNT; n++) {
+        // As latency benchmarks do 1 byte copies, we have to ensure we're not doing 0 byte copies
+        cuMemcpyAsync((CUdeviceptr) dst1, (CUdeviceptr) src1, (size_t)((size + 7) / 8), stream_dir1); // ASSERT_DRV
+        cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)((size + 7) / 8), stream_dir2); // ASSERT_DRV
+    }
+
+    if (enableCECopyStartMarker) {
+        cuMemcpyAsync((CUdeviceptr) markerDst, (CUdeviceptr) markerSrc, START_COPY_MARKER_SIZE, stream_dir1); // ASSERT_DRV
+    }
+
+    cuEventRecord(startEvent_dir1, stream_dir1); // ASSERT_DRV
+    cuStreamWaitEvent(stream_dir2, startEvent_dir1, 0); // ASSERT_DRV
+
+    for (unsigned int n = 0; n < loopCount; n++) {
+        cuMemcpyAsync((CUdeviceptr) dst1, (CUdeviceptr) src1, (size_t)size, stream_dir1); // ASSERT_DRV
+        cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)size, stream_dir2); // ASSERT_DRV
+    }
+
+    cuEventRecord(endEvent_dir1, stream_dir1); // ASSERT_DRV
+    
+    if (!disableP2P) {
+        *blockingVar = 1;
+    }
+
+    // At this point we know GPUs will eagerly consume the work and start it.
+    // The only exception is Windows WDDM, where the flush has to be enforced.
+    if (wddmPacketScheduling) {
+        cuStreamQuery(stream_dir1);
+        cuStreamQuery(stream_dir2);
+    }
+
+    // Now, we need to ensure there is always work in the stream2 pending, to ensure there always
+    // is intereference to the stream1.
+    unsigned int extraIters = loopCount > 1 ? (unsigned int)loopCount / 2 : 1; 
+    do {
+        // Enqueue extra work
+        for (unsigned int n = 0; n < extraIters; n++) {
+            cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)size, stream_dir2); // ASSERT_DRV
+        }
+
+        // Record the event in the middle of interfering flow, to ensure the next batch starts enqueuing
+        // before the previous one finishes.
+        cuEventRecord(endEvent_dir2, stream_dir2); // ASSERT_DRV
+
+        // Add more iterations to hide latency of scheduling more work in the next iteration of loop.
+        for (unsigned int n = 0; n < extraIters; n++) {
+            cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)size, stream_dir2); // ASSERT_DRV
+        }
+
+        // Wait until the flow in the interference stream2 is finished.
+        cuEventSynchronize(endEvent_dir2); // ASSERT_DRV
+    } while (cuStreamQuery(stream_dir1) == CUDA_ERROR_NOT_READY);
+
+    cuStreamSynchronize(stream_dir1); // ASSERT_DRV
+    cuStreamSynchronize(stream_dir2); // ASSERT_DRV
+
+    float timeWithEvents = 0.0f;
+    cuEventElapsedTime(&timeWithEvents, startEvent_dir1, endEvent_dir1); // ASSERT_DRV
+    double elapsedWithEventsInUs = ((double)timeWithEvents * 1000.0);
+
+    *bandwidth = (size * loopCount * 1000ull * 1000ull) / (unsigned long long)elapsedWithEventsInUs;
+
+    if (enableCECopyStartMarker) {
+        cuMemFreeHost(additionalMarkerLocation); // ASSERT_DRV
+    }
+
+    if (!disableP2P) {
+        cuMemFreeHost((void*)blockingVar); // ASSERT_DRV
+    }
+    
+    cuCtxSynchronize(); // ASSERT_DRV
+}
+
+static void memcpy_and_check(void* dst, void* src, unsigned long long size, unsigned long long* bandwidth, unsigned long long loopCount = defaultLoopCount)
+{
+    memset_pattern(src, size, 0xCAFEBABE);
+    memset_pattern(dst, size, 0xBAADF00D);
+
+    bool isPageable = !isMemoryOwnedByCUDA(dst) || !isMemoryOwnedByCUDA(src);
+    memcpyAsync(dst, src, size, bandwidth, isPageable, loopCount);
+
+    if (!skip_verif) {
+        memcmp_pattern(dst, size, 0xCAFEBABE);
+    }
+}
+
+static void memcpyAsync_and_check_bidirectional(void* dst1, void* src1, CUcontext ctx1, void* dst2, void* src2, CUcontext ctx2, unsigned long long size, unsigned long long* bandwidth, unsigned long long loopCount = defaultLoopCount)
+{
+    memset_pattern(src1, size, 0xCAFEBABE);
+    memset_pattern(dst1, size, 0xBAADF00D);
+    memset_pattern(src2, size, 0xFEEEFEEE);
+    memset_pattern(dst2, size, 0xFACEFEED);
+    memcpyAsync_bidirectional(dst1, src1, ctx1, dst2, src2, ctx2, size, bandwidth, loopCount);
+    if (!skip_verif) {
+        memcmp_pattern(dst1, size, 0xCAFEBABE);
+        memcmp_pattern(dst2, size, 0xFEEEFEEE);
+    }
+}
+
+static void find_best_memcpy(void* src, void* dst, unsigned long long* bandwidth, unsigned long long size, unsigned long long loopCount)
+{
+    unsigned long long bandwidth_current;
+    cudaStat bandwidthStat;
+
+    *bandwidth = 0;
+    for (unsigned int n = 0; n < averageLoopCount; n++)
+    {
+        memcpy_and_check(dst, src, size, &bandwidth_current, loopCount);
+        bandwidthStat((double)bandwidth_current);
+        std::cout << "\tSample " << n << ' ' << std::fixed << std::setprecision (2) << bandwidth_current * 1e-9 << " GB/s\n";
+    }
+    std::cout << "       bandwidth: " << std::fixed << std::setprecision (2) << STAT_MEAN(bandwidthStat) * 1e-9 << "(+/- " << STAT_ERROR(bandwidthStat) * 1e-9 << ") GB/s" << std::endl;
+    *bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
+}
+
+static void find_memcpy_time(void *src, void* dst, double *time_us, unsigned long long size, unsigned long long loopCount)
+{
+    unsigned long long bandwidth;
+
+    find_best_memcpy(src, dst, &bandwidth, size, loopCount);
+
+    *time_us = size * 1e6 / bandwidth;
+}
+
+static void find_best_memcpy_bidirectional(void* dst1, void* src1, CUcontext ctx1, void* dst2, void* src2, CUcontext ctx2, unsigned long long* bandwidth, unsigned long long size, unsigned long long loopCount)
+{
+    unsigned long long bandwidth_current;
+    cudaStat bandwidthStat;
+
+    *bandwidth = 0;
+    for (unsigned int n = 0; n < averageLoopCount; n++)
+    {
+        memcpyAsync_and_check_bidirectional(dst1, src1, ctx1, dst2, src2, ctx2, size, &bandwidth_current, loopCount);
+        bandwidthStat((double)bandwidth_current);
+        std::cout << "\tSample " << n << ' ' << std::fixed << std::setprecision (2) << bandwidth_current * 1e-9 << " GB/s\n";
+    }
+    std::cout << "       bandwidth: " << std::fixed << std::setprecision (2) << STAT_MEAN(bandwidthStat) * 1e-9 << "(+/- " << STAT_ERROR(bandwidthStat) * 1e-9 << ") GB/s" << std::endl;
+    *bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
+}
+
+size_t getFirstEnabledCPU() {
+    size_t firstEnabledCPU = 0;
+    size_t *procMask = (size_t *)calloc(1, SysProcessorMaskSize());
+    SysGetThreadAffinity(NULL, procMask);
+    for (size_t i = 0; i < SysProcessorMaskSize() * 8; ++i)
+    {
+        if (SysProcessorMaskQueryBit(procMask, i)) {
+            firstEnabledCPU = i;
+            break;
+        }
+    }
+    free(procMask);
+    return firstEnabledCPU;
+}
+
+void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount, DeviceFilter filter)
+{
+    void* HtoD_dstBuffer;
+    void* HtoD_srcBuffer;
+    void* DtoH_dstBuffer;
+    void* DtoH_srcBuffer;
+    unsigned long long bandwidth;
+    double bandwidth_sum = 0.0;
+    size_t *procMask = NULL;
+    size_t firstEnabledCPU = getFirstEnabledCPU();
+    size_t procCount = fullNumaTest ? SysGetProcessorCount() : 1;
+    int deviceCount;
+    
+    std::vector<int> devices = filterDevices(filter);
+
+    cuDeviceGetCount(&deviceCount); // ASSERT_DRV
+
+    PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
+
+    procMask = (size_t *)calloc(1, SysProcessorMaskSize());
+
+    for (size_t procId = 0; procId < procCount; procId++)
+    {
+        std::cout << "CPU Node: " << procId << '/' << procCount; // Was TESTSTACK
+
+        SysProcessorMaskSet(procMask, fullNumaTest ? procId : firstEnabledCPU);
+        SysSetThreadAffinity(NULL, procMask);
+
+        /* The NUMA location of the calling thread determines the physical
+           location of the pinned memory allocation, which can have different
+           performance characteristics */
+        cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
+        cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
+
+        for (size_t devIdx = 0; devIdx < devices.size(); devIdx++)
+        {
+            int currentDevice = devices[devIdx];
+            CUcontext srcCtx;
+
+            std::cout << "Device: " << currentDevice;
+
+            cuDevicePrimaryCtxRetain(&srcCtx, currentDevice); // ASSERT_DRV
+            cuCtxSetCurrent(srcCtx); // ASSERT_DRV
+
+            cuMemAlloc((CUdeviceptr*)&HtoD_dstBuffer, (size_t)size); // ASSERT_DRV
+            cuMemAlloc((CUdeviceptr*)&DtoH_srcBuffer, (size_t)size); // ASSERT_DRV
+            find_best_memcpy_bidirectional(HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, &bandwidth, size, loopCount);
+
+            // TODO : Internal CHECK_CPU_BANDWIDTH(currentDevice, bandwidth);
+            bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
+            bandwidth_sum += bandwidth * 1e-9;
+
+            cuMemFree((CUdeviceptr)DtoH_srcBuffer); // ASSERT_DRV
+            cuMemFree((CUdeviceptr)HtoD_dstBuffer); // ASSERT_DRV
+            cuDevicePrimaryCtxRelease(currentDevice); // ASSERT_DRV
+        }
+
+        cuMemFreeHost(HtoD_srcBuffer); // ASSERT_DRV
+        cuMemFreeHost(DtoH_dstBuffer); // ASSERT_DRV
+
+        SysProcessorMaskClear(procMask, procId);
+    }
+
+    free(procMask);
+
+    std::cout << "memcpy CE GPU(columns) <- CPU(rows) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+
+    std::string bandwidth_sum_name = test_name + "_sum";
+    // TODO : Internal stuff; testutils::performance::addPerfValue(bandwidth_sum_name.c_str(), bandwidth_sum, "GB/s", true);
+}
+
+void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount, DeviceFilter filter)
+{
+    void* HtoD_dstBuffer;
+    void* HtoD_srcBuffer;
+    void* DtoH_dstBuffer;
+    void* DtoH_srcBuffer;
+    unsigned long long bandwidth;
+    double bandwidth_sum = 0.0;
+    size_t *procMask = NULL;
+    size_t firstEnabledCPU = getFirstEnabledCPU();
+    size_t procCount = fullNumaTest ? SysGetProcessorCount() : 1;
+    int deviceCount;
+    std::vector<int> devices = filterDevices(filter);
+
+    cuDeviceGetCount(&deviceCount); // ASSERT_DRV
+
+    PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
+
+    procMask = (size_t *)calloc(1, SysProcessorMaskSize());
+
+    for (size_t procId = 0; procId < procCount; procId++)
+    {
+        std::cout << "CPU Node: " << procId << '/' << procCount;
+
+        SysProcessorMaskSet(procMask, fullNumaTest ? procId : firstEnabledCPU);
+        SysSetThreadAffinity(NULL, procMask);
+
+        /* The NUMA location of the calling thread determines the physical
+           location of the pinned memory allocation, which can have different
+           performance characteristics */
+        cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
+        cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
+
+        for (size_t devIdx = 0; devIdx < devices.size(); devIdx++)
+        {
+            int currentDevice = devices[devIdx];
+            CUcontext srcCtx;
+
+            std::cout << "Device: " << currentDevice;
+
+            cuDevicePrimaryCtxRetain(&srcCtx, currentDevice); // ASSERT_DRV
+            cuCtxSetCurrent(srcCtx); // ASSERT_DRV
+
+            cuMemAlloc((CUdeviceptr*)&HtoD_dstBuffer, (size_t)size); // ASSERT_DRV
+            cuMemAlloc((CUdeviceptr*)&DtoH_srcBuffer, (size_t)size); // ASSERT_DRV
+            find_best_memcpy_bidirectional(DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, &bandwidth, size, loopCount);
+
+            // TODO : Internal CHECK_CPU_BANDWIDTH(currentDevice, bandwidth);
+            bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
+            bandwidth_sum += bandwidth * 1e-9;
+
+            cuMemFree((CUdeviceptr)DtoH_srcBuffer); // ASSERT_DRV
+            cuMemFree((CUdeviceptr)HtoD_dstBuffer); // ASSERT_DRV
+            cuDevicePrimaryCtxRelease(currentDevice); // ASSERT_DRV
+        }
+        
+        cuMemFreeHost(HtoD_srcBuffer); // ASSERT_DRV
+        cuMemFreeHost(DtoH_dstBuffer); // ASSERT_DRV
+
+        SysProcessorMaskClear(procMask, procId);
+    }
+
+    free(procMask);
+
+    std::cout << "memcpy CE GPU(columns) <- CPU(rows) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+
+    std::string bandwidth_sum_name = test_name + "_sum";
+    // TODO : Internal testutils::performance::addPerfValue(bandwidth_sum_name.c_str(), bandwidth_sum, "GB/s", true);
+}
