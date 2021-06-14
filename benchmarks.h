@@ -10,6 +10,7 @@ typedef struct {
 
 typedef std::map<std::string, Benchmark> Benchmarks;
 
+// Benchmarks are listed here, to add additional benchmarks you only need to edit this map:
 static Benchmarks benchmarks_map {
     { "host_to_device_bidirectional_memcpy",
         {
