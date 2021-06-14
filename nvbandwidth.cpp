@@ -1,3 +1,4 @@
+#include <boost/exception/exception.hpp>
 #include <stdio.h>
 #include <iostream>
 #include <string.h>
@@ -8,7 +9,7 @@
 #include <boost/program_options.hpp>
 #include <boost/program_options/options_description.hpp>
 
-#include "memcpy_ce_tests.h"
+#include "benchmarks.h"
 
 // Beware, if the multiplier is too high, the benchmark can hang because of GPFIFO exhaustion.
 // CE benchmarks launch a spin kernel which prevents GPFIFO from emptying
@@ -44,30 +45,50 @@ int main(int argc, char**argv) {
     // Args parsing
     opt::options_description desc("NVBandwidth CLI");
     desc.add_options()
-        ("help", "produce help message")
-        ("benchmark", opt::value<std::string>(), "benchmark to run")
+        ("help", "Produce help message")
+        ("list", "List available benchmarks")
+        ("benchmark", opt::value<std::string>(), "Benchmark to run")
     ;
-    // TODO : Add flag to list tests
 
     opt::variables_map vm;
-    opt::store(opt::parse_command_line(argc, argv, desc), vm);
-    opt::notify(vm);    
+    try {
+        opt::store(opt::parse_command_line(argc, argv, desc), vm);
+        opt::notify(vm);
+    } catch (...) {
+        std::cout << desc << "\n";
+        return 1;
+    }
 
     if (vm.count("help")) {
         std::cout << desc << "\n";
         return 1;
     }
 
-    benchmark_name = vm["benchmark"].as<std::string>();
-    if (vm.count("benchmark")) {
-        std::cout << "Running benchmark " << benchmark_name << ".\n";
-    } else {
-        std::cout << "Please specify which benchmark to run.\n";
+    if (vm.count("list")) {
+        list_benchmarks();
         return 1;
     }
-    // TODO: Use macro for test names/selecting
-    if (benchmark_name == "host_to_device_bidirectional_memcpy") launch_HtoD_memcpy_bidirectional_CE("Host ot Device Bidirectional memcpy");
-    else if (benchmark_name == "device_to_host_bidirectional_memcpy") launch_DtoH_memcpy_bidirectional_CE("Device to Host Bidirectional memcpy");
+
+    if (vm.count("benchmark")) {
+        benchmark_name = vm["benchmark"].as<std::string>();
+        std::cout << "Running benchmark " << benchmark_name << ".\n";
+    }
+
+    // Setting some defaults
+    averageLoopCount = defaultAverageLoopCount;
+    disableP2P = true; // TODO : Temporary due to some issues loading spin kernel. Once those are solved this defaults to false
+
+    // Get device properties
+    int nDevices;
+    cudaGetDeviceCount(&nDevices);
+    for (int i = 0; i < nDevices; i++) {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, i);
+        deviceProps.push_back(prop);
+    }
+    
+    // Run benchmark
+    benchmarks_map[benchmark_name].benchmark_func(benchmarks_map[benchmark_name].desc, defaultBufferSize, defaultLoopCount, alwaysTrueDeviceFilter);
 
     return 0;
 }
