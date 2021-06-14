@@ -1,5 +1,4 @@
 #include "options.h"
-#include "nvbw_os.h"
 
 bool is_dvs()
 {

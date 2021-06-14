@@ -47,6 +47,7 @@ int main(int argc, char**argv) {
         ("help", "produce help message")
         ("benchmark", opt::value<std::string>(), "benchmark to run")
     ;
+    // TODO : Add flag to list tests
 
     opt::variables_map vm;
     opt::store(opt::parse_command_line(argc, argv, desc), vm);
@@ -64,7 +65,7 @@ int main(int argc, char**argv) {
         std::cout << "Please specify which benchmark to run.\n";
         return 1;
     }
-
+    // TODO: Use macro for test names/selecting
     if (benchmark_name == "host_to_device_bidirectional_memcpy") launch_HtoD_memcpy_bidirectional_CE("Host ot Device Bidirectional memcpy");
     else if (benchmark_name == "device_to_host_bidirectional_memcpy") launch_DtoH_memcpy_bidirectional_CE("Device to Host Bidirectional memcpy");
 

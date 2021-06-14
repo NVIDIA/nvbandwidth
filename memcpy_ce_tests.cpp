@@ -6,13 +6,13 @@
 #include <algorithm>
 #include <iostream>
 
-#include "nvbw_os.h"
 #include "options.h"
 #include "stats.h"
 #include "mem_allocator.h"
 #include "mem_pattern.h"
 #include "memcpy_ce_tests.h"
 #include "spinKernel.h"
+#include "common.h"
 
 const size_t WARMUP_COUNT = 32;
 const size_t START_COPY_MARKER_SIZE = 17;
@@ -306,11 +306,11 @@ static void find_best_memcpy_bidirectional(void* dst1, void* src1, CUcontext ctx
 
 size_t getFirstEnabledCPU() {
     size_t firstEnabledCPU = 0;
-    size_t *procMask = (size_t *)calloc(1, SysProcessorMaskSize());
-    SysGetThreadAffinity(NULL, procMask);
-    for (size_t i = 0; i < SysProcessorMaskSize() * 8; ++i)
+    size_t *procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
+    // TODO : REMOVE; SysGetThreadAffinity(NULL, procMask);
+    for (size_t i = 0; i < PROC_MASK_SIZE * 8; ++i)
     {
-        if (SysProcessorMaskQueryBit(procMask, i)) {
+        if (PROC_MASK_QUERY_BIT(procMask, i)) {
             firstEnabledCPU = i;
             break;
         }
@@ -329,7 +329,7 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
     double bandwidth_sum = 0.0;
     size_t *procMask = NULL;
     size_t firstEnabledCPU = getFirstEnabledCPU();
-    size_t procCount = fullNumaTest ? SysGetProcessorCount() : 1;
+    size_t procCount = fullNumaTest ? std::thread::hardware_concurrency() : 1;
     int deviceCount;
     
     std::vector<int> devices = filterDevices(filter);
@@ -338,14 +338,14 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
 
     PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
 
-    procMask = (size_t *)calloc(1, SysProcessorMaskSize());
+    procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
     for (size_t procId = 0; procId < procCount; procId++)
     {
         std::cout << "CPU Node: " << procId << '/' << procCount; // Was TESTSTACK
 
-        SysProcessorMaskSet(procMask, fullNumaTest ? procId : firstEnabledCPU);
-        SysSetThreadAffinity(NULL, procMask);
+        PROC_MASK_SET(procMask, fullNumaTest ? procId : firstEnabledCPU);
+        // TODO : REMOVE; LEAVING THIS TO OS SCHED; SysSetThreadAffinity(NULL, procMask);
 
         /* The NUMA location of the calling thread determines the physical
            location of the pinned memory allocation, which can have different
@@ -379,7 +379,7 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
         cuMemFreeHost(HtoD_srcBuffer); // ASSERT_DRV
         cuMemFreeHost(DtoH_dstBuffer); // ASSERT_DRV
 
-        SysProcessorMaskClear(procMask, procId);
+        PROC_MASK_CLEAR(procMask, procId);
     }
 
     free(procMask);
@@ -401,7 +401,7 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
     double bandwidth_sum = 0.0;
     size_t *procMask = NULL;
     size_t firstEnabledCPU = getFirstEnabledCPU();
-    size_t procCount = fullNumaTest ? SysGetProcessorCount() : 1;
+    size_t procCount = fullNumaTest ? std::thread::hardware_concurrency() : 1;
     int deviceCount;
     std::vector<int> devices = filterDevices(filter);
 
@@ -409,14 +409,14 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
 
     PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
 
-    procMask = (size_t *)calloc(1, SysProcessorMaskSize());
+    procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
     for (size_t procId = 0; procId < procCount; procId++)
     {
         std::cout << "CPU Node: " << procId << '/' << procCount;
 
-        SysProcessorMaskSet(procMask, fullNumaTest ? procId : firstEnabledCPU);
-        SysSetThreadAffinity(NULL, procMask);
+        PROC_MASK_SET(procMask, fullNumaTest ? procId : firstEnabledCPU);
+        // TODO : REMOVE; LEAVING THIS TO OS SCHED; SysSetThreadAffinity(NULL, procMask);
 
         /* The NUMA location of the calling thread determines the physical
            location of the pinned memory allocation, which can have different
@@ -450,7 +450,7 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
         cuMemFreeHost(HtoD_srcBuffer); // ASSERT_DRV
         cuMemFreeHost(DtoH_dstBuffer); // ASSERT_DRV
 
-        SysProcessorMaskClear(procMask, procId);
+        PROC_MASK_CLEAR(procMask, procId);
     }
 
     free(procMask);

@@ -1,4 +1,4 @@
-#include "nvbw_device.h"
+#include "device.h"
 
 std::vector<cudaDeviceProp> deviceProps;
 

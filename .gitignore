@@ -4,3 +4,4 @@ build
 nvbandwidth
 .cache
 .idea
+vscode.mk

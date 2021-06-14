@@ -1,6 +1,6 @@
 #include "default_constants.h"
 #include <string>
-#include "nvbw_device.h"
+#include "device.h"
 
 #ifndef _MEMCPY_CE_TEST_H_
 #define _MEMCPY_CE_TEST_H_

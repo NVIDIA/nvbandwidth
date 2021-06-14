@@ -1,7 +1,7 @@
+#include <cstring>
 #include <cuda.h>
 #include <iostream>
 
-#include "nvbw_os.h"
 #include "mem_pattern.h"
 
 static void xorshift2MBPattern(unsigned int* buffer, unsigned int seed)

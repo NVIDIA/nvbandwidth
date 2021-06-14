@@ -1,5 +1,5 @@
 #include "spinKernel.h"
-#include "nvbw_device.h"
+#include "device.h"
 
 CUresult launch_spin_kernel(volatile int *latch, CUstream stream, bool single, unsigned long long timeout_ns)
 {

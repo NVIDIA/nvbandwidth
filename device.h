@@ -5,9 +5,6 @@
 #include <functional>
 #include <stdlib.h>
 
-#include "nvbw_os.h"
-
-
 typedef std::function<bool (int deviceId, cudaDeviceProp *prop)> DeviceFilter;
 extern std::vector<cudaDeviceProp> deviceProps;
 
