@@ -73,6 +73,19 @@ int main(int argc, char**argv) {
         benchmark_name = vm["benchmark"].as<std::string>();
         std::cout << "Running benchmark " << benchmark_name << ".\n";
     }
+
+    // Setting some defaults
+    averageLoopCount = defaultAverageLoopCount;
+    disableP2P = true; // TODO : Temporary due to some issues loading spin kernel. Once those are solved this defaults to false
+
+    // Get device properties
+    int nDevices;
+    cudaGetDeviceCount(&nDevices);
+    for (int i = 0; i < nDevices; i++) {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, i);
+        deviceProps.push_back(prop);
+    }
     
     // Run benchmark
     benchmarks_map[benchmark_name].benchmark_func(benchmarks_map[benchmark_name].desc, defaultBufferSize, defaultLoopCount, alwaysTrueDeviceFilter);

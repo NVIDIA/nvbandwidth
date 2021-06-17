@@ -273,9 +273,9 @@ static void find_best_memcpy(void* src, void* dst, unsigned long long* bandwidth
     {
         memcpy_and_check(dst, src, size, &bandwidth_current, loopCount);
         bandwidthStat((double)bandwidth_current);
-        std::cout << "\tSample " << n << ' ' << std::fixed << std::setprecision (2) << bandwidth_current * 1e-9 << " GB/s\n";
+        // TODO : Maybe for VERBOSE? std::cout << "\tSample " << n << ' ' << std::fixed << std::setprecision (2) << bandwidth_current * 1e-9 << " GB/s\n";
     }
-    std::cout << "       bandwidth: " << std::fixed << std::setprecision (2) << STAT_MEAN(bandwidthStat) * 1e-9 << "(+/- " << STAT_ERROR(bandwidthStat) * 1e-9 << ") GB/s" << std::endl;
+    // TODO : Maybe for VERBOSE? std::cout << "       bandwidth: " << std::fixed << std::setprecision (2) << STAT_MEAN(bandwidthStat) * 1e-9 << "(+/- " << STAT_ERROR(bandwidthStat) * 1e-9 << ") GB/s" << std::endl;
     *bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
 }
 
@@ -298,9 +298,9 @@ static void find_best_memcpy_bidirectional(void* dst1, void* src1, CUcontext ctx
     {
         memcpyAsync_and_check_bidirectional(dst1, src1, ctx1, dst2, src2, ctx2, size, &bandwidth_current, loopCount);
         bandwidthStat((double)bandwidth_current);
-        std::cout << "\tSample " << n << ' ' << std::fixed << std::setprecision (2) << bandwidth_current * 1e-9 << " GB/s\n";
+        // TODO : Maybe for VERBOSE? std::cout << "\tSample " << n << ' ' << std::fixed << std::setprecision (2) << bandwidth_current * 1e-9 << " GB/s\n";
     }
-    std::cout << "       bandwidth: " << std::fixed << std::setprecision (2) << STAT_MEAN(bandwidthStat) * 1e-9 << "(+/- " << STAT_ERROR(bandwidthStat) * 1e-9 << ") GB/s" << std::endl;
+    // TODO : Maybe for VERBOSE? std::cout << "       bandwidth: " << std::fixed << std::setprecision (2) << STAT_MEAN(bandwidthStat) * 1e-9 << "(+/- " << STAT_ERROR(bandwidthStat) * 1e-9 << ") GB/s" << std::endl;
     *bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
 }
 
@@ -342,10 +342,19 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
 
     for (size_t procId = 0; procId < procCount; procId++)
     {
-        std::cout << "CPU Node: " << procId << '/' << procCount; // Was TESTSTACK
-
         PROC_MASK_SET(procMask, fullNumaTest ? procId : firstEnabledCPU);
-        // TODO : REMOVE; LEAVING THIS TO OS SCHED; SysSetThreadAffinity(NULL, procMask);
+        CUcontext srcCtx;
+
+        /* TODO :
+            This piece is added because the lines below allocating portable host memory would procude a 
+            201 (CUDA_ERROR_INVALID_CONTEXT) which is due no context being set. This is defaulting to the current
+            context of the first device (devices[0])
+            I am taking note of this because I am uncertain on this.
+        */
+        if (devices.size() > 0) {
+            cuDevicePrimaryCtxRetain(&srcCtx, devices[0]);
+            cuCtxSetCurrent(srcCtx);
+        }
 
         /* The NUMA location of the calling thread determines the physical
            location of the pinned memory allocation, which can have different
@@ -356,18 +365,17 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
         for (size_t devIdx = 0; devIdx < devices.size(); devIdx++)
         {
             int currentDevice = devices[devIdx];
-            CUcontext srcCtx;
 
-            std::cout << "Device: " << currentDevice;
+            // TODO : Maybe for VERBOSE? std::cout << "Device: " << currentDevice;
 
             cuDevicePrimaryCtxRetain(&srcCtx, currentDevice); // ASSERT_DRV
             cuCtxSetCurrent(srcCtx); // ASSERT_DRV
 
             cuMemAlloc((CUdeviceptr*)&HtoD_dstBuffer, (size_t)size); // ASSERT_DRV
             cuMemAlloc((CUdeviceptr*)&DtoH_srcBuffer, (size_t)size); // ASSERT_DRV
+
             find_best_memcpy_bidirectional(HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, &bandwidth, size, loopCount);
 
-            // TODO : Internal CHECK_CPU_BANDWIDTH(currentDevice, bandwidth);
             bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
             bandwidth_sum += bandwidth * 1e-9;
 
@@ -386,9 +394,6 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
 
     std::cout << "memcpy CE GPU(columns) <- CPU(rows) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
-
-    std::string bandwidth_sum_name = test_name + "_sum";
-    // TODO : Internal stuff; testutils::performance::addPerfValue(bandwidth_sum_name.c_str(), bandwidth_sum, "GB/s", true);
 }
 
 void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount, DeviceFilter filter)
@@ -413,10 +418,21 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
 
     for (size_t procId = 0; procId < procCount; procId++)
     {
-        std::cout << "CPU Node: " << procId << '/' << procCount;
+        // TODO : Maybe for VERBOSE? std::cout << "CPU Node: " << procId << '/' << procCount;
 
         PROC_MASK_SET(procMask, fullNumaTest ? procId : firstEnabledCPU);
-        // TODO : REMOVE; LEAVING THIS TO OS SCHED; SysSetThreadAffinity(NULL, procMask);
+        CUcontext srcCtx;
+
+        /* TODO :
+            This piece is added because the lines below allocating portable host memory would procude a 
+            201 (CUDA_ERROR_INVALID_CONTEXT) which is due no context being set. This is defaulting to the current
+            context of the first device (devices[0])
+            I am taking note of this because I am uncertain on this.
+        */
+        if (devices.size() > 0) {
+            cuDevicePrimaryCtxRetain(&srcCtx, devices[0]);
+            cuCtxSetCurrent(srcCtx);
+        }
 
         /* The NUMA location of the calling thread determines the physical
            location of the pinned memory allocation, which can have different
@@ -427,18 +443,17 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
         for (size_t devIdx = 0; devIdx < devices.size(); devIdx++)
         {
             int currentDevice = devices[devIdx];
-            CUcontext srcCtx;
 
-            std::cout << "Device: " << currentDevice;
+            // TODO : Maybe for VERBOSE? std::cout << "Device: " << currentDevice;
 
             cuDevicePrimaryCtxRetain(&srcCtx, currentDevice); // ASSERT_DRV
             cuCtxSetCurrent(srcCtx); // ASSERT_DRV
 
             cuMemAlloc((CUdeviceptr*)&HtoD_dstBuffer, (size_t)size); // ASSERT_DRV
             cuMemAlloc((CUdeviceptr*)&DtoH_srcBuffer, (size_t)size); // ASSERT_DRV
+            
             find_best_memcpy_bidirectional(DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, &bandwidth, size, loopCount);
 
-            // TODO : Internal CHECK_CPU_BANDWIDTH(currentDevice, bandwidth);
             bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
             bandwidth_sum += bandwidth * 1e-9;
 
@@ -457,7 +472,4 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
 
     std::cout << "memcpy CE GPU(columns) <- CPU(rows) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
-
-    std::string bandwidth_sum_name = test_name + "_sum";
-    // TODO : Internal testutils::performance::addPerfValue(bandwidth_sum_name.c_str(), bandwidth_sum, "GB/s", true);
 }

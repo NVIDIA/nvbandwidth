@@ -12,16 +12,20 @@ all: default
 debug: CFLAGS += -DDEBUG -g
 debug: $(TARGET)
 
+CUDA_OBJECTS = $(patsubst %.cu, %.o, $(wildcard *.cu))
 OBJECTS = $(patsubst %.cpp, %.o, $(wildcard *.cpp))
 HEADERS = $(wildcard *.h)
+
+%.o: %.cu $(HEADERS)
+	$(CXX) $(CFLAGS) -c $< -o $@
 
 %.o: %.cpp $(HEADERS)
 	$(CXX) $(CFLAGS) -c $< -o $@
 
-.PRECIOUS: $(TARGET) $(OBJECTS)
+.PRECIOUS: $(TARGET) $(CUDA_OBJECTS) $(OBJECTS)
 
-$(TARGET): $(OBJECTS)
-	$(CXX) $(OBJECTS) $(LIBS) -o $@
+$(TARGET): $(CUDA_OBJECTS) $(OBJECTS)
+	$(CXX) $(CUDA_OBJECTS) $(OBJECTS) $(LIBS) -o $@
 
 clean:
 	-rm -f *.o
