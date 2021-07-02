@@ -31,6 +31,26 @@ std::map<std::string, Benchmark> create_benchmarks() {
         {
             "host_to_device_memcpy_sm",
             Benchmark(launch_HtoD_memcpy_SM, "Host to device memcpy using the Stream Multiprocessor")
+        },
+        {
+            "device_to_host_memcpy_sm",
+            Benchmark(launch_DtoH_memcpy_SM, "Device to host memcpy using the Stream Multiprocessor")
+        },
+        {
+            "device_to_device_memcpy_read_sm",
+            Benchmark(launch_DtoD_memcpy_read_SM, "Device to device memcpy using the Stream Multiprocessor (read)")
+        },
+        {
+            "device_to_device_memcpy_write_sm",
+            Benchmark(launch_DtoD_memcpy_write_SM, "Device to device memcpy using the Stream Multiprocessor (write)")
+        },
+        {
+            "device_to_device_bidirectional_memcpy_read_ce",
+            Benchmark(launch_DtoD_memcpy_bidirectional_read_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (read)")
+        },
+        {
+            "device_to_device_bidirectional_memcpy_write_ce",
+            Benchmark(launch_DtoD_memcpy_bidirectional_write_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (write)")
         }
     };
 }
@@ -65,9 +85,8 @@ int main(int argc, char**argv) {
     }
 
     if (vm.count("list")) {
-        std::cout << "Available benchmarks:" << "\n";
         for  (std::map<std::string, Benchmark>::iterator iter = benchmarks.begin(); iter != benchmarks.end(); ++iter) {
-            std::cout << "\t" << iter->first << " : " << iter->second.description() << "\n";
+            std::cout << iter->first << ":\n\t\t" << iter->second.description() << "\n";
         }
         return 1;
     }
