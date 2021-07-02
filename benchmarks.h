@@ -2,22 +2,36 @@
 #include <string>
 #include "common.h"
 
-typedef void (*BenchmarkFunc)(const std::string &, unsigned long long, unsigned long long);
+typedef void (*benchfn_t)(const std::string &, unsigned long long, unsigned long long);
 
 class Benchmark {
-    BenchmarkFunc benchmark_func;
+    benchfn_t benchmark_func;
     std::string desc;
 public:
     Benchmark() {}
-    
-    Benchmark(BenchmarkFunc benchmark_func, std::string desc): benchmark_func(benchmark_func), desc(desc) {}
 
-    BenchmarkFunc benchFn() {
+    Benchmark(benchfn_t benchmark_func, std::string desc): benchmark_func(benchmark_func), desc(desc) {}
+
+    benchfn_t benchFn() {
         return benchmark_func;
     }
 
     std::string description() {
         return desc;
+    }
+};
+
+class BenchParams {
+public:
+    // what should be copied on where on which device
+    void *dst;
+    void *src;
+    CUcontext ctx;
+
+    BenchParams(void *_dst, void *_src, CUcontext _ctx) {
+        dst = _dst;
+        src = _src;
+        ctx = _ctx;
     }
 };
 

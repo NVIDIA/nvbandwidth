@@ -16,7 +16,6 @@ const unsigned long long defaultLoopCount = 16;
 const unsigned long long defaultBufferSize = 1024 * 1024 * 64; // 64MB
 const unsigned int defaultAverageLoopCount = 3;
 
-// TODO : Revisit placement
 extern unsigned int averageLoopCount;
 extern bool disableP2P;
 
@@ -220,7 +219,7 @@ void calculateLeastSquares(const std::vector<T>& x, const std::vector<T>& y, dou
 
 
 // Error handling
-inline void cuAssert(CUresult cuResult, const char *msg) {
+inline void cuAssert(CUresult cuResult, const char *msg = nullptr) {
   if (cuResult != CUDA_SUCCESS) {
     const char *errDescStr, *errNameStr;
     cuGetErrorString(cuResult, &errDescStr);

@@ -12,13 +12,6 @@
 
 #include "benchmarks.h"
 
-// Beware, if the multiplier is too high, the benchmark can hang because of GPFIFO exhaustion.
-// CE benchmarks launch a spin kernel which prevents GPFIFO from emptying
-// (but it makes the benchmark more stable). Each p2p copy adds 3 entries to GPFIFO.
-// The usual GPFIFO size of 1024 allows us to schedule around 330-340 copies before deadlocking.
-// P2P latency benchmarks schedule WARMUP_COUNT + loopCount * LATENCY_COUNT_MULTIPLIER copies
-#define LATENCY_COUNT_MULTIPLIER 16
-
 namespace opt = boost::program_options;
 
 unsigned int averageLoopCount;
@@ -43,6 +36,9 @@ std::map<std::string, Benchmark> create_benchmarks() {
 }
 
 int main(int argc, char**argv) {
+    averageLoopCount = defaultAverageLoopCount;
+    disableP2P = true;
+
     std::map<std::string, Benchmark> benchmarks = create_benchmarks();
     std::string benchmark_name;
 
@@ -82,10 +78,6 @@ int main(int argc, char**argv) {
     }
 
     cuInit(0);
-
-    // Setting some defaults (TODO : will be configurable via CLI)
-    averageLoopCount = defaultAverageLoopCount;
-    disableP2P = true;
 
     // Run benchmark
     try {
