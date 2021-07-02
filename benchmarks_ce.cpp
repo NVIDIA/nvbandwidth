@@ -6,13 +6,8 @@
 #include <algorithm>
 #include <iostream>
 
-#include "options.h"
-#include "stats.h"
-#include "mem_allocator.h"
-#include "mem_pattern.h"
-#include "memcpy_ce_tests.h"
-#include "spinKernel.h"
-#include "common.h"
+#include "memory_utils.h"
+#include "benchmarks.h"
 
 const size_t WARMUP_COUNT = 32;
 const size_t START_COPY_MARKER_SIZE = 17;
@@ -36,15 +31,7 @@ static void memcpyAsync(void* dst, void* src, unsigned long long size, unsigned 
     cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING); // ASSERT_DRV
     cuEventCreate(&startEvent, CU_EVENT_DEFAULT); // ASSERT_DRV
     cuEventCreate(&endEvent, CU_EVENT_DEFAULT); // ASSERT_DRV
-
-    // Pageable copies are (mostly) synchronous. Launching this kernel would deadlock the benchmark
-    // P2H2P copies heavily use GPFIFO, you can only launch a handful of iterations before it deadlocks.
-    if (!isPageable && !disableP2P) {
-        cuMemHostAlloc((void **)&blockingVar, sizeof(*blockingVar), CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
-        *blockingVar = 0;
-        launch_spin_kernel(blockingVar, stream, true); // ASSERT_DRV
-    }
-
+    
     // Spend time on the GPU so we finish submitting everything before the benchmark starts
     // Also events are tied to the last submission channel so we want to be sure it is copy and not compute
     for (unsigned int n = 0; n < WARMUP_COUNT; n++) {
@@ -104,18 +91,6 @@ static void memcpyAsync_bidirectional(void* dst1, void* src1, CUcontext ctx1, vo
     cuStreamCreate(&stream_dir2, CU_STREAM_NON_BLOCKING); // ASSERT_DRV
     cuEventCreate(&startEvent_dir2, CU_EVENT_DEFAULT); // ASSERT_DRV
     cuEventCreate(&endEvent_dir2, CU_EVENT_DEFAULT); // ASSERT_DRV
-
-    // TODO : Internal or depended on internal: wddmPacketScheduling = is_wddm_packet_scheduling(dev1) || is_wddm_packet_scheduling(dev2);
-    
-    // P2H2P copies heavily use GPFIFO, you can only launch a handful of iterations before it deadlocks.
-    if (!disableP2P) {
-        cuMemHostAlloc((void **)&blockingVar, sizeof(*blockingVar), CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
-        *blockingVar = 0;
-        cuCtxSetCurrent(ctx1); // ASSERT_DRV
-        launch_spin_kernel(blockingVar, stream_dir1, true); // ASSERT_DRV
-        cuCtxSetCurrent(ctx2); // ASSERT_DRV
-        launch_spin_kernel(blockingVar, stream_dir2, true); // ASSERT_DRV
-    }
 
     // Spend time on the GPU so we finish submitting everything before the benchmark starts
     // Also events are tied to the last submission channel so we want to be sure it is copy and not compute
@@ -254,7 +229,7 @@ size_t getFirstEnabledCPU() {
     return firstEnabledCPU;
 }
 
-void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount, DeviceFilter filter)
+void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount)
 {
     void* HtoD_dstBuffer;
     void* HtoD_srcBuffer;
@@ -266,8 +241,6 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
     size_t firstEnabledCPU = getFirstEnabledCPU();
     size_t procCount = 1;
     int deviceCount;
-    
-    std::vector<int> devices = filterDevices(filter);
 
     cuDeviceGetCount(&deviceCount); // ASSERT_DRV
 
@@ -280,26 +253,19 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
         PROC_MASK_SET(procMask, firstEnabledCPU);
         CUcontext srcCtx;
 
-        /* TODO :
-            This piece is added because the lines below allocating portable host memory would procude a 
-            201 (CUDA_ERROR_INVALID_CONTEXT) which is due no context being set. This is defaulting to the current
-            context of the first device (devices[0])
-            I am taking note of this because I am uncertain on this.
-        */
-        if (devices.size() > 0) {
-            cuDevicePrimaryCtxRetain(&srcCtx, devices[0]);
-            cuCtxSetCurrent(srcCtx);
-        }
+        cuDevicePrimaryCtxRetain(&srcCtx, 0); // TODO: Needs double-checking (will all available devices be enumerated like this?)
+        cuCtxSetCurrent(srcCtx);
 
+        // TODO : Move this down into the for loop and free at the end
         /* The NUMA location of the calling thread determines the physical
            location of the pinned memory allocation, which can have different
            performance characteristics */
         cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
         cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
 
-        for (size_t devIdx = 0; devIdx < devices.size(); devIdx++)
+        for (size_t devIdx = 0; devIdx < deviceCount; devIdx++)
         {
-            int currentDevice = devices[devIdx];
+            int currentDevice = devIdx; // TODO: Needs double-checking (will all available devices be enumerated like this?)
 
             // TODO : Maybe for VERBOSE? std::cout << "Device: " << currentDevice;
 
@@ -331,7 +297,7 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount, DeviceFilter filter)
+void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount)
 {
     void* HtoD_dstBuffer;
     void* HtoD_srcBuffer;
@@ -343,7 +309,6 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
     size_t firstEnabledCPU = getFirstEnabledCPU();
     size_t procCount = 1;
     int deviceCount;
-    std::vector<int> devices = filterDevices(filter);
 
     cuDeviceGetCount(&deviceCount); // ASSERT_DRV
 
@@ -358,16 +323,8 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
         PROC_MASK_SET(procMask, firstEnabledCPU);
         CUcontext srcCtx;
 
-        /* TODO :
-            This piece is added because the lines below allocating portable host memory would procude a 
-            201 (CUDA_ERROR_INVALID_CONTEXT) which is due no context being set. This is defaulting to the current
-            context of the first device (devices[0])
-            I am taking note of this because I am uncertain on this.
-        */
-        if (devices.size() > 0) {
-            cuDevicePrimaryCtxRetain(&srcCtx, devices[0]);
-            cuCtxSetCurrent(srcCtx);
-        }
+        cuDevicePrimaryCtxRetain(&srcCtx, 0); // TODO: Needs double-checking (will all available devices be enumerated like this?)
+        cuCtxSetCurrent(srcCtx);
 
         /* The NUMA location of the calling thread determines the physical
            location of the pinned memory allocation, which can have different
@@ -375,9 +332,9 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
         cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
         cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
 
-        for (size_t devIdx = 0; devIdx < devices.size(); devIdx++)
+        for (size_t devIdx = 0; devIdx < deviceCount; devIdx++)
         {
-            int currentDevice = devices[devIdx];
+            int currentDevice = devIdx; // TODO: Needs double-checking (will all available devices be enumerated like this?)
 
             // TODO : Maybe for VERBOSE? std::cout << "Device: " << currentDevice;
 

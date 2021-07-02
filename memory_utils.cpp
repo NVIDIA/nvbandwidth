@@ -1,8 +1,7 @@
-#include <cstring>
-#include <cuda.h>
-#include <iostream>
+#include <string.h>
 
-#include "mem_pattern.h"
+#include "memory_utils.h"
+#include "common.h"
 
 static void xorshift2MBPattern(unsigned int* buffer, unsigned int seed)
 {
@@ -27,16 +26,16 @@ void memset_pattern(void* buffer, unsigned long long size, unsigned int seed)
     unsigned long long remaining = size - (_2MBchunkCount * 1024 * 1024 * 2);
 
     // Allocate 2MB of pattern
-    cuMemHostAlloc((void**)&pattern, sizeof(char) * 1024 * 1024 * 2, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
+    cuAssert(cuMemHostAlloc((void**)&pattern, sizeof(char) * 1024 * 1024 * 2, CU_MEMHOSTALLOC_PORTABLE), "cuMemHostAlloc failed.");
     xorshift2MBPattern(pattern, seed);
 
     for (n = 0; n < _2MBchunkCount; n++)
     {
-        cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, 1024 * 1024 * 2); // ASSERT_DRV
+        cuAssert(cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, 1024 * 1024 * 2), "cuMemcpy failed.");
         buffer = (char*)buffer + (1024 * 1024 * 2);
     }
     if (remaining) {
-        cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, (size_t)remaining); // ASSERT_DRV
+        cuAssert(cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, (size_t)remaining), "cuMemcpy failed.");
     }
 
     cuCtxSynchronize(); // ASSERT_DRV
@@ -89,4 +88,36 @@ void memcmp_pattern(void* buffer, unsigned long long size, unsigned int seed)
     cuCtxSynchronize(); // ASSERT_DRV
     cuMemFreeHost((void*)devicePattern); // ASSERT_DRV
     free(pattern);
+}
+
+bool isMemoryOwnedByCUDA(void *memory) {
+	CUmemorytype memorytype;
+	CUresult status = cuPointerGetAttribute(&memorytype, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (CUdeviceptr) memory);
+	if (status == CUDA_ERROR_INVALID_VALUE) {
+		return false;
+	} else {
+		// ASSERT_DRV(status);
+		return true;
+	}
+}
+
+void* allocateHostMemory(size_t size, bool isPageable)
+{
+	void *memory;
+	if (isPageable) {
+		memory = malloc(size);
+		// ASSERT(memory, "");
+	} else {
+		cuMemHostAlloc(&memory, size, CU_MEMHOSTALLOC_PORTABLE); // ASSERT_DRV
+	}
+	return memory;
+}
+
+void freeHostMemory(void *memory)
+{
+	if (isMemoryOwnedByCUDA(memory)) {
+		cuMemFreeHost(memory); //ASSERT_DRV();
+	} else {
+		free(memory);
+	}
 }

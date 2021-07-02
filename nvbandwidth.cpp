@@ -1,4 +1,5 @@
 #include <boost/exception/exception.hpp>
+#include <map>
 #include <stdio.h>
 #include <iostream>
 #include <string.h>
@@ -23,7 +24,26 @@ namespace opt = boost::program_options;
 unsigned int averageLoopCount;
 bool disableP2P;
 
+// Define benchmarks here
+std::map<std::string, Benchmark> create_benchmarks() {
+    return {
+        {
+            "host_to_device_bidirectional_memcpy_ce",
+            Benchmark(launch_HtoD_memcpy_bidirectional_CE, "Bidirectional host to device memcpy using the Copy Engine")
+        },
+        {
+            "device_to_host_bidirectional_memcpy_ce",
+            Benchmark(launch_DtoH_memcpy_bidirectional_CE, "Bidirectional device to host memcpy using the Copy Engine")
+        },
+        {
+            "host_to_device_memcpy_sm",
+            Benchmark(launch_HtoD_memcpy_SM, "Host to device memcpy using the Stream Multiprocessor")
+        }
+    };
+}
+
 int main(int argc, char**argv) {
+    std::map<std::string, Benchmark> benchmarks = create_benchmarks();
     std::string benchmark_name;
 
     // Args parsing
@@ -49,7 +69,10 @@ int main(int argc, char**argv) {
     }
 
     if (vm.count("list")) {
-        list_benchmarks();
+        std::cout << "Available benchmarks:" << "\n";
+        for  (std::map<std::string, Benchmark>::iterator iter = benchmarks.begin(); iter != benchmarks.end(); ++iter) {
+            std::cout << "\t" << iter->first << " : " << iter->second.description() << "\n";
+        }
         return 1;
     }
 
@@ -58,21 +81,18 @@ int main(int argc, char**argv) {
         std::cout << "Running benchmark " << benchmark_name << ".\n";
     }
 
+    cuInit(0);
+
     // Setting some defaults (TODO : will be configurable via CLI)
     averageLoopCount = defaultAverageLoopCount;
     disableP2P = true;
 
-    // Get device properties
-    int nDevices;
-    cudaGetDeviceCount(&nDevices);
-    for (int i = 0; i < nDevices; i++) {
-        cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, i);
-        deviceProps.push_back(prop);
-    }
-    
     // Run benchmark
-    benchmarks_map[benchmark_name].benchmark_func(benchmarks_map[benchmark_name].desc, defaultBufferSize, defaultLoopCount, alwaysTrueDeviceFilter);
-
+    try {
+        Benchmark bench = benchmarks[benchmark_name];
+        bench.benchFn()(benchmarks[benchmark_name].description(), defaultBufferSize, defaultLoopCount);
+    } catch(std::string s) {
+        std::cout << s << std::endl;
+    }
     return 0;
 }

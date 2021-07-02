@@ -5,3 +5,4 @@ nvbandwidth
 .cache
 .idea
 vscode.mk
+error.h

@@ -1,34 +1,29 @@
 #include <iostream>
+#include <string>
+#include "common.h"
 
-#include "memcpy_ce_tests.h"
+typedef void (*BenchmarkFunc)(const std::string &, unsigned long long, unsigned long long);
 
-typedef void (*BenchmarkFunc)(const std::string &, unsigned long long, unsigned long long, DeviceFilter);
-typedef struct {
+class Benchmark {
     BenchmarkFunc benchmark_func;
-    std::string desc; 
-} Benchmark;
+    std::string desc;
+public:
+    Benchmark() {}
+    
+    Benchmark(BenchmarkFunc benchmark_func, std::string desc): benchmark_func(benchmark_func), desc(desc) {}
 
-typedef std::map<std::string, Benchmark> Benchmarks;
+    BenchmarkFunc benchFn() {
+        return benchmark_func;
+    }
 
-// Benchmarks are listed here, to add additional benchmarks you only need to edit this map:
-static Benchmarks benchmarks_map {
-    { "host_to_device_bidirectional_memcpy",
-        {
-            launch_HtoD_memcpy_bidirectional_CE,
-            "Host to device memcpy using the Copy Engine"
-        }
-    },
-    { "device_to_host_bidirectional_memcpy",
-        {
-            launch_DtoH_memcpy_bidirectional_CE,
-            "Device to host memcpy using the Copy Engine"
-        }
+    std::string description() {
+        return desc;
     }
 };
 
-inline void list_benchmarks() {
-    std::cout << "Available benchmarks:" << "\n";
-    for  (const auto &bench : benchmarks_map) {
-        std::cout << "\t" << bench.first << " : " << bench.second.desc << "\n";
-    }
-}
+// CE Benchmarks
+void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
+void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
+
+// SM Benchmarks
+void launch_HtoD_memcpy_SM(const std::string &test_name, unsigned long long size, unsigned long long loopCount);
