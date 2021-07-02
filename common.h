@@ -219,7 +219,7 @@ void calculateLeastSquares(const std::vector<T>& x, const std::vector<T>& y, dou
 
 
 // Error handling
-inline void cuAssert(CUresult cuResult, const char *msg = nullptr) {
+inline void CU_ASSERT(CUresult cuResult, const char *msg = nullptr) {
   if (cuResult != CUDA_SUCCESS) {
     const char *errDescStr, *errNameStr;
     cuGetErrorString(cuResult, &errDescStr);

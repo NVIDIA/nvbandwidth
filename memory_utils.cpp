@@ -26,20 +26,20 @@ void memset_pattern(void* buffer, unsigned long long size, unsigned int seed)
     unsigned long long remaining = size - (_2MBchunkCount * 1024 * 1024 * 2);
 
     // Allocate 2MB of pattern
-    cuAssert(cuMemHostAlloc((void**)&pattern, sizeof(char) * 1024 * 1024 * 2, CU_MEMHOSTALLOC_PORTABLE));
+    CU_ASSERT(cuMemHostAlloc((void**)&pattern, sizeof(char) * 1024 * 1024 * 2, CU_MEMHOSTALLOC_PORTABLE));
     xorshift2MBPattern(pattern, seed);
 
     for (n = 0; n < _2MBchunkCount; n++)
     {
-        cuAssert(cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, 1024 * 1024 * 2), "cuMemcpy failed.");
+        CU_ASSERT(cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, 1024 * 1024 * 2), "cuMemcpy failed.");
         buffer = (char*)buffer + (1024 * 1024 * 2);
     }
     if (remaining) {
-        cuAssert(cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, (size_t)remaining), "cuMemcpy failed.");
+        CU_ASSERT(cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, (size_t)remaining), "cuMemcpy failed.");
     }
 
-    cuAssert(cuCtxSynchronize());
-    cuAssert(cuMemFreeHost((void*)pattern));
+    CU_ASSERT(cuCtxSynchronize());
+    CU_ASSERT(cuMemFreeHost((void*)pattern));
 }
 
 void memcmp_pattern(void* buffer, unsigned long long size, unsigned int seed)
@@ -53,14 +53,14 @@ void memcmp_pattern(void* buffer, unsigned long long size, unsigned int seed)
     void* cpyBuffer = buffer;
 
     // Allocate 2MB of pattern
-    cuAssert(cuMemHostAlloc((void**)&devicePattern, sizeof(char) * 1024 * 1024 * 2, CU_MEMHOSTALLOC_PORTABLE));
+    CU_ASSERT(cuMemHostAlloc((void**)&devicePattern, sizeof(char) * 1024 * 1024 * 2, CU_MEMHOSTALLOC_PORTABLE));
     pattern = (unsigned int*)malloc(sizeof(char) * 1024 * 1024 * 2);
     xorshift2MBPattern(pattern, seed);
 
     for (n = 0; n < _2MBchunkCount; n++)
     {
-        cuAssert(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)buffer, 1024 * 1024 * 2));
-        cuAssert(cuCtxSynchronize());
+        CU_ASSERT(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)buffer, 1024 * 1024 * 2));
+        CU_ASSERT(cuCtxSynchronize());
         if(memcmp(pattern, devicePattern, 1024 * 1024 * 2) != 0)
         {
             for (x = 0; x < (1024 * 1024 * 2) / sizeof(unsigned int); x++)
@@ -73,7 +73,7 @@ void memcmp_pattern(void* buffer, unsigned long long size, unsigned int seed)
     }
     if (remaining)
     {
-        cuAssert(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)buffer, (size_t)remaining));
+        CU_ASSERT(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)buffer, (size_t)remaining));
         if (memcmp(pattern, devicePattern, (size_t)remaining) != 0)
         {
             for (x = 0; x < remaining / sizeof(unsigned int); x++)
@@ -84,8 +84,8 @@ void memcmp_pattern(void* buffer, unsigned long long size, unsigned int seed)
         }
     }
 
-    cuAssert(cuCtxSynchronize());
-    cuAssert(cuMemFreeHost((void*)devicePattern));
+    CU_ASSERT(cuCtxSynchronize());
+    CU_ASSERT(cuMemFreeHost((void*)devicePattern));
     free(pattern);
 }
 
@@ -95,7 +95,7 @@ bool isMemoryOwnedByCUDA(void *memory) {
 	if (status == CUDA_ERROR_INVALID_VALUE) {
 		return false;
 	} else {
-		cuAssert(status);
+		CU_ASSERT(status);
 		return true;
 	}
 }
@@ -106,7 +106,7 @@ void* allocateHostMemory(size_t size, bool isPageable)
 	if (isPageable) {
 		memory = malloc(size);
 	} else {
-		cuAssert(cuMemHostAlloc(&memory, size, CU_MEMHOSTALLOC_PORTABLE));
+		CU_ASSERT(cuMemHostAlloc(&memory, size, CU_MEMHOSTALLOC_PORTABLE));
 	}
 	return memory;
 }
@@ -114,7 +114,7 @@ void* allocateHostMemory(size_t size, bool isPageable)
 void freeHostMemory(void *memory)
 {
 	if (isMemoryOwnedByCUDA(memory)) {
-		cuAssert(cuMemFreeHost(memory));
+		CU_ASSERT(cuMemFreeHost(memory));
 	} else {
 		free(memory);
 	}

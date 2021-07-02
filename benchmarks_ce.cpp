@@ -20,39 +20,39 @@ static void memcpyAsync(void* dst, void* src, unsigned long long size, unsigned 
     volatile int *blockingVar = NULL;
     void *markerDst = NULL, *markerSrc = NULL, *additionalMarkerLocation = NULL;
 
-    cuAssert(cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING));
-    cuAssert(cuEventCreate(&startEvent, CU_EVENT_DEFAULT));
-    cuAssert(cuEventCreate(&endEvent, CU_EVENT_DEFAULT));
+    CU_ASSERT(cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING));
+    CU_ASSERT(cuEventCreate(&startEvent, CU_EVENT_DEFAULT));
+    CU_ASSERT(cuEventCreate(&endEvent, CU_EVENT_DEFAULT));
     
     // Spend time on the GPU so we finish submitting everything before the benchmark starts
     // Also events are tied to the last submission channel so we want to be sure it is copy and not compute
     for (unsigned int n = 0; n < WARMUP_COUNT; n++) {
         // As latency benchmarks do 1 byte copies, we have to ensure we're not doing 0 byte copies
-        cuAssert(cuMemcpyAsync((CUdeviceptr) dst, (CUdeviceptr) src, (size_t)((size + 7) / 8), stream));
+        CU_ASSERT(cuMemcpyAsync((CUdeviceptr) dst, (CUdeviceptr) src, (size_t)((size + 7) / 8), stream));
     }
 
-    cuAssert(cuEventRecord(startEvent, stream));
+    CU_ASSERT(cuEventRecord(startEvent, stream));
     for (unsigned int n = 0; n < loopCount; n++) {
-        cuAssert(cuMemcpyAsync((CUdeviceptr) dst, (CUdeviceptr) src, (size_t)size, stream));
+        CU_ASSERT(cuMemcpyAsync((CUdeviceptr) dst, (CUdeviceptr) src, (size_t)size, stream));
     }
-    cuAssert(cuEventRecord(endEvent, stream));
+    CU_ASSERT(cuEventRecord(endEvent, stream));
 
     if (!isPageable && !disableP2P) {
         *blockingVar = 1;
     }
 
-    cuAssert(cuStreamSynchronize(stream));
+    CU_ASSERT(cuStreamSynchronize(stream));
 
     float timeWithEvents = 0.0f;
-    cuAssert(cuEventElapsedTime(&timeWithEvents, startEvent, endEvent));
+    CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvent, endEvent));
     unsigned long long elapsedWithEventsInUs = (unsigned long long)(timeWithEvents * 1000.0f);
     *bandwidth = (size * loopCount * 1000ull * 1000ull) / elapsedWithEventsInUs; // Bandwidth in Bytes per second
 
     if (!isPageable && !disableP2P) {
-        cuAssert(cuMemFreeHost((void*)blockingVar));
+        CU_ASSERT(cuMemFreeHost((void*)blockingVar));
     }
 
-    cuAssert(cuCtxSynchronize());
+    CU_ASSERT(cuCtxSynchronize());
 }
 
 
@@ -72,35 +72,35 @@ static void memcpyAsync_bidirectional(void* dst1, void* src1, CUcontext ctx1, vo
     
     void *markerDst = NULL, *markerSrc = NULL, *additionalMarkerLocation = NULL;
 
-    cuAssert(cuCtxSetCurrent(ctx1));
-    cuAssert(cuCtxGetDevice(&dev1));
-    cuAssert(cuStreamCreate(&stream_dir1, CU_STREAM_NON_BLOCKING));
-    cuAssert(cuEventCreate(&startEvent_dir1, CU_EVENT_DEFAULT));
-    cuAssert(cuEventCreate(&endEvent_dir1, CU_EVENT_DEFAULT));
+    CU_ASSERT(cuCtxSetCurrent(ctx1));
+    CU_ASSERT(cuCtxGetDevice(&dev1));
+    CU_ASSERT(cuStreamCreate(&stream_dir1, CU_STREAM_NON_BLOCKING));
+    CU_ASSERT(cuEventCreate(&startEvent_dir1, CU_EVENT_DEFAULT));
+    CU_ASSERT(cuEventCreate(&endEvent_dir1, CU_EVENT_DEFAULT));
 
-    cuAssert(cuCtxSetCurrent(ctx2));
-    cuAssert(cuCtxGetDevice(&dev2));
-    cuAssert(cuStreamCreate(&stream_dir2, CU_STREAM_NON_BLOCKING));
-    cuAssert(cuEventCreate(&startEvent_dir2, CU_EVENT_DEFAULT));
-    cuAssert(cuEventCreate(&endEvent_dir2, CU_EVENT_DEFAULT));
+    CU_ASSERT(cuCtxSetCurrent(ctx2));
+    CU_ASSERT(cuCtxGetDevice(&dev2));
+    CU_ASSERT(cuStreamCreate(&stream_dir2, CU_STREAM_NON_BLOCKING));
+    CU_ASSERT(cuEventCreate(&startEvent_dir2, CU_EVENT_DEFAULT));
+    CU_ASSERT(cuEventCreate(&endEvent_dir2, CU_EVENT_DEFAULT));
 
     // Spend time on the GPU so we finish submitting everything before the benchmark starts
     // Also events are tied to the last submission channel so we want to be sure it is copy and not compute
     for (unsigned int n = 0; n < WARMUP_COUNT; n++) {
         // As latency benchmarks do 1 byte copies, we have to ensure we're not doing 0 byte copies
-        cuAssert(cuMemcpyAsync((CUdeviceptr) dst1, (CUdeviceptr) src1, (size_t)((size + 7) / 8), stream_dir1));
-        cuAssert(cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)((size + 7) / 8), stream_dir2));
+        CU_ASSERT(cuMemcpyAsync((CUdeviceptr) dst1, (CUdeviceptr) src1, (size_t)((size + 7) / 8), stream_dir1));
+        CU_ASSERT(cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)((size + 7) / 8), stream_dir2));
     }
 
-    cuAssert(cuEventRecord(startEvent_dir1, stream_dir1));
-    cuAssert(cuStreamWaitEvent(stream_dir2, startEvent_dir1, 0));
+    CU_ASSERT(cuEventRecord(startEvent_dir1, stream_dir1));
+    CU_ASSERT(cuStreamWaitEvent(stream_dir2, startEvent_dir1, 0));
 
     for (unsigned int n = 0; n < loopCount; n++) {
-        cuAssert(cuMemcpyAsync((CUdeviceptr) dst1, (CUdeviceptr) src1, (size_t)size, stream_dir1));
-        cuAssert(cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)size, stream_dir2));
+        CU_ASSERT(cuMemcpyAsync((CUdeviceptr) dst1, (CUdeviceptr) src1, (size_t)size, stream_dir1));
+        CU_ASSERT(cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)size, stream_dir2));
     }
 
-    cuAssert(cuEventRecord(endEvent_dir1, stream_dir1));
+    CU_ASSERT(cuEventRecord(endEvent_dir1, stream_dir1));
     
     if (!disableP2P) {
         *blockingVar = 1;
@@ -112,36 +112,36 @@ static void memcpyAsync_bidirectional(void* dst1, void* src1, CUcontext ctx1, vo
     do {
         // Enqueue extra work
         for (unsigned int n = 0; n < extraIters; n++) {
-            cuAssert(cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)size, stream_dir2));
+            CU_ASSERT(cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)size, stream_dir2));
         }
 
         // Record the event in the middle of interfering flow, to ensure the next batch starts enqueuing
         // before the previous one finishes.
-        cuAssert(cuEventRecord(endEvent_dir2, stream_dir2));
+        CU_ASSERT(cuEventRecord(endEvent_dir2, stream_dir2));
 
         // Add more iterations to hide latency of scheduling more work in the next iteration of loop.
         for (unsigned int n = 0; n < extraIters; n++) {
-            cuAssert(cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)size, stream_dir2));
+            CU_ASSERT(cuMemcpyAsync((CUdeviceptr) dst2, (CUdeviceptr) src2, (size_t)size, stream_dir2));
         }
 
         // Wait until the flow in the interference stream2 is finished.
-        cuAssert(cuEventSynchronize(endEvent_dir2));
+        CU_ASSERT(cuEventSynchronize(endEvent_dir2));
     } while (cuStreamQuery(stream_dir1) == CUDA_ERROR_NOT_READY);
 
-    cuAssert(cuStreamSynchronize(stream_dir1));
-    cuAssert(cuStreamSynchronize(stream_dir2));
+    CU_ASSERT(cuStreamSynchronize(stream_dir1));
+    CU_ASSERT(cuStreamSynchronize(stream_dir2));
 
     float timeWithEvents = 0.0f;
-    cuAssert(cuEventElapsedTime(&timeWithEvents, startEvent_dir1, endEvent_dir1));
+    CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvent_dir1, endEvent_dir1));
     double elapsedWithEventsInUs = ((double)timeWithEvents * 1000.0);
 
     *bandwidth = (size * loopCount * 1000ull * 1000ull) / (unsigned long long)elapsedWithEventsInUs;
 
     if (!disableP2P) {
-        cuAssert(cuMemFreeHost((void*)blockingVar));
+        CU_ASSERT(cuMemFreeHost((void*)blockingVar));
     }
     
-    cuAssert(cuCtxSynchronize());
+    CU_ASSERT(cuCtxSynchronize());
 }
 
 static void memcpy_and_check(void* dst, void* src, unsigned long long size, unsigned long long* bandwidth, unsigned long long loopCount = defaultLoopCount)
@@ -229,7 +229,7 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
     size_t procCount = 1;
     int deviceCount;
 
-    cuAssert(cuDeviceGetCount(&deviceCount));
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
 
     PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
 
@@ -246,31 +246,31 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
         /* The NUMA location of the calling thread determines the physical
            location of the pinned memory allocation, which can have different
            performance characteristics */
-        cuAssert(cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
-        cuAssert(cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
+        CU_ASSERT(cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
+        CU_ASSERT(cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
 
         for (size_t devIdx = 0; devIdx < deviceCount; devIdx++)
         {
             int currentDevice = devIdx;
 
-            cuAssert(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
-            cuAssert(cuCtxSetCurrent(srcCtx));
+            CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
+            CU_ASSERT(cuCtxSetCurrent(srcCtx));
 
-            cuAssert(cuMemAlloc((CUdeviceptr*)&HtoD_dstBuffer, (size_t)size));
-            cuAssert(cuMemAlloc((CUdeviceptr*)&DtoH_srcBuffer, (size_t)size));
+            CU_ASSERT(cuMemAlloc((CUdeviceptr*)&HtoD_dstBuffer, (size_t)size));
+            CU_ASSERT(cuMemAlloc((CUdeviceptr*)&DtoH_srcBuffer, (size_t)size));
 
             find_best_memcpy_bidirectional(HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, &bandwidth, size, loopCount);
 
             bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
             bandwidth_sum += bandwidth * 1e-9;
 
-            cuAssert(cuMemFree((CUdeviceptr)DtoH_srcBuffer));
-            cuAssert(cuMemFree((CUdeviceptr)HtoD_dstBuffer));
-            cuAssert(cuDevicePrimaryCtxRelease(currentDevice));
+            CU_ASSERT(cuMemFree((CUdeviceptr)DtoH_srcBuffer));
+            CU_ASSERT(cuMemFree((CUdeviceptr)HtoD_dstBuffer));
+            CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
         }
 
-        cuAssert(cuMemFreeHost(HtoD_srcBuffer));
-        cuAssert(cuMemFreeHost(DtoH_dstBuffer));
+        CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
+        CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
 
         PROC_MASK_CLEAR(procMask, procId);
     }
@@ -294,7 +294,7 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
     size_t procCount = 1;
     int deviceCount;
 
-    cuAssert(cuDeviceGetCount(&deviceCount));
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
 
     PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
 
@@ -311,31 +311,31 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
         /* The NUMA location of the calling thread determines the physical
            location of the pinned memory allocation, which can have different
            performance characteristics */
-        cuAssert(cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
-        cuAssert(cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
+        CU_ASSERT(cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
+        CU_ASSERT(cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
 
         for (size_t devIdx = 0; devIdx < deviceCount; devIdx++)
         {
             int currentDevice = devIdx;
 
-            cuAssert(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
-            cuAssert(cuCtxSetCurrent(srcCtx));
+            CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
+            CU_ASSERT(cuCtxSetCurrent(srcCtx));
 
-            cuAssert(cuMemAlloc((CUdeviceptr*)&HtoD_dstBuffer, (size_t)size));
-            cuAssert(cuMemAlloc((CUdeviceptr*)&DtoH_srcBuffer, (size_t)size));
+            CU_ASSERT(cuMemAlloc((CUdeviceptr*)&HtoD_dstBuffer, (size_t)size));
+            CU_ASSERT(cuMemAlloc((CUdeviceptr*)&DtoH_srcBuffer, (size_t)size));
             
             find_best_memcpy_bidirectional(DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, &bandwidth, size, loopCount);
 
             bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
             bandwidth_sum += bandwidth * 1e-9;
 
-            cuAssert(cuMemFree((CUdeviceptr)DtoH_srcBuffer));
-            cuAssert(cuMemFree((CUdeviceptr)HtoD_dstBuffer));
-            cuAssert(cuDevicePrimaryCtxRelease(currentDevice));
+            CU_ASSERT(cuMemFree((CUdeviceptr)DtoH_srcBuffer));
+            CU_ASSERT(cuMemFree((CUdeviceptr)HtoD_dstBuffer));
+            CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
         }
         
-        cuAssert(cuMemFreeHost(HtoD_srcBuffer));
-        cuAssert(cuMemFreeHost(DtoH_dstBuffer));
+        CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
+        CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
 
         PROC_MASK_CLEAR(procMask, procId);
     }
