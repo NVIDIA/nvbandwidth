@@ -40,11 +40,11 @@ std::map<std::string, Benchmark> create_benchmarks() {
        Benchmark(
            launch_DtoD_memcpy_write_SM,
            "Device to device memcpy using the Stream Multiprocessor (write)")},
-      {"device_to_device_bidirectional_memcpy_read_ce",
+      {"device_to_device_bidirectional_memcpy_read_sm",
        Benchmark(launch_DtoD_memcpy_bidirectional_read_SM,
                  "Bidirectional device to device memcpy using the Stream "
                  "Multiprocessor (read)")},
-      {"device_to_device_bidirectional_memcpy_write_ce",
+      {"device_to_device_bidirectional_memcpy_write_sm",
        Benchmark(launch_DtoD_memcpy_bidirectional_write_SM,
                  "Bidirectional device to device memcpy using the Stream "
                  "Multiprocessor (write)")}};
