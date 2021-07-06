@@ -50,6 +50,11 @@ std::map<std::string, Benchmark> create_benchmarks() {
                  "Multiprocessor (write)")}};
 }
 
+void init() {
+  cuInit(0);
+  retain_ctx();
+}
+
 int main(int argc, char **argv) {
   averageLoopCount = defaultAverageLoopCount;
   disableP2P = true;
@@ -92,7 +97,7 @@ int main(int argc, char **argv) {
     std::cout << "Running benchmark " << benchmark_name << ".\n";
   }
 
-  cuInit(0);
+  init();
 
   // Run benchmark
   try {

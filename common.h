@@ -217,3 +217,13 @@ inline void CU_ASSERT(CUresult cuResult, const char *msg = nullptr) {
     std::exit(1);
   }
 }
+
+// Context helpers
+inline void retain_ctx() {
+  CUcontext srcCtx;
+  int device;
+  cudaGetDevice(&device);
+
+  CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, device));
+  CU_ASSERT(cuCtxSetCurrent(srcCtx));
+}

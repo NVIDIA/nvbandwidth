@@ -154,16 +154,9 @@ void launch_HtoD_memcpy_SM(const std::string &test_name,
 
   std::vector<double> bandwidthValues(deviceCount);
 
-  CUcontext srcCtx;
-  int device;
-  cudaGetDevice(&device);
-
-  CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, device));
-  CU_ASSERT(cuCtxSetCurrent(srcCtx));
-
-  CU_ASSERT(cuMemHostAlloc(&srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE),
-            "cuMemHostAlloc failed.");
+  CU_ASSERT(cuMemHostAlloc(&srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
   for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+    CUcontext srcCtx;
     CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
     CU_ASSERT(cuCtxSetCurrent(srcCtx));
     CU_ASSERT(cuMemAlloc((CUdeviceptr *)&dstBuffer, (size_t)size));
@@ -197,6 +190,9 @@ void launch_HtoD_memcpy_SM(const std::string &test_name,
     CU_ASSERT(cuMemFree((CUdeviceptr)dstBuffer));
     CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
   }
+  
+  retain_ctx();
+
   CU_ASSERT(cuMemFreeHost(srcBuffer));
 
   std::cout << "memcpy SM GPU <- CPU bandwidth (GB/s):" << std::endl;
@@ -208,7 +204,7 @@ void launch_DtoH_memcpy_SM(const std::string &test_name,
                            unsigned long long size,
                            unsigned long long loopCount) {
   int deviceCount = 0;
-
+  CUcontext srcCtx;
   void *dstBuffer;
   void *srcBuffer;
   unsigned long long bandwidth;
@@ -220,8 +216,6 @@ void launch_DtoH_memcpy_SM(const std::string &test_name,
 
   CU_ASSERT(cuMemHostAlloc(&dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
   for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
-    CUcontext srcCtx;
-
     CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
     CU_ASSERT(cuCtxSetCurrent(srcCtx));
 
@@ -252,6 +246,9 @@ void launch_DtoH_memcpy_SM(const std::string &test_name,
 
     CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
   }
+  
+  retain_ctx();
+
   CU_ASSERT(cuMemFreeHost(dstBuffer));
 
   std::cout << "memcpy SM GPU -> CPU bandwidth (GB/s):" << std::endl;
@@ -262,6 +259,7 @@ void launch_DtoH_memcpy_SM(const std::string &test_name,
 static void launch_DtoD_memcpy_SM(const std::string &test_name, bool read,
                                   unsigned long long size,
                                   unsigned long long loopCount) {
+  CUcontext srcCtx;
   void *peerBuffer;
   void *srcBuffer;
   unsigned long long bandwidth;
@@ -273,7 +271,6 @@ static void launch_DtoD_memcpy_SM(const std::string &test_name, bool read,
   PeerValueMatrix<double> bandwidth_matrix(deviceCount);
 
   for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
-    CUcontext srcCtx;
     CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
     CU_ASSERT(cuCtxSetCurrent(srcCtx));
 
@@ -333,6 +330,10 @@ static void launch_DtoD_memcpy_SM(const std::string &test_name, bool read,
         CU_ASSERT(cuDevicePrimaryCtxRelease(peer));
       }
     }
+    // TODO : Switch to outermost context?
+    //          basically retain the 
+    //          context of the device 
+    //          corresponding to this iteration
     CU_ASSERT(cuMemFree((CUdeviceptr)srcBuffer));
     CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
   }
@@ -347,6 +348,7 @@ static void launch_DtoD_memcpy_bidirectional_SM(const std::string &test_name,
                                                 bool read,
                                                 unsigned long long size,
                                                 unsigned long long loopCount) {
+  CUcontext srcCtx;
   void *gpuAbuffer0;
   void *gpuAbuffer1;
   void *gpuBbuffer0;
@@ -360,7 +362,6 @@ static void launch_DtoD_memcpy_bidirectional_SM(const std::string &test_name,
   PeerValueMatrix<double> bandwidth_matrix(deviceCount);
 
   for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
-    CUcontext srcCtx;
     CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
     CU_ASSERT(cuCtxSetCurrent(srcCtx));
 

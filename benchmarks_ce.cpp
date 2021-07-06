@@ -248,6 +248,7 @@ size_t getFirstEnabledCPU() {
 void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name,
                                          unsigned long long size,
                                          unsigned long long loopCount) {
+  CUcontext srcCtx;
   void *HtoD_dstBuffer;
   void *HtoD_srcBuffer;
   void *DtoH_dstBuffer;
@@ -267,10 +268,6 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name,
 
   for (size_t procId = 0; procId < procCount; procId++) {
     PROC_MASK_SET(procMask, firstEnabledCPU);
-    CUcontext srcCtx;
-
-    cuDevicePrimaryCtxRetain(&srcCtx, 0);
-    cuCtxSetCurrent(srcCtx);
 
     /* The NUMA location of the calling thread determines the physical
        location of the pinned memory allocation, which can have different
@@ -301,6 +298,8 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name,
       CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
     }
 
+    retain_ctx();
+    
     CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
     CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
 
@@ -318,6 +317,7 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name,
 void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name,
                                          unsigned long long size,
                                          unsigned long long loopCount) {
+  CUcontext srcCtx;
   void *HtoD_dstBuffer;
   void *HtoD_srcBuffer;
   void *DtoH_dstBuffer;
@@ -337,10 +337,6 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name,
 
   for (size_t procId = 0; procId < procCount; procId++) {
     PROC_MASK_SET(procMask, firstEnabledCPU);
-    CUcontext srcCtx;
-
-    cuDevicePrimaryCtxRetain(&srcCtx, 0);
-    cuCtxSetCurrent(srcCtx);
 
     /* The NUMA location of the calling thread determines the physical
        location of the pinned memory allocation, which can have different
@@ -370,6 +366,8 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name,
       CU_ASSERT(cuMemFree((CUdeviceptr)HtoD_dstBuffer));
       CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
     }
+
+    retain_ctx();
 
     CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
     CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
