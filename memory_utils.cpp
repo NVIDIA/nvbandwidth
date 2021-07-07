@@ -23,20 +23,15 @@ void memset_pattern(void *buffer, unsigned long long size, unsigned int seed) {
   unsigned long long remaining = size - (_2MBchunkCount * 1024 * 1024 * 2);
 
   // Allocate 2MB of pattern
-  CU_ASSERT(cuMemHostAlloc((void **)&pattern, sizeof(char) * 1024 * 1024 * 2,
-                           CU_MEMHOSTALLOC_PORTABLE));
+  CU_ASSERT(cuMemHostAlloc((void **)&pattern, sizeof(char) * 1024 * 1024 * 2, CU_MEMHOSTALLOC_PORTABLE));
   xorshift2MBPattern(pattern, seed);
 
   for (n = 0; n < _2MBchunkCount; n++) {
-    CU_ASSERT(
-        cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, 1024 * 1024 * 2),
-        "cuMemcpy failed.");
+    CU_ASSERT(cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, 1024 * 1024 * 2), "cuMemcpy failed.");
     buffer = (char *)buffer + (1024 * 1024 * 2);
   }
   if (remaining) {
-    CU_ASSERT(
-        cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, (size_t)remaining),
-        "cuMemcpy failed.");
+    CU_ASSERT(cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, (size_t)remaining), "cuMemcpy failed.");
   }
 
   CU_ASSERT(cuCtxSynchronize());
@@ -53,15 +48,12 @@ void memcmp_pattern(void *buffer, unsigned long long size, unsigned int seed) {
   void *cpyBuffer = buffer;
 
   // Allocate 2MB of pattern
-  CU_ASSERT(cuMemHostAlloc((void **)&devicePattern,
-                           sizeof(char) * 1024 * 1024 * 2,
-                           CU_MEMHOSTALLOC_PORTABLE));
+  CU_ASSERT(cuMemHostAlloc((void **)&devicePattern, sizeof(char) * 1024 * 1024 * 2, CU_MEMHOSTALLOC_PORTABLE));
   pattern = (unsigned int *)malloc(sizeof(char) * 1024 * 1024 * 2);
   xorshift2MBPattern(pattern, seed);
 
   for (n = 0; n < _2MBchunkCount; n++) {
-    CU_ASSERT(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)buffer,
-                       1024 * 1024 * 2));
+    CU_ASSERT(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)buffer, 1024 * 1024 * 2));
     CU_ASSERT(cuCtxSynchronize());
     if (memcmp(pattern, devicePattern, 1024 * 1024 * 2) != 0) {
       // TODO : Double check
@@ -84,8 +76,7 @@ void memcmp_pattern(void *buffer, unsigned long long size, unsigned int seed) {
     buffer = (char *)buffer + (1024 * 1024 * 2);
   }
   if (remaining) {
-    CU_ASSERT(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)buffer,
-                       (size_t)remaining));
+    CU_ASSERT(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)buffer, (size_t)remaining));
     if (memcmp(pattern, devicePattern, (size_t)remaining) != 0) {
       // TODO : Double check
       /*
@@ -112,8 +103,7 @@ void memcmp_pattern(void *buffer, unsigned long long size, unsigned int seed) {
 
 bool isMemoryOwnedByCUDA(void *memory) {
   CUmemorytype memorytype;
-  CUresult status = cuPointerGetAttribute(
-      &memorytype, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (CUdeviceptr)memory);
+  CUresult status = cuPointerGetAttribute(&memorytype, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (CUdeviceptr)memory);
   if (status == CUDA_ERROR_INVALID_VALUE) {
     return false;
   } else {

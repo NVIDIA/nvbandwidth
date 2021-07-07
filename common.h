@@ -62,8 +62,7 @@ class PerformanceStatistic {
 
 public:
   PerformanceStatistic()
-      : m_smallest(DBL_MAX), m_largest(-DBL_MAX), m_total(0.0), m_mean(0.0),
-        m_var(0.0), m_cnt(0) {}
+      : m_smallest(DBL_MAX), m_largest(-DBL_MAX), m_total(0.0), m_mean(0.0), m_var(0.0), m_cnt(0) {}
   void operator()(const double &sample) { recordSample(sample); }
   void recordSample(const double &sample) {
     m_cnt++;
@@ -132,8 +131,7 @@ template <class T> struct PeerValueMatrix {
   int m_rows, m_columns;
   PeerValueMatrix(int rows, int columns)
       : m_matrix(new T[rows * columns]()), m_rows(rows), m_columns(columns) {}
-  PeerValueMatrix(int rows)
-      : m_matrix(new T[rows * rows]()), m_rows(rows), m_columns(rows) {}
+  PeerValueMatrix(int rows) : m_matrix(new T[rows * rows]()), m_rows(rows), m_columns(rows) {}
 
   ~PeerValueMatrix() { delete[] m_matrix; }
   T &value(int src, int dst) {
@@ -151,8 +149,7 @@ template <class T> struct PeerValueMatrix {
 template <class T>
 std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
   o << ' ';
-  for (int currentDevice = 0; currentDevice < matrix.m_columns;
-       currentDevice++) {
+  for (int currentDevice = 0; currentDevice < matrix.m_columns; currentDevice++) {
     o << std::setw(10) << currentDevice;
   }
   o << std::endl;
@@ -166,8 +163,7 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
 }
 
 template <class T>
-std::ostream &printIndexVector(std::ostream &o, std::vector<T> &v,
-                               int field_width = 10) {
+std::ostream &printIndexVector(std::ostream &o, std::vector<T> &v, int field_width = 10) {
   for (size_t i = 0; i < v.size(); i++)
     o << std::setw(field_width) << i;
   o << std::endl;
