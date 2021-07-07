@@ -1,4 +1,7 @@
-#include <cuda.h>
+#ifndef MEMORY_UTILS_H
+#define MEMORY_UTILS_H
+
+#include <cstddef>
 
 // Allocate host memory (including pageable)
 void *allocateHostMemory(size_t size, bool isPageable);
@@ -19,3 +22,5 @@ void memset_pattern(void *buffer, unsigned long long size, unsigned int seed);
 /// assert This call is using the current cuda context to perform the set and it
 /// causes a ctxSynchronize
 void memcmp_pattern(void *buffer, unsigned long long size, unsigned int seed);
+
+#endif

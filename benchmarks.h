@@ -1,6 +1,8 @@
+#ifndef BENCHMARKS_H
+#define BENCHMARKS_H
+
 #include "common.h"
-#include <iostream>
-#include <string>
+#include <map>
 
 typedef void (*benchfn_t)(const std::string &, unsigned long long,
                           unsigned long long);
@@ -15,7 +17,7 @@ public:
   Benchmark(benchfn_t benchmark_func, std::string desc)
       : benchmark_func(benchmark_func), desc(desc) {}
 
-  benchfn_t benchFn() { return benchmark_func; }
+  benchfn_t bench_fn() { return benchmark_func; }
 
   std::string description() { return desc; }
 };
@@ -55,3 +57,5 @@ void launch_DtoD_memcpy_bidirectional_read_SM(const std::string &test_name, unsi
                                               unsigned long long loopCount);
 void launch_DtoD_memcpy_bidirectional_write_SM(const std::string &test_name, unsigned long long size,
                                                unsigned long long loopCount);
+
+#endif

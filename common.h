@@ -1,3 +1,6 @@
+#ifndef COMMON_H
+#define COMMON_H
+
 #include <cassert>
 #include <cmath>
 #include <cstdlib>
@@ -223,3 +226,5 @@ inline void retain_ctx() {
   CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, device));
   CU_ASSERT(cuCtxSetCurrent(srcCtx));
 }
+
+#endif

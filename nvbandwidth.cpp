@@ -86,7 +86,8 @@ int main(int argc, char **argv) {
   if (vm.count("list")) {
     for (std::map<std::string, Benchmark>::iterator iter = benchmarks.begin();
          iter != benchmarks.end(); ++iter) {
-      std::cout << iter->first << ":\n\t\t" << iter->second.description() << "\n";
+      std::cout << iter->first << ":\n\t\t" << iter->second.description()
+                << "\n";
     }
     return 1;
   }
@@ -101,7 +102,8 @@ int main(int argc, char **argv) {
   // Run benchmark
   try {
     Benchmark bench = benchmarks[benchmark_name];
-    bench.benchFn()(benchmarks[benchmark_name].description(), defaultBufferSize, defaultLoopCount);
+    bench.bench_fn()(benchmarks[benchmark_name].description(), defaultBufferSize,
+                    defaultLoopCount);
   } catch (std::string s) {
     std::cout << s << std::endl;
   }
