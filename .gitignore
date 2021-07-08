@@ -6,4 +6,4 @@ nvbandwidth
 .idea
 vscode.mk
 error.h
-bench.sh
+bench_all.sh

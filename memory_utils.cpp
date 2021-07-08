@@ -57,13 +57,14 @@ void memcmp_pattern(void *buffer, unsigned long long size, unsigned int seed) {
     	CU_ASSERT(cuCtxSynchronize());
     	if (memcmp(pattern, devicePattern, 1024 * 1024 * 2) != 0) {
       		for (x = 0; x < (1024 * 1024 * 2) / sizeof(unsigned int); x++) {
-        		if (devicePattern[x] != pattern[x])
+        		if (devicePattern[x] != pattern[x]) {
           			std::cout << " Invalid value when checking the pattern at <"
             			<< (void *)((char *)buffer + n * (1024 * 1024 * 2) + x * sizeof(unsigned int))
         				<< ">" << std::endl << " Current offset [ "
             			<< (unsigned long long)((char *)buffer - (char *)cpyBuffer) + 
 						(unsigned long long)(x * sizeof(unsigned int))
             			<< "/" << (size) << "]" << std::endl;
+				}
       		}
     	}
 
@@ -73,13 +74,14 @@ void memcmp_pattern(void *buffer, unsigned long long size, unsigned int seed) {
     	CU_ASSERT(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)buffer, (size_t)remaining));
     	if (memcmp(pattern, devicePattern, (size_t)remaining) != 0) {
 			for (x = 0; x < (1024 * 1024 * 2) / sizeof(unsigned int); x++) {
-        		if (devicePattern[x] != pattern[x])
+        		if (devicePattern[x] != pattern[x]) {
           			std::cout << " Invalid value when checking the pattern at <"
             			<< (void *)((char *)buffer + n * (1024 * 1024 * 2) + x * sizeof(unsigned int))
         				<< ">" << std::endl << " Current offset [ "
             			<< (unsigned long long)((char *)buffer - (char *)cpyBuffer) + 
 						(unsigned long long)(x * sizeof(unsigned int))
             			<< "/" << (size) << "]" << std::endl;
+				}
       		}
     	}
   	}
