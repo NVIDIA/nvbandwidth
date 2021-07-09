@@ -22,6 +22,9 @@ const unsigned int _2MB = 1024 * 1024 * 2;
 extern unsigned int averageLoopCount;
 extern bool disableP2P;
 
+// Verbosity
+extern bool VERBOSE;
+
 // Rounds n up to the nearest multiple of "multiple".
 // if n is already a multiple of "multiple", n is returned unchanged.
 // works for arbitrary value of "multiple".

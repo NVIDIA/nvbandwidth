@@ -1,8 +1,8 @@
-# nvbandwidth
-A host to device, device to host, and device to device benchmark suit to measure memory bandwidth.
+# NVBandwidth
+Memory copy performance microbenchmark.
 
 ## Dependencies
-To build and run nvbandwidth please install the Boost program_options (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html) and Boost exceptions (https://www.boost.org/doc/libs/1_66_0/libs/exception/doc/boost-exception.html).
+To build and run NVBandwidth please install the Boost program_options (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html) and Boost exceptions (https://www.boost.org/doc/libs/1_66_0/libs/exception/doc/boost-exception.html).
 
 Ubuntu/Debian users can run the following to install:
 ```

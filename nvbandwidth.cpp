@@ -16,6 +16,7 @@ namespace opt = boost::program_options;
 
 unsigned int averageLoopCount;
 bool disableP2P;
+bool VERBOSE;
 
 // Define benchmarks here
 std::map<std::string, Benchmark> create_benchmarks() {
@@ -60,10 +61,11 @@ int main(int argc, char **argv) {
 
   	// Args parsing
   	opt::options_description desc("NVBandwidth CLI");
-  	desc.add_options()("help", "Produce help message")(
-      	"list", "List available benchmarks")("benchmark",
-                                           opt::value<std::string>(),
-                                           "Benchmark to run");
+  	desc.add_options()
+	  	("help", "Produce help message")
+	  	("list", "List available benchmarks")
+	  	("verbose", "Verbose output")
+	  	("benchmark", opt::value<std::string>(), "Benchmark to run");
 
   	opt::variables_map vm;
   	try {
@@ -84,8 +86,11 @@ int main(int argc, char **argv) {
         	iter != benchmarks.end(); ++iter) {
       		std::cout << iter->first << ":\n\t\t" << iter->second.description() << "\n";
     	}
-    	return 1;
+    	return 0;
   	}
+
+	if (vm.count("verbose")) VERBOSE = true;
+	else VERBOSE = false;
 
   	if (vm.count("benchmark")) {
     	benchmark_name = vm["benchmark"].as<std::string>();
