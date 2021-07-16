@@ -21,6 +21,12 @@ bool VERBOSE;
 // Define benchmarks here
 std::map<std::string, Benchmark> create_benchmarks() {
   	return {
+		{"host_to_device_memcpy_ce",
+       		Benchmark(launch_HtoD_memcpy_CE,
+                	"Host to device memcpy using the Copy Engine")},
+		{"device_to_host_memcpy_ce",
+       		Benchmark(launch_DtoH_memcpy_CE,
+                	"Device to host memcpy using the Copy Engine")},
 		{"host_to_device_bidirectional_memcpy_ce",
        		Benchmark(launch_HtoD_memcpy_bidirectional_CE,
                 	"Bidirectional host to device memcpy using the Copy Engine")},

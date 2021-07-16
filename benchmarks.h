@@ -36,6 +36,12 @@ public:
 };
 
 // CE Benchmarks
+void launch_HtoD_memcpy_CE(
+    const std::string &test_name, unsigned long long size = defaultBufferSize,
+    unsigned long long loopCount = defaultLoopCount);
+void launch_DtoH_memcpy_CE(
+    const std::string &test_name, unsigned long long size = defaultBufferSize,
+    unsigned long long loopCount = defaultLoopCount);
 void launch_HtoD_memcpy_bidirectional_CE(
     const std::string &test_name, unsigned long long size = defaultBufferSize,
     unsigned long long loopCount = defaultLoopCount);

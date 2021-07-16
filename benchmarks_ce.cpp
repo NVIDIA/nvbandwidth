@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstddef>
 #include <cuda.h>
 #include <iomanip>
 #include <iostream>
@@ -223,6 +224,107 @@ size_t getFirstEnabledCPU() {
   	}
   	free(procMask);
   	return firstEnabledCPU;
+}
+
+void launch_HtoD_memcpy_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount) {
+    void* dstBuffer;
+    void* srcBuffer;
+    double perf_value_sum = 0.0;
+    int deviceCount = 0;
+    size_t *procMask = NULL;
+    size_t firstEnabledCPU = getFirstEnabledCPU();
+    size_t procCount = 1;
+
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
+
+  	PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
+
+    procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
+
+    for (size_t procId = 0; procId < procCount; procId++)
+    {
+		PROC_MASK_SET(procMask, firstEnabledCPU);
+
+		cuMemHostAlloc(&srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE);
+
+        for (size_t devIdx = 0; devIdx < deviceCount; devIdx++)
+        {
+            int currentDevice = devIdx;
+            CUcontext srcCtx;
+
+            CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
+            CU_ASSERT(cuCtxSetCurrent(srcCtx));
+            
+            CU_ASSERT(cuMemAlloc((CUdeviceptr*)&dstBuffer, (size_t)size));
+
+        	unsigned long long bandwidth;
+            find_best_memcpy(srcBuffer, dstBuffer, &bandwidth, size, loopCount);
+            bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
+            perf_value_sum += bandwidth * 1e-9;
+
+            CU_ASSERT(cuMemFree((CUdeviceptr)dstBuffer));
+
+            CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
+
+            PROC_MASK_CLEAR(procMask, procId);
+        }
+        freeHostMemory(srcBuffer);
+    }
+
+    free(procMask);
+
+    std::cout << "memcpy CE GPU(columns) <- CPU(rows) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
+void launch_DtoH_memcpy_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount) {
+    void* dstBuffer;
+    void* srcBuffer;
+    double perf_value_sum = 0.0;
+    int deviceCount = 0;
+    size_t *procMask = NULL;
+    size_t firstEnabledCPU = getFirstEnabledCPU();
+    size_t procCount = 1;
+
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
+
+  	PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
+
+    procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
+
+    for (size_t procId = 0; procId < procCount; procId++)
+    {
+        PROC_MASK_SET(procMask, firstEnabledCPU);
+
+		CU_ASSERT(cuMemHostAlloc(&dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
+        
+		for (size_t devIdx = 0; devIdx < deviceCount; devIdx++)
+        {
+            int currentDevice = devIdx;
+            CUcontext srcCtx;
+
+            CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
+            CU_ASSERT(cuCtxSetCurrent(srcCtx));
+            CU_ASSERT(cuMemAlloc((CUdeviceptr*)&srcBuffer, size));
+
+            unsigned long long bandwidth;
+            find_best_memcpy(srcBuffer, dstBuffer, &bandwidth, size, loopCount);
+            bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
+            perf_value_sum += bandwidth * 1e-9;
+
+            CU_ASSERT(cuMemFree((CUdeviceptr)srcBuffer));
+
+            CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
+        }
+
+        CU_ASSERT(cuMemFreeHost(dstBuffer));
+		PROC_MASK_CLEAR(procMask, procId);
+    }
+
+    free(procMask);
+
+    std::cout << "memcpy CE GPU(columns) -> CPU(rows) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
 void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size,
