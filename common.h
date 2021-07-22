@@ -67,8 +67,7 @@ class PerformanceStatistic {
   	size_t m_cnt;
 
 public:
-  	PerformanceStatistic(): m_smallest(DBL_MAX), m_largest(-DBL_MAX), m_total(0.0), m_mean(0.0),
-							m_var(0.0), m_cnt(0) {}
+  	PerformanceStatistic(): m_smallest(DBL_MAX), m_largest(-DBL_MAX), m_total(0.0), m_mean(0.0), m_var(0.0), m_cnt(0) {}
   	
 	void operator()(const double &sample) { recordSample(sample); }
   	
@@ -146,8 +145,7 @@ static std::ostream &operator<<(std::ostream &o, const cudaStat &s) {
 template <class T> struct PeerValueMatrix {
   	T *m_matrix;
   	int m_rows, m_columns;
-  	PeerValueMatrix(int rows, int columns)
-    	: m_matrix(new T[rows * columns]()), m_rows(rows), m_columns(columns) {}
+  	PeerValueMatrix(int rows, int columns): m_matrix(new T[rows * columns]()), m_rows(rows), m_columns(columns) {}
   	PeerValueMatrix(int rows) : m_matrix(new T[rows * rows]()), m_rows(rows), m_columns(rows) {}
 
   	~PeerValueMatrix() { delete[] m_matrix; }
@@ -192,8 +190,7 @@ std::ostream &printIndexVector(std::ostream &o, std::vector<T> &v, int field_wid
 
 /* Calculates the least-squares approximation of the linear data */
 template <class T>
-void calculateLeastSquares(const std::vector<T> &x, const std::vector<T> &y, double &slope,
-						double &intercept) {
+void calculateLeastSquares(const std::vector<T> &x, const std::vector<T> &y, double &slope, double &intercept) {
   	double x_avg = 0.0, y_avg = 0.0;
   	double rise = 0.0, run = 0.0;
   	ASSERT_GT(x.size(), 1U);

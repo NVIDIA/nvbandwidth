@@ -13,9 +13,7 @@
 const size_t WARMUP_COUNT = 32;
 const size_t START_COPY_MARKER_SIZE = 17;
 
-static void memcpyAsync(void *dst, void *src, unsigned long long size,
-                        unsigned long long *bandwidth, bool isPageable,
-                        unsigned long long loopCount = defaultLoopCount) {
+static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned long long *bandwidth, bool isPageable, unsigned long long loopCount = defaultLoopCount) {
   	CUstream stream;
   	CUevent startEvent;
   	CUevent endEvent;
@@ -60,10 +58,7 @@ static void memcpyAsync(void *dst, void *src, unsigned long long size,
 }
 
 static void
-memcpyAsync_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2,
-                        void *src2, CUcontext ctx2, unsigned long long size,
-                        unsigned long long *bandwidth,
-                        unsigned long long loopCount = defaultLoopCount) {
+memcpyAsync_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2, unsigned long long size, unsigned long long *bandwidth, unsigned long long loopCount = defaultLoopCount) {
   	volatile int *blockingVar = NULL;
 
   	int dev1, dev2;
@@ -96,10 +91,8 @@ memcpyAsync_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2,
   	for (unsigned int n = 0; n < WARMUP_COUNT; n++) {
     	// As latency benchmarks do 1 byte copies, we have to ensure we're not doing
     	// 0 byte copies
-    	CU_ASSERT(cuMemcpyAsync((CUdeviceptr)dst1, (CUdeviceptr)src1,
-                            (size_t)((size + 7) / 8), stream_dir1));
-    	CU_ASSERT(cuMemcpyAsync((CUdeviceptr)dst2, (CUdeviceptr)src2,
-                            (size_t)((size + 7) / 8), stream_dir2));
+    	CU_ASSERT(cuMemcpyAsync((CUdeviceptr)dst1, (CUdeviceptr)src1, (size_t)((size + 7) / 8), stream_dir1));
+    	CU_ASSERT(cuMemcpyAsync((CUdeviceptr)dst2, (CUdeviceptr)src2, (size_t)((size + 7) / 8), stream_dir2));
   	}
 
   	CU_ASSERT(cuEventRecord(startEvent_dir1, stream_dir1));
@@ -155,9 +148,7 @@ memcpyAsync_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2,
   	CU_ASSERT(cuCtxSynchronize());
 }
 
-static void memcpy_and_check(void *dst, void *src, unsigned long long size,
-                            unsigned long long *bandwidth,
-                            unsigned long long loopCount = defaultLoopCount) {
+static void memcpy_and_check(void *dst, void *src, unsigned long long size, unsigned long long *bandwidth, unsigned long long loopCount = defaultLoopCount) {
   	memset_pattern(src, size, 0xCAFEBABE);
   	memset_pattern(dst, size, 0xBAADF00D);
 
@@ -166,9 +157,8 @@ static void memcpy_and_check(void *dst, void *src, unsigned long long size,
   	memcmp_pattern(dst, size, 0xCAFEBABE);
 }
 
-static void memcpyAsync_and_check_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2,
-    										CUcontext ctx2, unsigned long long size, unsigned long long *bandwidth,
-											unsigned long long loopCount = defaultLoopCount) {
+static void memcpyAsync_and_check_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2,
+	unsigned long long size, unsigned long long *bandwidth, unsigned long long loopCount = defaultLoopCount) {
 	memset_pattern(src1, size, 0xCAFEBABE);
   	memset_pattern(dst1, size, 0xBAADF00D);
   	memset_pattern(src2, size, 0xFEEEFEEE);
@@ -178,8 +168,7 @@ static void memcpyAsync_and_check_bidirectional(void *dst1, void *src1, CUcontex
   	memcmp_pattern(dst2, size, 0xFEEEFEEE);
 }
 
-static void find_best_memcpy(void *src, void *dst, unsigned long long *bandwidth,
-                            unsigned long long size, unsigned long long loopCount) {
+static void find_best_memcpy(void *src, void *dst, unsigned long long *bandwidth, unsigned long long size, unsigned long long loopCount) {
   	unsigned long long bandwidth_current;
   	cudaStat bandwidthStat;
 
@@ -191,17 +180,16 @@ static void find_best_memcpy(void *src, void *dst, unsigned long long *bandwidth
   	*bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
 }
 
-static void find_memcpy_time(void *src, void *dst, double *time_us, unsigned long long size,
-                            unsigned long long loopCount) {
+static void find_memcpy_time(void *src, void *dst, double *time_us, unsigned long long size, unsigned long long loopCount) {
   	unsigned long long bandwidth;
   	find_best_memcpy(src, dst, &bandwidth, size, loopCount);
   	*time_us = size * 1e6 / bandwidth;
 }
 
-static void find_best_memcpy_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2,
-                                        void *src2, CUcontext ctx2, unsigned long long *bandwidth,
-                                        unsigned long long size, unsigned long long loopCount) {
-  	unsigned long long bandwidth_current;
+static void find_best_memcpy_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2, 
+	unsigned long long *bandwidth, unsigned long long size, unsigned long long loopCount) {
+  	
+	unsigned long long bandwidth_current;
   	cudaStat bandwidthStat;
 
   	*bandwidth = 0;
@@ -241,14 +229,12 @@ void launch_HtoD_memcpy_CE(const std::string &test_name, unsigned long long size
 
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
-    for (size_t procId = 0; procId < procCount; procId++)
-    {
+    for (size_t procId = 0; procId < procCount; procId++) {
 		PROC_MASK_SET(procMask, firstEnabledCPU);
 
 		cuMemHostAlloc(&srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE);
 
-        for (size_t devIdx = 0; devIdx < deviceCount; devIdx++)
-        {
+        for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
             int currentDevice = devIdx;
             CUcontext srcCtx;
 
@@ -292,14 +278,12 @@ void launch_DtoH_memcpy_CE(const std::string &test_name, unsigned long long size
 
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
-    for (size_t procId = 0; procId < procCount; procId++)
-    {
+    for (size_t procId = 0; procId < procCount; procId++) {
         PROC_MASK_SET(procMask, firstEnabledCPU);
 
 		CU_ASSERT(cuMemHostAlloc(&dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
         
-		for (size_t devIdx = 0; devIdx < deviceCount; devIdx++)
-        {
+		for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
             int currentDevice = devIdx;
             CUcontext srcCtx;
 
@@ -327,8 +311,7 @@ void launch_DtoH_memcpy_CE(const std::string &test_name, unsigned long long size
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size,
-                                        unsigned long long loopCount) {
+void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount) {
   	CUcontext srcCtx;
   	void *HtoD_dstBuffer;
   	void *HtoD_srcBuffer;
@@ -365,8 +348,7 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
       		CU_ASSERT(cuMemAlloc((CUdeviceptr *)&HtoD_dstBuffer, (size_t)size));
       		CU_ASSERT(cuMemAlloc((CUdeviceptr *)&DtoH_srcBuffer, (size_t)size));
 
-      		find_best_memcpy_bidirectional(HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, DtoH_dstBuffer,
-                                    DtoH_srcBuffer, srcCtx, &bandwidth, size, loopCount);
+      		find_best_memcpy_bidirectional(HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, &bandwidth, size, loopCount);
 
       		bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
       		bandwidth_sum += bandwidth * 1e-9;
@@ -390,8 +372,7 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
   	std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size,
-                                        unsigned long long loopCount) {
+void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount) {
   	CUcontext srcCtx;
   	void *HtoD_dstBuffer;
   	void *HtoD_srcBuffer;
@@ -428,8 +409,7 @@ void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
       		CU_ASSERT(cuMemAlloc((CUdeviceptr *)&HtoD_dstBuffer, (size_t)size));
       		CU_ASSERT(cuMemAlloc((CUdeviceptr *)&DtoH_srcBuffer, (size_t)size));
 
-      		find_best_memcpy_bidirectional(DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, HtoD_dstBuffer, HtoD_srcBuffer,
-                                    srcCtx, &bandwidth, size, loopCount);
+      		find_best_memcpy_bidirectional(DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, &bandwidth, size, loopCount);
       		bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
       		bandwidth_sum += bandwidth * 1e-9;
 
