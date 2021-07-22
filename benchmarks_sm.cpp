@@ -71,9 +71,9 @@ static void memcpyAsync(std::vector<BenchParams> params, unsigned long long size
   	CU_ASSERT(cuMemFreeHost((void *)blockingVar));
 }
 
-static void memcpyAsync_and_check(std::vector<BenchParams> params, unsigned long long sizeInElement,
-    						unsigned int numThreadPerBlock, unsigned long long *bandwidth, bool stride,
-    						unsigned long long loopCount = defaultLoopCount) {
+static void memcpyAsync_and_check(std::vector<BenchParams> params, unsigned long long sizeInElement, unsigned int numThreadPerBlock,
+	unsigned long long *bandwidth, bool stride, unsigned long long loopCount = defaultLoopCount) {
+	
   	CUdevice device;
   	int kernelTimeout = 0;
   	CU_ASSERT(cuCtxGetDevice(&device));
@@ -119,8 +119,7 @@ static void memcpyAsync_and_check(std::vector<BenchParams> params, unsigned long
   	}
 }
 
-void launch_HtoD_memcpy_SM(const std::string &test_name, unsigned long long size,
-                           unsigned long long loopCount) {
+void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount) {
 
   	int deviceCount = 0;
   	bool stride = false;
@@ -174,8 +173,7 @@ void launch_HtoD_memcpy_SM(const std::string &test_name, unsigned long long size
   	printIndexVector(std::cout << std::fixed << std::setprecision(2), bandwidthValues);
 }
 
-void launch_DtoH_memcpy_SM(const std::string &test_name, unsigned long long size,
-                           unsigned long long loopCount) {
+void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount) {
   	int deviceCount = 0;
   	CUcontext srcCtx;
   	void *dstBuffer;
@@ -227,8 +225,7 @@ void launch_DtoH_memcpy_SM(const std::string &test_name, unsigned long long size
   	printIndexVector(std::cout << std::fixed << std::setprecision(2), bandwidthValues);
 }
 
-static void launch_DtoD_memcpy_SM(const std::string &test_name, bool read, unsigned long long size,
-                                unsigned long long loopCount) {
+static void launch_DtoD_memcpy_SM(bool read, unsigned long long size, unsigned long long loopCount) {
   	CUcontext srcCtx;
   	void *peerBuffer;
   	void *srcBuffer;
@@ -305,9 +302,7 @@ static void launch_DtoD_memcpy_SM(const std::string &test_name, bool read, unsig
   	std::cout << std::fixed << std::setprecision(2) << bandwidth_matrix << std::endl;
 }
 
-static void launch_DtoD_memcpy_bidirectional_SM(const std::string &test_name, bool read,
-                                                unsigned long long size,
-                                                unsigned long long loopCount) {
+static void launch_DtoD_memcpy_bidirectional_SM(bool read, unsigned long long size, unsigned long long loopCount) {
   	CUcontext srcCtx;
   	void *gpuAbuffer0;
   	void *gpuAbuffer1;
@@ -395,19 +390,15 @@ static void launch_DtoD_memcpy_bidirectional_SM(const std::string &test_name, bo
   	std::cout << std::fixed << std::setprecision(2) << bandwidth_matrix << std::endl;
 }
 
-void launch_DtoD_memcpy_bidirectional_read_SM(const std::string &test_name, unsigned long long size,
-                                            unsigned long long loopCount) {
-  	launch_DtoD_memcpy_bidirectional_SM(test_name, true, size, loopCount);
+void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned long long loopCount) {
+  	launch_DtoD_memcpy_bidirectional_SM(true, size, loopCount);
 }
-void launch_DtoD_memcpy_bidirectional_write_SM(const std::string &test_name, unsigned long long size,
-                                            unsigned long long loopCount) {
-  	launch_DtoD_memcpy_bidirectional_SM(test_name, false, size, loopCount);
+void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned long long loopCount) {
+  	launch_DtoD_memcpy_bidirectional_SM(false, size, loopCount);
 }
-void launch_DtoD_memcpy_read_SM(const std::string &test_name, unsigned long long size,
-                                unsigned long long loopCount) {
-	launch_DtoD_memcpy_SM(test_name, true, size, loopCount);
+void launch_DtoD_memcpy_read_SM(unsigned long long size, unsigned long long loopCount) {
+	launch_DtoD_memcpy_SM(true, size, loopCount);
 }
-void launch_DtoD_memcpy_write_SM(const std::string &test_name, unsigned long long size,
-                                unsigned long long loopCount) {
-  	launch_DtoD_memcpy_SM(test_name, false, size, loopCount);
+void launch_DtoD_memcpy_write_SM(unsigned long long size, unsigned long long loopCount) {
+  	launch_DtoD_memcpy_SM(false, size, loopCount);
 }
