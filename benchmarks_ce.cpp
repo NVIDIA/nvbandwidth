@@ -192,7 +192,7 @@ size_t getFirstEnabledCPU() {
   	return firstEnabledCPU;
 }
 
-void launch_HtoD_memcpy_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount) {
+void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount) {
     void* dstBuffer;
     void* srcBuffer;
     double perf_value_sum = 0.0;
