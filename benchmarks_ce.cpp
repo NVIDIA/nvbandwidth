@@ -241,7 +241,7 @@ void launch_HtoD_memcpy_CE(const std::string &test_name, unsigned long long size
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_DtoH_memcpy_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount) {
+void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount) {
     void* dstBuffer;
     void* srcBuffer;
     double perf_value_sum = 0.0;
@@ -289,7 +289,7 @@ void launch_DtoH_memcpy_CE(const std::string &test_name, unsigned long long size
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount) {
+void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long long loopCount) {
   	CUcontext srcCtx;
   	void *HtoD_dstBuffer;
   	void *HtoD_srcBuffer;
@@ -350,7 +350,7 @@ void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned 
   	std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size, unsigned long long loopCount) {
+void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long long loopCount) {
   	CUcontext srcCtx;
   	void *HtoD_dstBuffer;
   	void *HtoD_srcBuffer;

@@ -112,8 +112,7 @@ int main(int argc, char **argv) {
   	// Run benchmark
   	try {
     	Benchmark bench = benchmarks[benchmark_name];
-    	bench.bench_fn()(benchmarks[benchmark_name].description(), defaultBufferSize,
-                    defaultLoopCount);
+    	bench.bench_fn()(defaultBufferSize, defaultLoopCount);
   	} catch (std::string s) {
     	std::cout << s << std::endl;
   	}

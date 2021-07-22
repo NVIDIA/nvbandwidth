@@ -4,7 +4,7 @@
 #include "common.h"
 #include <map>
 
-typedef void (*benchfn_t)(const std::string &, unsigned long long, unsigned long long);
+typedef void (*benchfn_t)(unsigned long long, unsigned long long);
 
 class Benchmark {
   	benchfn_t benchmark_func;
@@ -35,17 +35,17 @@ public:
 };
 
 // CE Benchmarks
-void launch_HtoD_memcpy_CE(const std::string &test_name, unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
-void launch_DtoH_memcpy_CE(const std::string &test_name, unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
-void launch_HtoD_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
-void launch_DtoH_memcpy_bidirectional_CE(const std::string &test_name, unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
+void launch_HtoD_memcpy_CE(unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
+void launch_DtoH_memcpy_CE(unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
+void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
+void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
 
 // SM Benchmarks
-void launch_HtoD_memcpy_SM(const std::string &test_name, unsigned long long size, unsigned long long loopCount);
-void launch_DtoH_memcpy_SM(const std::string &test_name, unsigned long long size, unsigned long long loopCount);
-void launch_DtoD_memcpy_read_SM(const std::string &test_name, unsigned long long size, unsigned long long loopCount);
-void launch_DtoD_memcpy_write_SM(const std::string &test_name, unsigned long long size, unsigned long long loopCount);
-void launch_DtoD_memcpy_bidirectional_read_SM(const std::string &test_name, unsigned long long size, unsigned long long loopCount);
-void launch_DtoD_memcpy_bidirectional_write_SM(const std::string &test_name, unsigned long long size, unsigned long long loopCount);
+void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount);
+void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount);
+void launch_DtoD_memcpy_read_SM(unsigned long long size, unsigned long long loopCount);
+void launch_DtoD_memcpy_write_SM(unsigned long long size, unsigned long long loopCount);
+void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned long long loopCount);
+void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned long long loopCount);
 
 #endif
