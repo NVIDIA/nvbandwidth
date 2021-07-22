@@ -10,9 +10,6 @@
 #include "benchmarks.h"
 #include "memory_utils.h"
 
-const size_t WARMUP_COUNT = 32;
-const size_t START_COPY_MARKER_SIZE = 17;
-
 static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned long long *bandwidth, bool isPageable, unsigned long long loopCount = defaultLoopCount) {
   	CUstream stream;
   	CUevent startEvent;
@@ -23,15 +20,6 @@ static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned 
   	CU_ASSERT(cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING));
   	CU_ASSERT(cuEventCreate(&startEvent, CU_EVENT_DEFAULT));
   	CU_ASSERT(cuEventCreate(&endEvent, CU_EVENT_DEFAULT));
-
-  	// Spend time on the GPU so we finish submitting everything before the
-  	// benchmark starts Also events are tied to the last submission channel so we
-  	// want to be sure it is copy and not compute
-  	for (unsigned int n = 0; n < WARMUP_COUNT; n++) {
-    	// As latency benchmarks do 1 byte copies, we have to ensure we're not doing
-    	// 0 byte copies
-    	CU_ASSERT(cuMemcpyAsync((CUdeviceptr)dst, (CUdeviceptr)src, (size_t)((size + 7) / 8), stream));
-  	}
 
   	CU_ASSERT(cuEventRecord(startEvent, stream));
   	for (unsigned int n = 0; n < loopCount; n++) {
@@ -84,16 +72,6 @@ memcpyAsync_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, vo
   	CU_ASSERT(cuStreamCreate(&stream_dir2, CU_STREAM_NON_BLOCKING));
   	CU_ASSERT(cuEventCreate(&startEvent_dir2, CU_EVENT_DEFAULT));
   	CU_ASSERT(cuEventCreate(&endEvent_dir2, CU_EVENT_DEFAULT));
-
-  	// Spend time on the GPU so we finish submitting everything before the
-  	// benchmark starts Also events are tied to the last submission channel so we
-  	// want to be sure it is copy and not compute
-  	for (unsigned int n = 0; n < WARMUP_COUNT; n++) {
-    	// As latency benchmarks do 1 byte copies, we have to ensure we're not doing
-    	// 0 byte copies
-    	CU_ASSERT(cuMemcpyAsync((CUdeviceptr)dst1, (CUdeviceptr)src1, (size_t)((size + 7) / 8), stream_dir1));
-    	CU_ASSERT(cuMemcpyAsync((CUdeviceptr)dst2, (CUdeviceptr)src2, (size_t)((size + 7) / 8), stream_dir2));
-  	}
 
   	CU_ASSERT(cuEventRecord(startEvent_dir1, stream_dir1));
   	CU_ASSERT(cuStreamWaitEvent(stream_dir2, startEvent_dir1, 0));

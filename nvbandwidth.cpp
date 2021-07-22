@@ -15,6 +15,10 @@
 namespace opt = boost::program_options;
 
 unsigned int averageLoopCount;
+unsigned long long bufferSize;
+unsigned long long loopCount;
+bool skip_verif;
+
 bool disableP2P;
 bool VERBOSE;
 
