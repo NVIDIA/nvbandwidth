@@ -27,8 +27,8 @@ void memset_pattern(void *buffer, unsigned long long size, unsigned int seed) {
   	xorshift2MBPattern(pattern, seed);
 
   	for (n = 0; n < _2MBchunkCount; n++) {
-    	CU_ASSERT(cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, _2MB), "cuMemcpy failed.");
-    	buffer = (char *)buffer + _2MB;
+    	CU_ASSERT(cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, _2MB / 4), "cuMemcpy failed.");
+    	buffer = (char *)buffer + (_2MB / 4);
   	}
   	if (remaining) {
     	CU_ASSERT(cuMemcpy((CUdeviceptr)buffer, (CUdeviceptr)pattern, (size_t)remaining), "cuMemcpy failed.");

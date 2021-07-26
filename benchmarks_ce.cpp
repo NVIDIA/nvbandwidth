@@ -200,11 +200,11 @@ void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount
     size_t *procMask = NULL;
     size_t firstEnabledCPU = getFirstEnabledCPU();
     size_t procCount = 1;
+	CUcontext benchCtx;
 
+	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
-
   	PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
-
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
     for (size_t procId = 0; procId < procCount; procId++) {
@@ -232,6 +232,8 @@ void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount
 
             PROC_MASK_CLEAR(procMask, procId);
         }
+
+		CU_ASSERT(cuCtxSetCurrent(benchCtx));
         freeHostMemory(srcBuffer);
     }
 
@@ -249,11 +251,11 @@ void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount
     size_t *procMask = NULL;
     size_t firstEnabledCPU = getFirstEnabledCPU();
     size_t procCount = 1;
+	CUcontext benchCtx;
 
+	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
-
   	PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
-
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
     for (size_t procId = 0; procId < procCount; procId++) {
@@ -279,6 +281,7 @@ void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount
             CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
         }
 
+		CU_ASSERT(cuCtxSetCurrent(benchCtx));
         CU_ASSERT(cuMemFreeHost(dstBuffer));
 		PROC_MASK_CLEAR(procMask, procId);
     }
@@ -301,11 +304,11 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
   	size_t firstEnabledCPU = getFirstEnabledCPU();
   	size_t procCount = 1;
   	int deviceCount;
+	CUcontext benchCtx;
 
+	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
   	CU_ASSERT(cuDeviceGetCount(&deviceCount));
-
   	PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
-
   	procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
   	for (size_t procId = 0; procId < procCount; procId++) {
@@ -338,6 +341,7 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
 
     	retain_ctx();
     
+		CU_ASSERT(cuCtxSetCurrent(benchCtx));
     	CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
     	CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
 
@@ -364,9 +368,7 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
   	int deviceCount;
 
   	CU_ASSERT(cuDeviceGetCount(&deviceCount));
-
   	PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
-
   	procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
   	for (size_t procId = 0; procId < procCount; procId++) {
@@ -408,4 +410,130 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
 
   	std::cout << "memcpy CE GPU(columns) <- CPU(rows) bandwidth (GB/s)" << std::endl;
   	std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
+void launch_DtoD_memcpy_CE(bool read, unsigned long long size, unsigned long long loopCount) {
+    void* dstBuffer;
+    void* srcBuffer;
+    double latency;
+    unsigned long long bandwidth;
+    double value_sum = 0.0;
+    int deviceCount = 0;
+	CUcontext benchCtx;
+
+	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
+    PeerValueMatrix<double> value_matrix(deviceCount);
+
+    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        unsigned long long currentSize = size;
+        CUcontext srcCtx;
+
+        CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
+        CU_ASSERT(cuCtxSetCurrent(srcCtx));
+
+        CU_ASSERT(cuMemAlloc((CUdeviceptr*)&srcBuffer, (size_t)currentSize));
+
+        for (int peer = 0; peer < deviceCount; peer++) {
+            CUcontext peerCtx;
+            int canAccessPeer = 0;
+      		CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, currentDevice, peer));
+
+            if (canAccessPeer) {
+                CU_ASSERT(cuDevicePrimaryCtxRetain(&peerCtx, peer));
+                CU_ASSERT(cuCtxSetCurrent(peerCtx));
+                CU_ASSERT(cuCtxEnablePeerAccess(srcCtx, 0));
+                CU_ASSERT(cuMemAlloc((CUdeviceptr*)&dstBuffer, currentSize));
+                CU_ASSERT(cuCtxSetCurrent(srcCtx));
+                CU_ASSERT(cuCtxEnablePeerAccess(peerCtx, 0));
+
+                if (read) {
+                    find_best_memcpy(dstBuffer, srcBuffer, &bandwidth, currentSize, loopCount);
+                    value_matrix.value(currentDevice, peer) = bandwidth * 1e-9;
+                } else {
+                    find_best_memcpy(srcBuffer, dstBuffer, &bandwidth, currentSize, loopCount);
+                    value_matrix.value(currentDevice, peer) = bandwidth * 1e-9;
+                }
+
+                value_sum += value_matrix.value(currentDevice, peer);
+                CU_ASSERT(cuCtxSetCurrent(srcCtx));
+                CU_ASSERT(cuCtxDisablePeerAccess(peerCtx));
+                CU_ASSERT(cuCtxSetCurrent(peerCtx));
+                CU_ASSERT(cuCtxDisablePeerAccess(srcCtx));
+                CU_ASSERT(cuMemFree((CUdeviceptr)dstBuffer));
+                CU_ASSERT(cuDevicePrimaryCtxRelease(peer));
+            }
+        }
+		CU_ASSERT(cuCtxSetCurrent(benchCtx));
+        CU_ASSERT(cuMemFree((CUdeviceptr)srcBuffer));
+        CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
+    }
+    std::cout << "memcpy CE GPU(row) " << (read ? "->" : "<-") << " GPU(column) bandwidth (GB/s):" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << value_matrix << std::endl;
+}
+
+void launch_DtoD_memcpy_read_CE(unsigned long long size, unsigned long long loopCount) {
+	launch_DtoD_memcpy_CE(true, size, loopCount);
+}
+void launch_DtoD_memcpy_write_CE(unsigned long long size, unsigned long long loopCount) {
+	launch_DtoD_memcpy_CE(false, size, loopCount);
+}
+
+void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long long loopCount) {
+    void* dst1Buffer;
+    void* src1Buffer;
+    void* dst2Buffer;
+    void* src2Buffer;
+    unsigned long long bandwidth;
+    double bandwidth_sum = 0.0;
+    int deviceCount = 0;
+	CUcontext benchCtx;
+
+	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
+    PeerValueMatrix<double> bandwidth_matrix(deviceCount);
+
+    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        CUcontext srcCtx;
+        CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
+        CU_ASSERT(cuCtxSetCurrent(srcCtx));
+        CU_ASSERT(cuMemAlloc((CUdeviceptr*)&src1Buffer, (size_t)size));
+        CU_ASSERT(cuMemAlloc((CUdeviceptr*)&dst2Buffer, (size_t)size));
+
+        for (int peer = 0; peer < deviceCount; peer++) {
+            CUcontext peerCtx;
+
+            int canAccessPeer = 0;
+            CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, currentDevice, peer));
+
+            if (canAccessPeer) {
+                CU_ASSERT(cuDevicePrimaryCtxRetain(&peerCtx, peer));
+                CU_ASSERT(cuCtxSetCurrent(peerCtx));
+                CU_ASSERT(cuCtxEnablePeerAccess(srcCtx, 0));
+                CU_ASSERT(cuMemAlloc((CUdeviceptr*)&dst1Buffer, size));
+                CU_ASSERT(cuMemAlloc((CUdeviceptr*)&src2Buffer, size));
+                CU_ASSERT(cuCtxSetCurrent(srcCtx));
+                CU_ASSERT(cuCtxEnablePeerAccess(peerCtx, 0));
+           
+                find_best_memcpy_bidirectional(dst1Buffer, src1Buffer, srcCtx, dst2Buffer, src2Buffer, peerCtx, &bandwidth, size, loopCount);
+
+                bandwidth_matrix.value(peer, currentDevice) = bandwidth * 1e-9;
+                bandwidth_sum += bandwidth * 1e-9;
+
+                CU_ASSERT(cuCtxSetCurrent(srcCtx));
+                CU_ASSERT(cuCtxDisablePeerAccess(peerCtx));
+                CU_ASSERT(cuCtxSetCurrent(peerCtx));
+                CU_ASSERT(cuCtxDisablePeerAccess(srcCtx));
+                CU_ASSERT(cuMemFree((CUdeviceptr)dst1Buffer));
+                CU_ASSERT(cuMemFree((CUdeviceptr)src2Buffer));
+                CU_ASSERT(cuDevicePrimaryCtxRelease(peer));
+            }
+        }
+		CU_ASSERT(cuCtxSetCurrent(benchCtx));
+        CU_ASSERT(cuMemFree((CUdeviceptr)src1Buffer));
+        CU_ASSERT(cuMemFree((CUdeviceptr)dst2Buffer));
+        CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
+    }
+    std::cout << "memcpy CE GPU <-> GPU bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidth_matrix << std::endl;
 }

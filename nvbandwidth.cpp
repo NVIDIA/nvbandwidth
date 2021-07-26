@@ -37,6 +37,15 @@ std::map<std::string, Benchmark> create_benchmarks() {
       	{"device_to_host_bidirectional_memcpy_ce",
        		Benchmark(launch_DtoH_memcpy_bidirectional_CE,
                  	"Bidirectional device to host memcpy using the Copy Engine")},
+		{"device_to_device_memcpy_read_ce",
+       		Benchmark(launch_DtoD_memcpy_read_CE,
+                 	"Device to device memcpy using the Copy Engine (read)")},
+		{"device_to_device_memcpy_write_ce",
+       		Benchmark(launch_DtoD_memcpy_write_CE,
+                 	"Device to device memcpy using the Copy Engine (write)")},
+		{"device_to_device_bidirectional_memcpy_ce",
+       		Benchmark(launch_DtoD_memcpy_bidirectional_CE,
+                 	"Bidirectional device to device memcpy using the Copy Engine")},
       	{"host_to_device_memcpy_sm",
        		Benchmark(launch_HtoD_memcpy_SM,
                  	"Host to device memcpy using the Stream Multiprocessor")},
@@ -111,8 +120,14 @@ int main(int argc, char **argv) {
 
   	// Run benchmark
   	try {
-    	Benchmark bench = benchmarks[benchmark_name];
+		CUcontext benchCtx;
+		CU_ASSERT(cuCtxCreate(&benchCtx, 0, 0));
+		CU_ASSERT(cuCtxSetCurrent(benchCtx));
+    	
+		Benchmark bench = benchmarks[benchmark_name];
     	bench.bench_fn()(defaultBufferSize, defaultLoopCount);
+
+		CU_ASSERT(cuCtxDestroy(benchCtx));
   	} catch (std::string s) {
     	std::cout << s << std::endl;
   	}
