@@ -7,17 +7,17 @@
 typedef void (*benchfn_t)(unsigned long long, unsigned long long);
 
 class Benchmark {
-  	benchfn_t benchmark_func;
-  	std::string desc;
+    benchfn_t benchmark_func;
+    std::string desc;
 
 public:
-  	Benchmark() {}
+    Benchmark() {}
 
-  	Benchmark(benchfn_t benchmark_func, std::string desc): benchmark_func(benchmark_func), desc(desc) {}
+    Benchmark(benchfn_t benchmark_func, std::string desc): benchmark_func(benchmark_func), desc(desc) {}
 
-  	benchfn_t bench_fn() { return benchmark_func; }
+    benchfn_t bench_fn() { return benchmark_func; }
 
-  	std::string description() { return desc; }
+    std::string description() { return desc; }
 };
 
 // CE Benchmarks

@@ -9,113 +9,113 @@
 #include "memory_utils.h"
 
 static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned long long *bandwidth, bool isPageable, unsigned long long loopCount = defaultLoopCount) {
-  	CUstream stream;
-  	CUevent startEvent;
-  	CUevent endEvent;
-  	volatile int *blockingVar = NULL;
+    CUstream stream;
+    CUevent startEvent;
+    CUevent endEvent;
+    volatile int *blockingVar = NULL;
 
-  	CU_ASSERT(cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING));
-  	CU_ASSERT(cuEventCreate(&startEvent, CU_EVENT_DEFAULT));
-  	CU_ASSERT(cuEventCreate(&endEvent, CU_EVENT_DEFAULT));
+    CU_ASSERT(cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING));
+    CU_ASSERT(cuEventCreate(&startEvent, CU_EVENT_DEFAULT));
+    CU_ASSERT(cuEventCreate(&endEvent, CU_EVENT_DEFAULT));
 
-  	CU_ASSERT(cuEventRecord(startEvent, stream));
-  	for (unsigned int n = 0; n < loopCount; n++) {
-    	CU_ASSERT(cuMemcpyAsync((CUdeviceptr)dst, (CUdeviceptr)src, (size_t)size, stream));
-  	}
-  	CU_ASSERT(cuEventRecord(endEvent, stream));
+    CU_ASSERT(cuEventRecord(startEvent, stream));
+    for (unsigned int n = 0; n < loopCount; n++) {
+        CU_ASSERT(cuMemcpyAsync((CUdeviceptr)dst, (CUdeviceptr)src, (size_t)size, stream));
+    }
+    CU_ASSERT(cuEventRecord(endEvent, stream));
 
-  	if (!isPageable && !disableP2P) {
-    	*blockingVar = 1;
-  	}
+    if (!isPageable && !disableP2P) {
+        *blockingVar = 1;
+    }
 
-  	CU_ASSERT(cuStreamSynchronize(stream));
+    CU_ASSERT(cuStreamSynchronize(stream));
 
-  	float timeWithEvents = 0.0f;
-  	CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvent, endEvent));
-  	unsigned long long elapsedWithEventsInUs = (unsigned long long)(timeWithEvents * 1000.0f);
-  	*bandwidth = (size * loopCount * 1000ull * 1000ull) / elapsedWithEventsInUs; // Bandwidth in Bytes per second
+    float timeWithEvents = 0.0f;
+    CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvent, endEvent));
+    unsigned long long elapsedWithEventsInUs = (unsigned long long)(timeWithEvents * 1000.0f);
+    *bandwidth = (size * loopCount * 1000ull * 1000ull) / elapsedWithEventsInUs; // Bandwidth in Bytes per second
 
-  	if (!isPageable && !disableP2P) {
-    	CU_ASSERT(cuMemFreeHost((void *)blockingVar));
-  	}
+    if (!isPageable && !disableP2P) {
+        CU_ASSERT(cuMemFreeHost((void *)blockingVar));
+    }
 
-  	CU_ASSERT(cuCtxSynchronize());
+    CU_ASSERT(cuCtxSynchronize());
 }
 
 
 static void memcpyAsync_and_check(void *src, void *dst, unsigned long long sizeInElement, unsigned long long *bandwidth,
-	unsigned long long loopCount = defaultLoopCount) {
-  	CUdevice device;
-  	int kernelTimeout = 0;
-  	CU_ASSERT(cuCtxGetDevice(&device));
-  	CU_ASSERT(cuDeviceGetAttribute(&kernelTimeout, CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT, device));
-  	if (kernelTimeout) {
-    	double timeout = 1.8;
-    	unsigned long long expectedBandwidth = 0;
-    	unsigned long long smallSizeInElement = sizeInElement > 1024 * 1024 * 128 ? 1024 * 1024 * 128
-			: sizeInElement;
+    unsigned long long loopCount = defaultLoopCount) {
+    CUdevice device;
+    int kernelTimeout = 0;
+    CU_ASSERT(cuCtxGetDevice(&device));
+    CU_ASSERT(cuDeviceGetAttribute(&kernelTimeout, CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT, device));
+    if (kernelTimeout) {
+        double timeout = 1.8;
+        unsigned long long expectedBandwidth = 0;
+        unsigned long long smallSizeInElement = sizeInElement > 1024 * 1024 * 128 ? 1024 * 1024 * 128
+            : sizeInElement;
 
-      	memset_pattern(src, smallSizeInElement * sizeof(int4), 0xCAFEBABE);
-      	memset_pattern(dst, smallSizeInElement * sizeof(int4), 0xBAADF00D);
+        memset_pattern(src, smallSizeInElement * sizeof(int4), 0xCAFEBABE);
+        memset_pattern(dst, smallSizeInElement * sizeof(int4), 0xBAADF00D);
 
-		memcpyAsync(src, dst, smallSizeInElement, &expectedBandwidth, 1);
+        memcpyAsync(src, dst, smallSizeInElement, &expectedBandwidth, 1);
 
-    	unsigned long long maxBytes = (unsigned long long)((double)expectedBandwidth) * timeout * 0.25;
-    	unsigned long long maxLoopcount = maxBytes / (sizeInElement * sizeof(int4));
-    	maxLoopcount = maxLoopcount == 0 ? 1 : maxLoopcount;
-    	if (maxLoopcount < loopCount) {
-      		loopCount = maxLoopcount;
-      		if (maxLoopcount == 1 && maxBytes < (sizeInElement * sizeof(int4))) {
-        		sizeInElement = maxBytes / (sizeInElement * sizeof(int4));
-        		if (sizeInElement == 0) {
-          			*bandwidth = 0;
-          			return;
-        		}
-      		}
-    	}
-  	}
+        unsigned long long maxBytes = (unsigned long long)((double)expectedBandwidth) * timeout * 0.25;
+        unsigned long long maxLoopcount = maxBytes / (sizeInElement * sizeof(int4));
+        maxLoopcount = maxLoopcount == 0 ? 1 : maxLoopcount;
+        if (maxLoopcount < loopCount) {
+            loopCount = maxLoopcount;
+            if (maxLoopcount == 1 && maxBytes < (sizeInElement * sizeof(int4))) {
+                sizeInElement = maxBytes / (sizeInElement * sizeof(int4));
+                if (sizeInElement == 0) {
+                    *bandwidth = 0;
+                    return;
+                }
+            }
+        }
+    }
 
     memset_pattern(src, sizeInElement * sizeof(int), 0xCAFEBABE);
     memset_pattern(dst, sizeInElement * sizeof(int), 0xBAADF00D);
-	
-	memcpyAsync(src, dst, sizeInElement, bandwidth, loopCount);
+    
+    memcpyAsync(src, dst, sizeInElement, bandwidth, loopCount);
 }
 
 static void find_best_memcpy_threadcount_per_sm(void *src, void *dst,  unsigned long long* bandwidth, unsigned long long size = defaultBufferSize,
-	unsigned long long loopCount = defaultLoopCount, bool doubleBandwidth = false) {
+    unsigned long long loopCount = defaultLoopCount, bool doubleBandwidth = false) {
     unsigned long long bandwidth_current;
     unsigned long long bandwidth_sum;
 
     *bandwidth = 0;
     memcpyAsync(src, dst, size, &bandwidth_current, loopCount);
     if (doubleBandwidth) bandwidth_current *= 2;
-	*bandwidth = bandwidth_current;
+    *bandwidth = bandwidth_current;
 }
 
 static void find_best_memcpy(void *src, void *dst, unsigned long long* bandwidth, unsigned long long size = defaultBufferSize,
-	unsigned long long loopCount = defaultLoopCount, bool doubleBandwidth = false) {
+    unsigned long long loopCount = defaultLoopCount, bool doubleBandwidth = false) {
     unsigned long long bandwidth_current = 0;
     *bandwidth = 0;
     find_best_memcpy_threadcount_per_sm(src, dst, &bandwidth_current, size, loopCount, doubleBandwidth);
-	
-	if (bandwidth_current > *bandwidth) { *bandwidth = bandwidth_current; }
+    
+    if (bandwidth_current > *bandwidth) { *bandwidth = bandwidth_current; }
 }
 
 void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount) {
-  	int deviceCount = 0;
+    int deviceCount = 0;
     void* dstBuffer;
     void* srcBuffer;
     unsigned long long bandwidth;
     double bandwidth_sum;
-	CUcontext benchCtx;
+    CUcontext benchCtx;
 
-	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
+    CU_ASSERT(cuCtxGetCurrent(&benchCtx));
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
     std::vector<double> bandwidthValues(deviceCount);
     CU_ASSERT(cuMemHostAlloc(&srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
-	
+    
     for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
-		CUcontext srcCtx;
+        CUcontext srcCtx;
 
         CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
         CU_ASSERT(cuCtxSetCurrent(srcCtx));
@@ -130,7 +130,7 @@ void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount
         CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
     }
 
-	CU_ASSERT(cuCtxSetCurrent(benchCtx));
+    CU_ASSERT(cuCtxSetCurrent(benchCtx));
     CU_ASSERT(cuMemFreeHost(srcBuffer));
 
     std::cout << "memcpy SM GPU <- CPU bandwidth (GB/s):" << std::endl;
@@ -138,14 +138,14 @@ void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount
 }
 
 void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount) {
-  	int deviceCount = 0;
+    int deviceCount = 0;
     void* dstBuffer;
     void* srcBuffer;
     unsigned long long bandwidth;
     double bandwidth_sum;
-	CUcontext benchCtx;
+    CUcontext benchCtx;
 
-	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
+    CU_ASSERT(cuCtxGetCurrent(&benchCtx));
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
     std::vector<double> bandwidthValues(deviceCount);
     CU_ASSERT(cuMemHostAlloc(&dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
@@ -166,8 +166,8 @@ void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount
 
         CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
     }
-	
-	CU_ASSERT(cuCtxSetCurrent(benchCtx));
+    
+    CU_ASSERT(cuCtxSetCurrent(benchCtx));
     CU_ASSERT(cuMemFreeHost(dstBuffer));
 
     std::cout << "memcpy SM GPU -> CPU bandwidth (GB/s):" << std::endl;
@@ -175,19 +175,19 @@ void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount
 }
 
 static void launch_DtoD_memcpy_SM(bool read, unsigned long long size, unsigned long long loopCount) {
-  	void* dstBuffer;
+    void* dstBuffer;
     void* srcBuffer;
     unsigned long long bandwidth;
     double value_sum = 0.0;
     int deviceCount = 0;
-	CUcontext benchCtx;
+    CUcontext benchCtx;
 
-	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
-  	CU_ASSERT(cuDeviceGetCount(&deviceCount));
-  	PeerValueMatrix<double> value_matrix(deviceCount);
+    CU_ASSERT(cuCtxGetCurrent(&benchCtx));
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
+    PeerValueMatrix<double> value_matrix(deviceCount);
 
-  	for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
-    	unsigned long long currentSize = size;
+    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        unsigned long long currentSize = size;
         CUcontext srcCtx;
 
         CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
@@ -195,21 +195,21 @@ static void launch_DtoD_memcpy_SM(bool read, unsigned long long size, unsigned l
 
         CU_ASSERT(cuMemAlloc((CUdeviceptr*)&srcBuffer, (size_t)currentSize));
 
-    	for (int peer = 0; peer < deviceCount; peer++) {
-      		CUcontext peerCtx;
-      		int canAccessPeer = 0;
-      		CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, currentDevice, peer));
+        for (int peer = 0; peer < deviceCount; peer++) {
+            CUcontext peerCtx;
+            int canAccessPeer = 0;
+            CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, currentDevice, peer));
 
-      		if (canAccessPeer) {
-        		CU_ASSERT(cuDevicePrimaryCtxRetain(&peerCtx, peer));
-        		CU_ASSERT(cuCtxSetCurrent(peerCtx));
+            if (canAccessPeer) {
+                CU_ASSERT(cuDevicePrimaryCtxRetain(&peerCtx, peer));
+                CU_ASSERT(cuCtxSetCurrent(peerCtx));
 
-        		CU_ASSERT(cuCtxEnablePeerAccess(srcCtx, 0));
+                CU_ASSERT(cuCtxEnablePeerAccess(srcCtx, 0));
                 CU_ASSERT(cuMemAlloc((CUdeviceptr*)&dstBuffer, currentSize));
                 CU_ASSERT(cuCtxSetCurrent(srcCtx));
                 CU_ASSERT(cuCtxEnablePeerAccess(peerCtx, 0));
 
-        		if (read) {
+                if (read) {
                     find_best_memcpy(dstBuffer, srcBuffer, &bandwidth, currentSize, loopCount);
                     value_matrix.value(currentDevice, peer) = bandwidth * 1e-9;
                 } else {
@@ -217,123 +217,123 @@ static void launch_DtoD_memcpy_SM(bool read, unsigned long long size, unsigned l
                     value_matrix.value(currentDevice, peer) = bandwidth * 1e-9;
                 }
 
-        		unsigned long long device_current_bandwidth = 0;
-        		unsigned long long bandwidth_current;
-        		unsigned long long bandwidth_sum;
+                unsigned long long device_current_bandwidth = 0;
+                unsigned long long bandwidth_current;
+                unsigned long long bandwidth_sum;
 
-        		if (bandwidth_sum > device_current_bandwidth) device_current_bandwidth = bandwidth_sum;
-        		value_matrix.value(currentDevice, peer) = bandwidth * 1e-9;
+                if (bandwidth_sum > device_current_bandwidth) device_current_bandwidth = bandwidth_sum;
+                value_matrix.value(currentDevice, peer) = bandwidth * 1e-9;
 
-        		bandwidth_sum += bandwidth * 1e-9;
-        		CU_ASSERT(cuCtxSetCurrent(srcCtx));
-        		CU_ASSERT(cuCtxDisablePeerAccess(peerCtx));
-        		CU_ASSERT(cuCtxSetCurrent(peerCtx));
-        		CU_ASSERT(cuCtxDisablePeerAccess(srcCtx));
-        		CU_ASSERT(cuMemFree((CUdeviceptr)dstBuffer));
-        		CU_ASSERT(cuDevicePrimaryCtxRelease(peer));
-      		}
-    	}
+                bandwidth_sum += bandwidth * 1e-9;
+                CU_ASSERT(cuCtxSetCurrent(srcCtx));
+                CU_ASSERT(cuCtxDisablePeerAccess(peerCtx));
+                CU_ASSERT(cuCtxSetCurrent(peerCtx));
+                CU_ASSERT(cuCtxDisablePeerAccess(srcCtx));
+                CU_ASSERT(cuMemFree((CUdeviceptr)dstBuffer));
+                CU_ASSERT(cuDevicePrimaryCtxRelease(peer));
+            }
+        }
 
-		CU_ASSERT(cuCtxSetCurrent(benchCtx));
-    	CU_ASSERT(cuMemFree((CUdeviceptr)srcBuffer));
-    	CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
-  	}
+        CU_ASSERT(cuCtxSetCurrent(benchCtx));
+        CU_ASSERT(cuMemFree((CUdeviceptr)srcBuffer));
+        CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
+    }
 
-  	std::cout << "memcpy SM GPU(row) " << (read ? "->" : "<-") << " GPU(column) bandwidth (GB/s):" << std::endl;
-  	std::cout << std::fixed << std::setprecision(2) << value_matrix << std::endl;
+    std::cout << "memcpy SM GPU(row) " << (read ? "->" : "<-") << " GPU(column) bandwidth (GB/s):" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << value_matrix << std::endl;
 }
 
 
 static void launch_DtoD_memcpy_bidirectional_SM(bool read, unsigned long long size, unsigned long long loopCount) {
-  	CUcontext srcCtx;
-  	void *gpuAbuffer0;
-  	void *gpuAbuffer1;
-  	void *gpuBbuffer0;
-  	void *gpuBbuffer1;
-	CUcontext benchCtx;
+    CUcontext srcCtx;
+    void *gpuAbuffer0;
+    void *gpuAbuffer1;
+    void *gpuBbuffer0;
+    void *gpuBbuffer1;
+    CUcontext benchCtx;
 
-	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
-  	unsigned long long bandwidth;
-	double bandwidth_sum;
-  	int deviceCount = 0;
+    CU_ASSERT(cuCtxGetCurrent(&benchCtx));
+    unsigned long long bandwidth;
+    double bandwidth_sum;
+    int deviceCount = 0;
 
-  	CU_ASSERT(cuDeviceGetCount(&deviceCount));
-  	PeerValueMatrix<double> bandwidth_matrix(deviceCount);
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
+    PeerValueMatrix<double> bandwidth_matrix(deviceCount);
 
-  	for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
-    	CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
-    	CU_ASSERT(cuCtxSetCurrent(srcCtx));
+    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
+        CU_ASSERT(cuCtxSetCurrent(srcCtx));
 
-    	CU_ASSERT(cuCtxGetDevice(&currentDevice));
-    	CU_ASSERT(cuMemAlloc((CUdeviceptr *)&gpuAbuffer0, (size_t)size));
-    	CU_ASSERT(cuMemAlloc((CUdeviceptr *)&gpuAbuffer1, (size_t)size));
+        CU_ASSERT(cuCtxGetDevice(&currentDevice));
+        CU_ASSERT(cuMemAlloc((CUdeviceptr *)&gpuAbuffer0, (size_t)size));
+        CU_ASSERT(cuMemAlloc((CUdeviceptr *)&gpuAbuffer1, (size_t)size));
 
-    	for (int peer = 0; peer < deviceCount; peer++) {
-			bandwidth_sum = 0.0;
-      		CUcontext peerCtx;
+        for (int peer = 0; peer < deviceCount; peer++) {
+            bandwidth_sum = 0.0;
+            CUcontext peerCtx;
 
-      		if (currentDevice == peer) {
-        		continue;
-      		}
+            if (currentDevice == peer) {
+                continue;
+            }
 
-      		int canAccessPeer = 0;
-      		CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, currentDevice, peer));
+            int canAccessPeer = 0;
+            CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, currentDevice, peer));
 
-      		if (canAccessPeer) {
-        		CU_ASSERT(cuDevicePrimaryCtxRetain(&peerCtx, peer));
+            if (canAccessPeer) {
+                CU_ASSERT(cuDevicePrimaryCtxRetain(&peerCtx, peer));
 
-        		CU_ASSERT(cuCtxSetCurrent(peerCtx));
-        		CU_ASSERT(cuCtxEnablePeerAccess(srcCtx, 0));
+                CU_ASSERT(cuCtxSetCurrent(peerCtx));
+                CU_ASSERT(cuCtxEnablePeerAccess(srcCtx, 0));
 
-        		CU_ASSERT(cuMemAlloc((CUdeviceptr *)&gpuBbuffer0, (size_t)size));
-        		CU_ASSERT(cuMemAlloc((CUdeviceptr *)&gpuBbuffer1, (size_t)size));
-				
-        		CU_ASSERT(cuCtxSetCurrent(srcCtx));
-        		CU_ASSERT(cuCtxEnablePeerAccess(peerCtx, 0));
+                CU_ASSERT(cuMemAlloc((CUdeviceptr *)&gpuBbuffer0, (size_t)size));
+                CU_ASSERT(cuMemAlloc((CUdeviceptr *)&gpuBbuffer1, (size_t)size));
+                
+                CU_ASSERT(cuCtxSetCurrent(srcCtx));
+                CU_ASSERT(cuCtxEnablePeerAccess(peerCtx, 0));
 
-        		for (unsigned int n = 0; n < loopCount; n++) {
-					if (read) {
-						find_best_memcpy(gpuBbuffer0, gpuAbuffer0, &bandwidth, size / sizeof(int), loopCount);
-						bandwidth_sum += bandwidth;
-						find_best_memcpy(gpuAbuffer1, gpuBbuffer1, &bandwidth, size / sizeof(int), loopCount);
-						bandwidth_sum += bandwidth;
-        			} else {
-						find_best_memcpy(gpuAbuffer0, gpuBbuffer0, &bandwidth, size / sizeof(int), loopCount);
-						bandwidth_sum += bandwidth;
-						find_best_memcpy(gpuBbuffer1, gpuAbuffer1, &bandwidth, size / sizeof(int), loopCount);
-						bandwidth_sum += bandwidth;
-        			}
-        		}
+                for (unsigned int n = 0; n < loopCount; n++) {
+                    if (read) {
+                        find_best_memcpy(gpuBbuffer0, gpuAbuffer0, &bandwidth, size / sizeof(int), loopCount);
+                        bandwidth_sum += bandwidth;
+                        find_best_memcpy(gpuAbuffer1, gpuBbuffer1, &bandwidth, size / sizeof(int), loopCount);
+                        bandwidth_sum += bandwidth;
+                    } else {
+                        find_best_memcpy(gpuAbuffer0, gpuBbuffer0, &bandwidth, size / sizeof(int), loopCount);
+                        bandwidth_sum += bandwidth;
+                        find_best_memcpy(gpuBbuffer1, gpuAbuffer1, &bandwidth, size / sizeof(int), loopCount);
+                        bandwidth_sum += bandwidth;
+                    }
+                }
 
-		        bandwidth_matrix.value(currentDevice, peer) = (bandwidth_sum * 1e-9) / loopCount;
-        		CU_ASSERT(cuCtxSetCurrent(srcCtx));
-        		CU_ASSERT(cuCtxDisablePeerAccess(peerCtx));
-        		CU_ASSERT(cuCtxSetCurrent(peerCtx));
-        		CU_ASSERT(cuCtxDisablePeerAccess(srcCtx));
+                bandwidth_matrix.value(currentDevice, peer) = (bandwidth_sum * 1e-9) / loopCount;
+                CU_ASSERT(cuCtxSetCurrent(srcCtx));
+                CU_ASSERT(cuCtxDisablePeerAccess(peerCtx));
+                CU_ASSERT(cuCtxSetCurrent(peerCtx));
+                CU_ASSERT(cuCtxDisablePeerAccess(srcCtx));
 
-        		CU_ASSERT(cuMemFree((CUdeviceptr)gpuBbuffer0));
-        		CU_ASSERT(cuMemFree((CUdeviceptr)gpuBbuffer1));
-        		CU_ASSERT(cuDevicePrimaryCtxRelease(peer));
-      		}
-    	}
-		CU_ASSERT(cuCtxSetCurrent(benchCtx));
-    	CU_ASSERT(cuMemFree((CUdeviceptr)gpuAbuffer0));
-    	CU_ASSERT(cuMemFree((CUdeviceptr)gpuAbuffer1));
-    	CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
-  	}
-  	std::cout << "memcpy SM GPU(row) " << (read ? "->" : "<-") << " GPU(column) bandwidth (GB/s):" << std::endl;
-  	std::cout << std::fixed << std::setprecision(2) << bandwidth_matrix << std::endl;
+                CU_ASSERT(cuMemFree((CUdeviceptr)gpuBbuffer0));
+                CU_ASSERT(cuMemFree((CUdeviceptr)gpuBbuffer1));
+                CU_ASSERT(cuDevicePrimaryCtxRelease(peer));
+            }
+        }
+        CU_ASSERT(cuCtxSetCurrent(benchCtx));
+        CU_ASSERT(cuMemFree((CUdeviceptr)gpuAbuffer0));
+        CU_ASSERT(cuMemFree((CUdeviceptr)gpuAbuffer1));
+        CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
+    }
+    std::cout << "memcpy SM GPU(row) " << (read ? "->" : "<-") << " GPU(column) bandwidth (GB/s):" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidth_matrix << std::endl;
 }
 
 void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned long long loopCount) {
-  	launch_DtoD_memcpy_bidirectional_SM(true, size, loopCount);
+    launch_DtoD_memcpy_bidirectional_SM(true, size, loopCount);
 }
 void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned long long loopCount) {
-  	launch_DtoD_memcpy_bidirectional_SM(false, size, loopCount);
+    launch_DtoD_memcpy_bidirectional_SM(false, size, loopCount);
 }
 void launch_DtoD_memcpy_read_SM(unsigned long long size, unsigned long long loopCount) {
-	launch_DtoD_memcpy_SM(true, size, loopCount);
+    launch_DtoD_memcpy_SM(true, size, loopCount);
 }
 void launch_DtoD_memcpy_write_SM(unsigned long long size, unsigned long long loopCount) {
-  	launch_DtoD_memcpy_SM(false, size, loopCount);
+    launch_DtoD_memcpy_SM(false, size, loopCount);
 }
