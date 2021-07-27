@@ -198,43 +198,40 @@ void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount
     int deviceCount = 0;
     size_t *procMask = NULL;
     size_t firstEnabledCPU = getFirstEnabledCPU();
-    size_t procCount = 1;
 	CUcontext benchCtx;
 
 	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
-  	PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
+  	PeerValueMatrix<double> bandwidthValues(1, deviceCount);
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
-    for (size_t procId = 0; procId < procCount; procId++) {
-		PROC_MASK_SET(procMask, firstEnabledCPU);
+	PROC_MASK_SET(procMask, firstEnabledCPU);
 
-		cuMemHostAlloc(&srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE);
+	cuMemHostAlloc(&srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE);
 
-        for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
-            int currentDevice = devIdx;
-            CUcontext srcCtx;
+    for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
+        int currentDevice = devIdx;
+        CUcontext srcCtx;
 
-            CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
-            CU_ASSERT(cuCtxSetCurrent(srcCtx));
+        CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
+        CU_ASSERT(cuCtxSetCurrent(srcCtx));
             
-            CU_ASSERT(cuMemAlloc((CUdeviceptr*)&dstBuffer, (size_t)size));
+        CU_ASSERT(cuMemAlloc((CUdeviceptr*)&dstBuffer, (size_t)size));
 
-        	unsigned long long bandwidth;
-            find_best_memcpy(srcBuffer, dstBuffer, &bandwidth, size, loopCount);
-            bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
-            perf_value_sum += bandwidth * 1e-9;
+        unsigned long long bandwidth;
+        find_best_memcpy(srcBuffer, dstBuffer, &bandwidth, size, loopCount);
+        bandwidthValues.value(0, currentDevice) = bandwidth * 1e-9;
+        perf_value_sum += bandwidth * 1e-9;
 
-            CU_ASSERT(cuMemFree((CUdeviceptr)dstBuffer));
+        CU_ASSERT(cuMemFree((CUdeviceptr)dstBuffer));
 
-            CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
+        CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
 
-            PROC_MASK_CLEAR(procMask, procId);
-        }
-
-		CU_ASSERT(cuCtxSetCurrent(benchCtx));
-        freeHostMemory(srcBuffer);
+        PROC_MASK_CLEAR(procMask, 0);
     }
+
+	CU_ASSERT(cuCtxSetCurrent(benchCtx));
+    freeHostMemory(srcBuffer);
 
     free(procMask);
 
@@ -249,41 +246,38 @@ void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount
     int deviceCount = 0;
     size_t *procMask = NULL;
     size_t firstEnabledCPU = getFirstEnabledCPU();
-    size_t procCount = 1;
 	CUcontext benchCtx;
 
 	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
-  	PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
+  	PeerValueMatrix<double> bandwidthValues(1, deviceCount);
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
-    for (size_t procId = 0; procId < procCount; procId++) {
-        PROC_MASK_SET(procMask, firstEnabledCPU);
+    PROC_MASK_SET(procMask, firstEnabledCPU);
 
-		CU_ASSERT(cuMemHostAlloc(&dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
+	CU_ASSERT(cuMemHostAlloc(&dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
         
-		for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
-            int currentDevice = devIdx;
-            CUcontext srcCtx;
+	for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
+        int currentDevice = devIdx;
+        CUcontext srcCtx;
 
-            CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
-            CU_ASSERT(cuCtxSetCurrent(srcCtx));
-            CU_ASSERT(cuMemAlloc((CUdeviceptr*)&srcBuffer, size));
+        CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
+        CU_ASSERT(cuCtxSetCurrent(srcCtx));
+        CU_ASSERT(cuMemAlloc((CUdeviceptr*)&srcBuffer, size));
 
-            unsigned long long bandwidth;
-            find_best_memcpy(srcBuffer, dstBuffer, &bandwidth, size, loopCount);
-            bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
-            perf_value_sum += bandwidth * 1e-9;
+        unsigned long long bandwidth;
+        find_best_memcpy(srcBuffer, dstBuffer, &bandwidth, size, loopCount);
+        bandwidthValues.value(0, currentDevice) = bandwidth * 1e-9;
+        perf_value_sum += bandwidth * 1e-9;
 
-            CU_ASSERT(cuMemFree((CUdeviceptr)srcBuffer));
+        CU_ASSERT(cuMemFree((CUdeviceptr)srcBuffer));
 
-            CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
-        }
-
-		CU_ASSERT(cuCtxSetCurrent(benchCtx));
-        CU_ASSERT(cuMemFreeHost(dstBuffer));
-		PROC_MASK_CLEAR(procMask, procId);
+        CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
     }
+
+	CU_ASSERT(cuCtxSetCurrent(benchCtx));
+    CU_ASSERT(cuMemFreeHost(dstBuffer));
+	PROC_MASK_CLEAR(procMask, 0);
 
     free(procMask);
 
@@ -301,51 +295,48 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
   	double bandwidth_sum = 0.0;
   	size_t *procMask = NULL;
   	size_t firstEnabledCPU = getFirstEnabledCPU();
-  	size_t procCount = 1;
   	int deviceCount;
 	CUcontext benchCtx;
 
 	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
   	CU_ASSERT(cuDeviceGetCount(&deviceCount));
-  	PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
+  	PeerValueMatrix<double> bandwidthValues(1, deviceCount);
   	procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
-  	for (size_t procId = 0; procId < procCount; procId++) {
-    	PROC_MASK_SET(procMask, firstEnabledCPU);
+    PROC_MASK_SET(procMask, firstEnabledCPU);
 
-    	/* The NUMA location of the calling thread determines the physical
-       		location of the pinned memory allocation, which can have different
-       		performance characteristics */
-    	CU_ASSERT(cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
-    	CU_ASSERT(cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
+    /* The NUMA location of the calling thread determines the physical
+       	location of the pinned memory allocation, which can have different
+       	performance characteristics */
+    CU_ASSERT(cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
+    CU_ASSERT(cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
 
-    	for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
-      		int currentDevice = devIdx;
+    for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
+      	int currentDevice = devIdx;
 
-      		CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
-      		CU_ASSERT(cuCtxSetCurrent(srcCtx));
+      	CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
+      	CU_ASSERT(cuCtxSetCurrent(srcCtx));
 
-      		CU_ASSERT(cuMemAlloc((CUdeviceptr *)&HtoD_dstBuffer, (size_t)size));
-      		CU_ASSERT(cuMemAlloc((CUdeviceptr *)&DtoH_srcBuffer, (size_t)size));
+      	CU_ASSERT(cuMemAlloc((CUdeviceptr *)&HtoD_dstBuffer, (size_t)size));
+      	CU_ASSERT(cuMemAlloc((CUdeviceptr *)&DtoH_srcBuffer, (size_t)size));
 
-      		find_best_memcpy_bidirectional(HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, &bandwidth, size, loopCount);
+      	find_best_memcpy_bidirectional(HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, &bandwidth, size, loopCount);
 
-      		bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
-      		bandwidth_sum += bandwidth * 1e-9;
+      	bandwidthValues.value(0, currentDevice) = bandwidth * 1e-9;
+      	bandwidth_sum += bandwidth * 1e-9;
 
-      		CU_ASSERT(cuMemFree((CUdeviceptr)DtoH_srcBuffer));
-      		CU_ASSERT(cuMemFree((CUdeviceptr)HtoD_dstBuffer));
-      		CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
-    	}
+      	CU_ASSERT(cuMemFree((CUdeviceptr)DtoH_srcBuffer));
+      	CU_ASSERT(cuMemFree((CUdeviceptr)HtoD_dstBuffer));
+      	CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
+    }
 
-    	retain_ctx();
+    retain_ctx();
     
-		CU_ASSERT(cuCtxSetCurrent(benchCtx));
-    	CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
-    	CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
+	CU_ASSERT(cuCtxSetCurrent(benchCtx));
+    CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
+    CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
 
-    	PROC_MASK_CLEAR(procMask, procId);
-  	}
+    PROC_MASK_CLEAR(procMask, 0);
 
   	free(procMask);
 
@@ -363,47 +354,44 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
   	double bandwidth_sum = 0.0;
   	size_t *procMask = NULL;
   	size_t firstEnabledCPU = getFirstEnabledCPU();
-  	size_t procCount = 1;
   	int deviceCount;
 
   	CU_ASSERT(cuDeviceGetCount(&deviceCount));
-  	PeerValueMatrix<double> bandwidthValues((int)procCount, deviceCount);
+  	PeerValueMatrix<double> bandwidthValues(1, deviceCount);
   	procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
-  	for (size_t procId = 0; procId < procCount; procId++) {
-    	PROC_MASK_SET(procMask, firstEnabledCPU);
+    PROC_MASK_SET(procMask, firstEnabledCPU);
 
-    	/* The NUMA location of the calling thread determines the physical
-       		location of the pinned memory allocation, which can have different
-       		performance characteristics */
-    	CU_ASSERT(cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
-    	CU_ASSERT(cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
+    /* The NUMA location of the calling thread determines the physical
+       	location of the pinned memory allocation, which can have different
+       	performance characteristics */
+    CU_ASSERT(cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
+    CU_ASSERT(cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
 
-    	for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
-      		int currentDevice = devIdx;
+    for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
+      	int currentDevice = devIdx;
 
-      		CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
-      		CU_ASSERT(cuCtxSetCurrent(srcCtx));
+      	CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
+      	CU_ASSERT(cuCtxSetCurrent(srcCtx));
 
-      		CU_ASSERT(cuMemAlloc((CUdeviceptr *)&HtoD_dstBuffer, (size_t)size));
-      		CU_ASSERT(cuMemAlloc((CUdeviceptr *)&DtoH_srcBuffer, (size_t)size));
+      	CU_ASSERT(cuMemAlloc((CUdeviceptr *)&HtoD_dstBuffer, (size_t)size));
+      	CU_ASSERT(cuMemAlloc((CUdeviceptr *)&DtoH_srcBuffer, (size_t)size));
 
-      		find_best_memcpy_bidirectional(DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, &bandwidth, size, loopCount);
-      		bandwidthValues.value((int)procId, currentDevice) = bandwidth * 1e-9;
-      		bandwidth_sum += bandwidth * 1e-9;
+      	find_best_memcpy_bidirectional(DtoH_dstBuffer, DtoH_srcBuffer, srcCtx, HtoD_dstBuffer, HtoD_srcBuffer, srcCtx, &bandwidth, size, loopCount);
+      	bandwidthValues.value(0, currentDevice) = bandwidth * 1e-9;
+      	bandwidth_sum += bandwidth * 1e-9;
 
-      		CU_ASSERT(cuMemFree((CUdeviceptr)DtoH_srcBuffer));
-      		CU_ASSERT(cuMemFree((CUdeviceptr)HtoD_dstBuffer));
-      		CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
-    	}
+      	CU_ASSERT(cuMemFree((CUdeviceptr)DtoH_srcBuffer));
+      	CU_ASSERT(cuMemFree((CUdeviceptr)HtoD_dstBuffer));
+    	CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
+    }
 
-    	retain_ctx();
+    retain_ctx();
 
-    	CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
-    	CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
+    CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
+    CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
 
-    	PROC_MASK_CLEAR(procMask, procId);
-  	}
+    PROC_MASK_CLEAR(procMask, 0);
 
   	free(procMask);
 
