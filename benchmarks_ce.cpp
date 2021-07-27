@@ -20,6 +20,14 @@ static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned 
   	CU_ASSERT(cuEventCreate(&startEvent, CU_EVENT_DEFAULT));
   	CU_ASSERT(cuEventCreate(&endEvent, CU_EVENT_DEFAULT));
 
+	// Spend time on the GPU so we finish submitting everything before the benchmark starts
+    // Also events are tied to the last submission channel so we want to be sure it is copy and not compute
+	const size_t WARMUP_COUNT = 32;
+    for (unsigned int n = 0; n < WARMUP_COUNT; n++) {
+        // As latency benchmarks do 1 byte copies, we have to ensure we're not doing 0 byte copies
+        cuMemcpyAsync((CUdeviceptr) dst, (CUdeviceptr) src, (size_t)((size + 7) / 8), stream); // ASSERT_DRV
+    }
+
   	CU_ASSERT(cuEventRecord(startEvent, stream));
   	for (unsigned int n = 0; n < loopCount; n++) {
     	CU_ASSERT(cuMemcpyAsync((CUdeviceptr)dst, (CUdeviceptr)src, (size_t)size, stream));
