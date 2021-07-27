@@ -57,7 +57,7 @@ void memcmp_pattern(void *buffer, unsigned long long size, unsigned int seed) {
     	CU_ASSERT(cuCtxSynchronize());
     	if (memcmp(pattern, devicePattern, _2MB) != 0) {
       		for (x = 0; x < _2MB / sizeof(unsigned int); x++) {
-        		if (devicePattern[x] != pattern[x] && VERBOSE) {
+				if (devicePattern[x] != pattern[x] && verbose) {
           			std::cout << " Invalid value when checking the pattern at <"
             			<< (void *)((char *)buffer + n * _2MB + x * sizeof(unsigned int))
         				<< ">" << std::endl << " Current offset [ "
@@ -74,7 +74,7 @@ void memcmp_pattern(void *buffer, unsigned long long size, unsigned int seed) {
     	CU_ASSERT(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)buffer, (size_t)remaining));
     	if (memcmp(pattern, devicePattern, (size_t)remaining) != 0) {
 			for (x = 0; x < _2MB / sizeof(unsigned int); x++) {
-        		if (devicePattern[x] != pattern[x] && VERBOSE) {
+				if (devicePattern[x] != pattern[x] && verbose) {
           			std::cout << " Invalid value when checking the pattern at <"
             			<< (void *)((char *)buffer + n * _2MB + x * sizeof(unsigned int))
         				<< ">" << std::endl << " Current offset [ "

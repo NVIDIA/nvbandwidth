@@ -20,7 +20,7 @@ unsigned long long loopCount;
 bool skip_verif;
 
 bool disableP2P;
-bool VERBOSE;
+bool verbose;
 
 // Define benchmarks here
 std::map<std::string, Benchmark> create_benchmarks() {
@@ -107,8 +107,8 @@ int main(int argc, char **argv) {
     	return 0;
   	}
 
-	if (vm.count("verbose")) VERBOSE = true;
-	else VERBOSE = false;
+	if (vm.count("verbose")) verbose = true;
+	else verbose = false;
 
   	if (vm.count("benchmark")) {
     	benchmark_name = vm["benchmark"].as<std::string>();
