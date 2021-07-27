@@ -68,7 +68,6 @@ std::map<std::string, Benchmark> create_benchmarks() {
 
 void init() {
   	cuInit(0);
-  	retain_ctx();
 }
 
 int main(int argc, char **argv) {

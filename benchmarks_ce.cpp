@@ -329,8 +329,6 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
       	CU_ASSERT(cuMemFree((CUdeviceptr)HtoD_dstBuffer));
       	CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
     }
-
-    retain_ctx();
     
 	CU_ASSERT(cuCtxSetCurrent(benchCtx));
     CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
@@ -355,6 +353,8 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
   	size_t *procMask = NULL;
   	size_t firstEnabledCPU = getFirstEnabledCPU();
   	int deviceCount;
+	CUcontext benchCtx;
+	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
 
   	CU_ASSERT(cuDeviceGetCount(&deviceCount));
   	PeerValueMatrix<double> bandwidthValues(1, deviceCount);
@@ -386,8 +386,7 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     	CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
     }
 
-    retain_ctx();
-
+	CU_ASSERT(cuCtxSetCurrent(benchCtx));
     CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
     CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
 
