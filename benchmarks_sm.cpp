@@ -43,7 +43,7 @@ static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned 
 }
 
 
-static void memcpyAsync_and_check(void *src, void *dst, unsigned long long sizeInElement, unsigned long long *bandwidth, bool stride,
+static void memcpyAsync_and_check(void *src, void *dst, unsigned long long sizeInElement, unsigned long long *bandwidth,
 	unsigned long long loopCount = defaultLoopCount) {
   	CUdevice device;
   	int kernelTimeout = 0;
@@ -58,7 +58,7 @@ static void memcpyAsync_and_check(void *src, void *dst, unsigned long long sizeI
       	memset_pattern(src, smallSizeInElement * sizeof(int4), 0xCAFEBABE);
       	memset_pattern(dst, smallSizeInElement * sizeof(int4), 0xBAADF00D);
 
-		memcpyAsync(src, dst, smallSizeInElement, &expectedBandwidth, stride, 1);
+		memcpyAsync(src, dst, smallSizeInElement, &expectedBandwidth, 1);
 
     	unsigned long long maxBytes = (unsigned long long)((double)expectedBandwidth) * timeout * 0.25;
     	unsigned long long maxLoopcount = maxBytes / (sizeInElement * sizeof(int4));
@@ -78,16 +78,16 @@ static void memcpyAsync_and_check(void *src, void *dst, unsigned long long sizeI
     memset_pattern(src, sizeInElement * sizeof(int), 0xCAFEBABE);
     memset_pattern(dst, sizeInElement * sizeof(int), 0xBAADF00D);
 	
-	memcpyAsync(src, dst, sizeInElement, bandwidth, stride, loopCount);
+	memcpyAsync(src, dst, sizeInElement, bandwidth, loopCount);
 }
 
-static void find_best_memcpy_threadcount_per_sm(void *src, void *dst,  unsigned long long* bandwidth, bool stride = false,
-	unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount, bool doubleBandwidth = false) {
+static void find_best_memcpy_threadcount_per_sm(void *src, void *dst,  unsigned long long* bandwidth, unsigned long long size = defaultBufferSize,
+	unsigned long long loopCount = defaultLoopCount, bool doubleBandwidth = false) {
     unsigned long long bandwidth_current;
     unsigned long long bandwidth_sum;
 
     *bandwidth = 0;
-    memcpyAsync(src, dst, size, &bandwidth_current, stride, loopCount);
+    memcpyAsync(src, dst, size, &bandwidth_current, loopCount);
     if (doubleBandwidth) bandwidth_current *= 2;
 	*bandwidth = bandwidth_current;
 }
@@ -96,7 +96,7 @@ static void find_best_memcpy(void *src, void *dst, unsigned long long* bandwidth
 	unsigned long long loopCount = defaultLoopCount, bool doubleBandwidth = false) {
     unsigned long long bandwidth_current = 0;
     *bandwidth = 0;
-    find_best_memcpy_threadcount_per_sm(src, dst, &bandwidth_current, true, size, loopCount, doubleBandwidth);
+    find_best_memcpy_threadcount_per_sm(src, dst, &bandwidth_current, size, loopCount, doubleBandwidth);
 	
 	if (bandwidth_current > *bandwidth) { *bandwidth = bandwidth_current; }
 }
