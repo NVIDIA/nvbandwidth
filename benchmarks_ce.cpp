@@ -178,19 +178,6 @@ static void find_best_memcpy_bidirectional(void *dst1, void *src1, CUcontext ctx
   	*bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
 }
 
-size_t getFirstEnabledCPU() {
-  	size_t firstEnabledCPU = 0;
-  	size_t *procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
-  	for (size_t i = 0; i < PROC_MASK_SIZE * 8; ++i) {
-    	if (PROC_MASK_QUERY_BIT(procMask, i)) {
-      		firstEnabledCPU = i;
-      	break;
-    	}
-  	}
-  	free(procMask);
-  	return firstEnabledCPU;
-}
-
 void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount) {
     void* dstBuffer;
     void* srcBuffer;

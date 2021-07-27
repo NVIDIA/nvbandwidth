@@ -58,6 +58,19 @@ extern bool VERBOSE;
         	~((size_t)1 << (_proc % PROC_MASK_WORD_BITS));                         		\
   	} while (0)
 
+inline size_t getFirstEnabledCPU() {
+  	size_t firstEnabledCPU = 0;
+  	size_t *procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
+  	for (size_t i = 0; i < PROC_MASK_SIZE * 8; ++i) {
+    	if (PROC_MASK_QUERY_BIT(procMask, i)) {
+      		firstEnabledCPU = i;
+      	break;
+    	}
+  	}
+  	free(procMask);
+  	return firstEnabledCPU;
+}
+
 // Calculation and display of performance statistics
 // Basic online running statistics calculator, modeled after a less templated
 // version of boost::accumulators.
