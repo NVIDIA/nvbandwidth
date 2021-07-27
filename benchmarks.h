@@ -20,20 +20,6 @@ public:
   	std::string description() { return desc; }
 };
 
-class BenchParams {
-public:
-  	// what should be copied on where on which device
-  	void *dst;
-  	void *src;
-  	CUcontext ctx;
-
-  	BenchParams(void *_dst, void *_src, CUcontext _ctx) {
-    	dst = _dst;
-    	src = _src;
-    	ctx = _ctx;
-  	}
-};
-
 // CE Benchmarks
 void launch_HtoD_memcpy_CE(unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
 void launch_DtoH_memcpy_CE(unsigned long long size = defaultBufferSize, unsigned long long loopCount = defaultLoopCount);
