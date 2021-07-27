@@ -15,7 +15,6 @@ static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned 
   	CUevent startEvent;
   	CUevent endEvent;
   	volatile int *blockingVar = NULL;
-  	void *markerDst = NULL, *markerSrc = NULL, *additionalMarkerLocation = NULL;
 
   	CU_ASSERT(cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING));
   	CU_ASSERT(cuEventCreate(&startEvent, CU_EVENT_DEFAULT));
@@ -415,7 +414,6 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
 void launch_DtoD_memcpy_CE(bool read, unsigned long long size, unsigned long long loopCount) {
     void* dstBuffer;
     void* srcBuffer;
-    double latency;
     unsigned long long bandwidth;
     double value_sum = 0.0;
     int deviceCount = 0;
@@ -442,6 +440,7 @@ void launch_DtoD_memcpy_CE(bool read, unsigned long long size, unsigned long lon
             if (canAccessPeer) {
                 CU_ASSERT(cuDevicePrimaryCtxRetain(&peerCtx, peer));
                 CU_ASSERT(cuCtxSetCurrent(peerCtx));
+
                 CU_ASSERT(cuCtxEnablePeerAccess(srcCtx, 0));
                 CU_ASSERT(cuMemAlloc((CUdeviceptr*)&dstBuffer, currentSize));
                 CU_ASSERT(cuCtxSetCurrent(srcCtx));
