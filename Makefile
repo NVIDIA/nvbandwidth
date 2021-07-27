@@ -9,6 +9,9 @@ default: $(TARGET)
 
 all: default
 
+release: CFLAGS += -O3
+release: $(TARGET)
+
 debug: CFLAGS += -DDEBUG -g
 debug: $(TARGET)
 
@@ -28,5 +31,4 @@ $(TARGET): $(CUDA_OBJECTS) $(OBJECTS)
 	$(CXX) $(CUDA_OBJECTS) $(OBJECTS) $(LIBS) -o $@
 
 clean:
-	-rm -f *.o
-	-rm -f $(TARGET)
+	-rm -f $(OBJECTS) $(CUDA_OBJECTS) $(TARGET)
