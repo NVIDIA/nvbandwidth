@@ -106,7 +106,7 @@ void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount
     void* dstBuffer;
     void* srcBuffer;
     unsigned long long bandwidth;
-    double bandwidth_sum = 0.0;
+    double bandwidth_sum;
 	CUcontext benchCtx;
 
 	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
@@ -142,7 +142,7 @@ void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount
     void* dstBuffer;
     void* srcBuffer;
     unsigned long long bandwidth;
-    double bandwidth_sum = 0.0;
+    double bandwidth_sum;
 	CUcontext benchCtx;
 
 	CU_ASSERT(cuCtxGetCurrent(&benchCtx));
