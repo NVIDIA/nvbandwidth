@@ -15,7 +15,7 @@ release: $(TARGET)
 debug: CFLAGS += -DDEBUG -g
 debug: $(TARGET)
 
-CUDA_OBJECTS = $(patsubst %.cu, %.o, $(wildcard *.cu))
+CUDA_OBJECTS = memcpy_kernel.o
 OBJECTS = benchmarks_ce.o benchmarks_sm.o memory_utils.o nvbandwidth.o
 HEADERS = $(wildcard *.h)
 

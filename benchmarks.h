@@ -20,12 +20,9 @@ public:
     std::string description() { return desc; }
 };
 
-inline void benchmark_prepare(CUcontext *ctx, int *deviceCount, bool d2d, void *srcBuffer = nullptr, unsigned long long size = 0) {
+inline void benchmark_prepare(CUcontext *ctx, int *deviceCount) {
     CU_ASSERT(cuCtxGetCurrent(ctx));
     CU_ASSERT(cuDeviceGetCount(deviceCount));
-    if (!d2d) {
-        CU_ASSERT(cuMemHostAlloc(&srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
-    }
 }
 
 inline void benchmark_prepare_bidir(CUcontext *srcCtx, int currentDevice, void *gpuBuffer0, void *gpuBuffer1, unsigned long long size) {

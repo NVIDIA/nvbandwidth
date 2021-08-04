@@ -11,6 +11,7 @@
 #include <time.h>
 
 #include "benchmarks.h"
+#include "common.h"
 
 namespace opt = boost::program_options;
 
