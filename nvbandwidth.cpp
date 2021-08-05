@@ -81,10 +81,10 @@ int main(int argc, char **argv) {
     // Args parsing
     opt::options_description desc("NVBandwidth CLI");
     desc.add_options()
-        ("help", "Produce help message")
-        ("list", "List available benchmarks")
-        ("verbose", "Verbose output")
-        ("benchmark", opt::value<std::string>(), "Benchmark to run");
+        ("help,h", "Produce help message")
+        ("list,l", "List available benchmarks")
+        ("verbose,v", "Verbose output")
+        ("benchmark,b", opt::value<std::string>(), "Benchmark to run");
 
     opt::variables_map vm;
     try {
