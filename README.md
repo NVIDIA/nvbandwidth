@@ -15,15 +15,20 @@ To build the `nvbandwidth` executable:
 make
 ```
 
+If you plan on making changes to `sm_memcpy_kernel.cu` which is the module containing the memcpy kernel used for SM tests, run
+```
+nvcc -ptx -c sm_memcpy_kernel.cu -o sm_memcpy_kernel.ptx
+```
+
 ## Usage:
 To list available benchmarks:
 ```
-./nvbandwidth --list
+./nvbandwidth -l
 ```
 
 To run a benchmarks:
 ```
-./nvbandwidth --benchmark host_to_device_bidirectional_memcpy_ce
+./nvbandwidth -b host_to_device_bidirectional_memcpy_ce
 ```
 Example output:
 ```
