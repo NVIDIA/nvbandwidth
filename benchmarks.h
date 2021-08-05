@@ -44,7 +44,7 @@ inline void benchmark_clean(void *srcBuffer, CUcontext *ctx, bool d2d = false, i
     }
 }
 
-inline void benchmark_clean_bidir(CUcontext *ctx, int currentDevice, void *gpuBuffer0, void *gpuBuffer1, unsigned long long size) {
+inline void benchmark_clean_bidir(CUcontext *ctx, int currentDevice, void *gpuBuffer0, void *gpuBuffer1) {
     CU_ASSERT(cuCtxSetCurrent(*ctx));
     CU_ASSERT(cuMemFree((CUdeviceptr)gpuBuffer0));
     CU_ASSERT(cuMemFree((CUdeviceptr)gpuBuffer1));
