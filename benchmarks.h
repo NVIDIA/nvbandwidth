@@ -2,6 +2,7 @@
 #define BENCHMARKS_H
 
 #include "common.h"
+#include "memory_utils.h"
 #include <map>
 
 typedef void (*benchfn_t)(unsigned long long, unsigned long long);
@@ -25,23 +26,20 @@ inline void benchmark_prepare(CUcontext *ctx, int *deviceCount) {
     CU_ASSERT(cuDeviceGetCount(deviceCount));
 }
 
-inline void benchmark_prepare_bidir(CUcontext *srcCtx, int currentDevice, void *gpuBuffer0, void *gpuBuffer1, unsigned long long size) {
-    CU_ASSERT(cuDevicePrimaryCtxRetain(srcCtx, currentDevice));
-    CU_ASSERT(cuCtxSetCurrent(*srcCtx));
-
-    CU_ASSERT(cuCtxGetDevice(&currentDevice));
-    CU_ASSERT(cuMemAlloc((CUdeviceptr *)&gpuBuffer0, (size_t)size));
-    CU_ASSERT(cuMemAlloc((CUdeviceptr *)&gpuBuffer1, (size_t)size));
-}
-
 inline void benchmark_clean(void *srcBuffer, CUcontext *ctx, bool d2d = false, int currentDevice = 0) {
     CU_ASSERT(cuCtxSetCurrent(*ctx));
     if (d2d) {
         CU_ASSERT(cuMemFree((CUdeviceptr)srcBuffer));
         CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
     } else {
-        CU_ASSERT(cuMemFreeHost(srcBuffer));
+        freeHostMemory(srcBuffer);
     }
+}
+
+inline void benchmark_clean_bidir_h2d(CUcontext *ctx, int currentDevice, void *hostBuffer, void *gpuBuffer) {
+    CU_ASSERT(cuCtxSetCurrent(*ctx));
+    freeHostMemory(hostBuffer);
+    freeHostMemory(gpuBuffer);
 }
 
 inline void benchmark_clean_bidir(CUcontext *ctx, int currentDevice, void *gpuBuffer0, void *gpuBuffer1) {

@@ -8,7 +8,9 @@
 #include "common.h"
 #include "memory_utils.h"
 
-CUresult memcpy_kernel(int4* dst, int4* src, CUstream stream, unsigned long long sizeInElement, unsigned int numThreadPerBlock, bool stride, unsigned long long loopCount) {
+CUresult memcpy_kernel(int4* dst, int4* src, CUstream stream, unsigned long long sizeInElement, unsigned int numThreadPerBlock,
+    bool stride, unsigned long long loopCount) {
+
     CUdevice dev;
     CUcontext ctx;
     CUfunction func;
@@ -33,7 +35,9 @@ CUresult memcpy_kernel(int4* dst, int4* src, CUstream stream, unsigned long long
     return cuLaunchKernel(func, numSm, 1, 1, numThreadPerBlock, 1, 1, 0, stream, params, 0);
 }
 
-static void memcpy_sm(void *dst, void *src, CUcontext *ctx, unsigned long long sizeInElement, unsigned long long* bandwidth, unsigned long long loopCount = defaultLoopCount, CUcontext *peerCtx = nullptr) {
+static void memcpy_sm(void *dst, void *src, CUcontext *ctx, unsigned long long sizeInElement, unsigned long long* bandwidth,
+    unsigned long long loopCount = defaultLoopCount, CUcontext *peerCtx = nullptr) {
+
     unsigned int numThreadPerBlock = 512;
     CUdevice device;
     int kernelTimeout = 0;
@@ -103,9 +107,11 @@ static void memcpy_sm(void *dst, void *src, CUcontext *ctx, unsigned long long s
     CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvent, endEvent));
     unsigned long long elapsedWithEventsInUs = (unsigned long long)(timeWithEvents * 1000.0f);
 
-    *bandwidth += (adjustedSizeInElement * sizeof(int4) * loopCount * 1000ull * 1000ull) / elapsedWithEventsInUs; // Bandwidth in Bytes per second
+    // Bandwidth in Bytes per second
+    *bandwidth += (adjustedSizeInElement * sizeof(int4) * loopCount * 1000ull * 1000ull) / elapsedWithEventsInUs;
 
-    CU_ASSERT(cuMemcpy((CUdeviceptr)(((int4 *)dst) + adjustedSizeInElement), (CUdeviceptr)(((int4 *)src) + adjustedSizeInElement), (size_t)((sizeInElement - adjustedSizeInElement) * sizeof(int4))));
+    CU_ASSERT(cuMemcpy((CUdeviceptr)(((int4 *)dst) + adjustedSizeInElement), (CUdeviceptr)(((int4 *)src) + adjustedSizeInElement),
+        (size_t)((sizeInElement - adjustedSizeInElement) * sizeof(int4))));
     CU_ASSERT(cuCtxSynchronize());
     CU_ASSERT(cuStreamDestroy(stream));
     if (peerCtx != nullptr) {
@@ -114,9 +120,11 @@ static void memcpy_sm(void *dst, void *src, CUcontext *ctx, unsigned long long s
         CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEventPeer, endEventPeer));
         elapsedWithEventsInUs = (unsigned long long)(timeWithEvents * 1000.0f);
 
-        *bandwidth += (adjustedSizeInElement * sizeof(int4) * loopCount * 1000ull * 1000ull) / elapsedWithEventsInUs; // Bandwidth in Bytes per second
+        // Bandwidth in Bytes per second
+        *bandwidth += (adjustedSizeInElement * sizeof(int4) * loopCount * 1000ull * 1000ull) / elapsedWithEventsInUs;
 
-        CU_ASSERT(cuMemcpy((CUdeviceptr)(((int4 *)src) + adjustedSizeInElement), (CUdeviceptr)(((int4 *)dst) + adjustedSizeInElement), (size_t)((sizeInElement - adjustedSizeInElement) * sizeof(int4))));
+        CU_ASSERT(cuMemcpy((CUdeviceptr)(((int4 *)src) + adjustedSizeInElement), (CUdeviceptr)(((int4 *)dst) + adjustedSizeInElement), 
+            (size_t)((sizeInElement - adjustedSizeInElement) * sizeof(int4))));
         CU_ASSERT(cuCtxSynchronize());
         CU_ASSERT(cuStreamDestroy(streamPeer));
     }

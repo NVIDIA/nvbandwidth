@@ -10,7 +10,9 @@
 #include "benchmarks.h"
 #include "memory_utils.h"
 
-static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned long long *bandwidth, bool isPageable, unsigned long long loopCount = defaultLoopCount) {
+static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned long long *bandwidth, bool isPageable,
+    unsigned long long loopCount = defaultLoopCount) {
+
     CUstream stream;
     CUevent startEvent;
     CUevent endEvent;
@@ -52,8 +54,9 @@ static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned 
     CU_ASSERT(cuCtxSynchronize());
 }
 
-static void memcpyAsync_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2, unsigned long long size, unsigned long long *bandwidth,
-    unsigned long long loopCount = defaultLoopCount) {
+static void memcpyAsync_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2, unsigned long long size,
+    unsigned long long *bandwidth, unsigned long long loopCount = defaultLoopCount) {
+
     volatile int *blockingVar = NULL;
 
     int dev1, dev2;
@@ -133,7 +136,9 @@ static void memcpyAsync_bidirectional(void *dst1, void *src1, CUcontext ctx1, vo
     CU_ASSERT(cuCtxSynchronize());
 }
 
-static void memcpy_and_check(void *dst, void *src, unsigned long long size, unsigned long long *bandwidth, unsigned long long loopCount = defaultLoopCount) {
+static void memcpy_and_check(void *dst, void *src, unsigned long long size, unsigned long long *bandwidth,
+    unsigned long long loopCount = defaultLoopCount) {
+
     memset_pattern(src, size, 0xCAFEBABE);
     memset_pattern(dst, size, 0xBAADF00D);
 
@@ -142,8 +147,9 @@ static void memcpy_and_check(void *dst, void *src, unsigned long long size, unsi
     memcmp_pattern(dst, size, 0xCAFEBABE);
 }
 
-static void memcpyAsync_and_check_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2, unsigned long long size,
-    unsigned long long *bandwidth, unsigned long long loopCount = defaultLoopCount) {
+static void memcpyAsync_and_check_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2,
+    unsigned long long size, unsigned long long *bandwidth, unsigned long long loopCount = defaultLoopCount) {
+
     memset_pattern(src1, size, 0xCAFEBABE);
     memset_pattern(dst1, size, 0xBAADF00D);
     memset_pattern(src2, size, 0xFEEEFEEE);
@@ -153,7 +159,9 @@ static void memcpyAsync_and_check_bidirectional(void *dst1, void *src1, CUcontex
     memcmp_pattern(dst2, size, 0xFEEEFEEE);
 }
 
-static void unidirectional_memcpy(void *src, void *dst, unsigned long long *bandwidth, unsigned long long size, unsigned long long loopCount) {
+static void unidirectional_memcpy(void *src, void *dst, unsigned long long *bandwidth, unsigned long long size,
+    unsigned long long loopCount) {
+
     unsigned long long bandwidth_current;
     cudaStat bandwidthStat;
 
@@ -165,8 +173,9 @@ static void unidirectional_memcpy(void *src, void *dst, unsigned long long *band
     *bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
 }
 
-static void bidirectional_memcpy(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2,  unsigned long long *bandwidth,
-    unsigned long long size, unsigned long long loopCount) {
+static void bidirectional_memcpy(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2,
+    unsigned long long *bandwidth, unsigned long long size, unsigned long long loopCount) {
+
     unsigned long long bandwidth_current;
     cudaStat bandwidthStat;
 
@@ -186,9 +195,8 @@ void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount
     size_t *procMask = NULL;
     size_t firstEnabledCPU = getFirstEnabledCPU();
     CUcontext benchCtx;
+    benchmark_prepare(&benchCtx, &deviceCount);
 
-    CU_ASSERT(cuCtxGetCurrent(&benchCtx));
-    CU_ASSERT(cuDeviceGetCount(&deviceCount));
     PeerValueMatrix<double> bandwidthValues(1, deviceCount);
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
@@ -217,8 +225,7 @@ void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount
         PROC_MASK_CLEAR(procMask, 0);
     }
 
-    CU_ASSERT(cuCtxSetCurrent(benchCtx));
-    freeHostMemory(srcBuffer);
+    benchmark_clean(srcBuffer, &benchCtx);
 
     free(procMask);
 
@@ -234,9 +241,8 @@ void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount
     size_t *procMask = NULL;
     size_t firstEnabledCPU = getFirstEnabledCPU();
     CUcontext benchCtx;
+    benchmark_prepare(&benchCtx, &deviceCount);
 
-    CU_ASSERT(cuCtxGetCurrent(&benchCtx));
-    CU_ASSERT(cuDeviceGetCount(&deviceCount));
     PeerValueMatrix<double> bandwidthValues(1, deviceCount);
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
@@ -258,12 +264,10 @@ void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount
         perf_value_sum += bandwidth * 1e-9;
 
         CU_ASSERT(cuMemFree((CUdeviceptr)srcBuffer));
-
         CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
     }
 
-    CU_ASSERT(cuCtxSetCurrent(benchCtx));
-    CU_ASSERT(cuMemFreeHost(dstBuffer));
+    benchmark_clean(dstBuffer, &benchCtx);
     PROC_MASK_CLEAR(procMask, 0);
 
     free(procMask);
@@ -284,9 +288,8 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     size_t firstEnabledCPU = getFirstEnabledCPU();
     int deviceCount;
     CUcontext benchCtx;
+    benchmark_prepare(&benchCtx, &deviceCount);
 
-    CU_ASSERT(cuCtxGetCurrent(&benchCtx));
-    CU_ASSERT(cuDeviceGetCount(&deviceCount));
     PeerValueMatrix<double> bandwidthValues(1, deviceCount);
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
@@ -316,10 +319,8 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
         CU_ASSERT(cuMemFree((CUdeviceptr)HtoD_dstBuffer));
         CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
     }
-    
-    CU_ASSERT(cuCtxSetCurrent(benchCtx));
-    CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
-    CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
+
+    benchmark_clean_bidir_h2d(&benchCtx, 0, HtoD_srcBuffer, DtoH_dstBuffer);
 
     PROC_MASK_CLEAR(procMask, 0);
 
@@ -341,9 +342,8 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     size_t firstEnabledCPU = getFirstEnabledCPU();
     int deviceCount;
     CUcontext benchCtx;
-    CU_ASSERT(cuCtxGetCurrent(&benchCtx));
+    benchmark_prepare(&benchCtx, &deviceCount);
 
-    CU_ASSERT(cuDeviceGetCount(&deviceCount));
     PeerValueMatrix<double> bandwidthValues(1, deviceCount);
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
 
@@ -373,9 +373,7 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
         CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
     }
 
-    CU_ASSERT(cuCtxSetCurrent(benchCtx));
-    CU_ASSERT(cuMemFreeHost(HtoD_srcBuffer));
-    CU_ASSERT(cuMemFreeHost(DtoH_dstBuffer));
+    benchmark_clean_bidir_h2d(&benchCtx, 0, HtoD_srcBuffer, DtoH_dstBuffer);
 
     PROC_MASK_CLEAR(procMask, 0);
 
@@ -392,9 +390,8 @@ void launch_DtoD_memcpy_CE(bool read, unsigned long long size, unsigned long lon
     double value_sum = 0.0;
     int deviceCount = 0;
     CUcontext benchCtx;
+    benchmark_prepare(&benchCtx, &deviceCount);
 
-    CU_ASSERT(cuCtxGetCurrent(&benchCtx));
-    CU_ASSERT(cuDeviceGetCount(&deviceCount));
     PeerValueMatrix<double> value_matrix(deviceCount);
 
     for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
@@ -437,9 +434,8 @@ void launch_DtoD_memcpy_CE(bool read, unsigned long long size, unsigned long lon
                 CU_ASSERT(cuDevicePrimaryCtxRelease(peer));
             }
         }
-        CU_ASSERT(cuCtxSetCurrent(benchCtx));
-        CU_ASSERT(cuMemFree((CUdeviceptr)srcBuffer));
-        CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
+        
+        benchmark_clean(srcBuffer, &benchCtx, true, currentDevice);
     }
     std::cout << "memcpy CE GPU(row) " << (read ? "->" : "<-") << " GPU(column) bandwidth (GB/s):" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << value_matrix << std::endl;
@@ -461,9 +457,8 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     double bandwidth_sum = 0.0;
     int deviceCount = 0;
     CUcontext benchCtx;
+    benchmark_prepare(&benchCtx, &deviceCount);
 
-    CU_ASSERT(cuCtxGetCurrent(&benchCtx));
-    CU_ASSERT(cuDeviceGetCount(&deviceCount));
     PeerValueMatrix<double> bandwidth_matrix(deviceCount);
 
     for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
@@ -506,6 +501,7 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
         CU_ASSERT(cuMemFree((CUdeviceptr)src1Buffer));
         CU_ASSERT(cuMemFree((CUdeviceptr)dst2Buffer));
         CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
+        benchmark_clean_bidir_h2d(&benchCtx, currentDevice, src1Buffer, dst2Buffer);
     }
     std::cout << "memcpy CE GPU <-> GPU bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidth_matrix << std::endl;
