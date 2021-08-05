@@ -10,13 +10,15 @@
 #include "benchmarks.h"
 #include "memory_utils.h"
 
-static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned long long *bandwidth, bool isPageable,
+static void memcpy_ce(void *dst, void *src, unsigned long long size, unsigned long long *bandwidth,
     unsigned long long loopCount = defaultLoopCount) {
 
     CUstream stream;
     CUevent startEvent;
     CUevent endEvent;
     volatile int *blockingVar = NULL;
+
+    bool isPageable = !isMemoryOwnedByCUDA(dst) || !isMemoryOwnedByCUDA(src);
 
     CU_ASSERT(cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING));
     CU_ASSERT(cuEventCreate(&startEvent, CU_EVENT_DEFAULT));
@@ -54,7 +56,7 @@ static void memcpyAsync(void *dst, void *src, unsigned long long size, unsigned 
     CU_ASSERT(cuCtxSynchronize());
 }
 
-static void memcpyAsync_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2, unsigned long long size,
+static void memcpy_ce_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2, unsigned long long size,
     unsigned long long *bandwidth, unsigned long long loopCount = defaultLoopCount) {
 
     volatile int *blockingVar = NULL;
@@ -136,29 +138,6 @@ static void memcpyAsync_bidirectional(void *dst1, void *src1, CUcontext ctx1, vo
     CU_ASSERT(cuCtxSynchronize());
 }
 
-static void memcpy_and_check(void *dst, void *src, unsigned long long size, unsigned long long *bandwidth,
-    unsigned long long loopCount = defaultLoopCount) {
-
-    memset_pattern(src, size, 0xCAFEBABE);
-    memset_pattern(dst, size, 0xBAADF00D);
-
-    bool isPageable = !isMemoryOwnedByCUDA(dst) || !isMemoryOwnedByCUDA(src);
-    memcpyAsync(dst, src, size, bandwidth, isPageable, loopCount);
-    memcmp_pattern(dst, size, 0xCAFEBABE);
-}
-
-static void memcpyAsync_and_check_bidirectional(void *dst1, void *src1, CUcontext ctx1, void *dst2, void *src2, CUcontext ctx2,
-    unsigned long long size, unsigned long long *bandwidth, unsigned long long loopCount = defaultLoopCount) {
-
-    memset_pattern(src1, size, 0xCAFEBABE);
-    memset_pattern(dst1, size, 0xBAADF00D);
-    memset_pattern(src2, size, 0xFEEEFEEE);
-    memset_pattern(dst2, size, 0xFACEFEED);
-    memcpyAsync_bidirectional(dst1, src1, ctx1, dst2, src2, ctx2, size, bandwidth, loopCount);
-    memcmp_pattern(dst1, size, 0xCAFEBABE);
-    memcmp_pattern(dst2, size, 0xFEEEFEEE);
-}
-
 static void unidirectional_memcpy(void *src, void *dst, unsigned long long *bandwidth, unsigned long long size,
     unsigned long long loopCount) {
 
@@ -167,7 +146,7 @@ static void unidirectional_memcpy(void *src, void *dst, unsigned long long *band
 
     *bandwidth = 0;
     for (unsigned int n = 0; n < averageLoopCount; n++) {
-        memcpy_and_check(dst, src, size, &bandwidth_current, loopCount);
+        memcpy_ce(dst, src, size, &bandwidth_current, loopCount);
         bandwidthStat((double)bandwidth_current);
     }
     *bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
@@ -181,7 +160,7 @@ static void bidirectional_memcpy(void *dst1, void *src1, CUcontext ctx1, void *d
 
     *bandwidth = 0;
     for (unsigned int n = 0; n < averageLoopCount; n++) {
-        memcpyAsync_and_check_bidirectional(dst1, src1, ctx1, dst2, src2, ctx2, size,  &bandwidth_current, loopCount);
+        memcpy_ce_bidirectional(dst1, src1, ctx1, dst2, src2, ctx2, size,  &bandwidth_current, loopCount);
         bandwidthStat((double)bandwidth_current);
     }
     *bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
@@ -497,11 +476,8 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
                 CU_ASSERT(cuDevicePrimaryCtxRelease(peer));
             }
         }
-        CU_ASSERT(cuCtxSetCurrent(benchCtx));
-        CU_ASSERT(cuMemFree((CUdeviceptr)src1Buffer));
-        CU_ASSERT(cuMemFree((CUdeviceptr)dst2Buffer));
-        CU_ASSERT(cuDevicePrimaryCtxRelease(currentDevice));
-        benchmark_clean_bidir_h2d(&benchCtx, currentDevice, src1Buffer, dst2Buffer);
+
+        benchmark_clean_bidir(&benchCtx, currentDevice, src1Buffer, dst2Buffer);
     }
     std::cout << "memcpy CE GPU <-> GPU bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidth_matrix << std::endl;
