@@ -4,7 +4,7 @@
 #include <cuda.h>
 #include <iomanip>
 #include <iostream>
-#include <map>
+#include <vector>
 #include <stdio.h>
 #include <string.h>
 #include <string>
@@ -23,59 +23,68 @@ bool disableP2P;
 bool verbose;
 
 // Define benchmarks here
-std::map<std::string, Benchmark> create_benchmarks() {
+std::vector<Benchmark> createBenchmarks() {
     return {
-        {"host_to_device_memcpy_ce",
-            Benchmark(launch_HtoD_memcpy_CE,
-                    "Host to device memcpy using the Copy Engine")},
-        {"device_to_host_memcpy_ce",
-            Benchmark(launch_DtoH_memcpy_CE,
-                    "Device to host memcpy using the Copy Engine")},
-        {"host_to_device_bidirectional_memcpy_ce",
-            Benchmark(launch_HtoD_memcpy_bidirectional_CE,
-                    "Bidirectional host to device memcpy using the Copy Engine")},
-        {"device_to_host_bidirectional_memcpy_ce",
-            Benchmark(launch_DtoH_memcpy_bidirectional_CE,
-                    "Bidirectional device to host memcpy using the Copy Engine")},
-        {"device_to_device_memcpy_read_ce",
-            Benchmark(launch_DtoD_memcpy_read_CE,
-                    "Device to device memcpy using the Copy Engine (read)")},
-        {"device_to_device_memcpy_write_ce",
-            Benchmark(launch_DtoD_memcpy_write_CE,
-                    "Device to device memcpy using the Copy Engine (write)")},
-        {"device_to_device_bidirectional_memcpy_ce",
-            Benchmark(launch_DtoD_memcpy_bidirectional_CE,
-                    "Bidirectional device to device memcpy using the Copy Engine")},
-        {"host_to_device_memcpy_sm",
-            Benchmark(launch_HtoD_memcpy_SM,
-                    "Host to device memcpy using the Stream Multiprocessor")},
-        {"device_to_host_memcpy_sm",
-            Benchmark(launch_DtoH_memcpy_SM,
-                   "Device to host memcpy using the Stream Multiprocessor")},
-        {"device_to_device_memcpy_read_sm",
-            Benchmark(launch_DtoD_memcpy_read_SM,
-                    "Device to device memcpy using the Stream Multiprocessor (read)")},
-        {"device_to_device_memcpy_write_sm",
-            Benchmark(launch_DtoD_memcpy_write_SM,
-                    "Device to device memcpy using the Stream Multiprocessor (write)")},
-        {"device_to_device_bidirectional_memcpy_read_sm",
-            Benchmark(launch_DtoD_memcpy_bidirectional_read_SM,
-                    "Bidirectional device to device memcpy using the Stream Multiprocessor (read)")},
-        {"device_to_device_bidirectional_memcpy_write_sm",
-            Benchmark(launch_DtoD_memcpy_bidirectional_write_SM,
-                    "Bidirectional device to device memcpy using the Stream Multiprocessor (write)")}};
+        Benchmark("host_to_device_memcpy_ce", launch_HtoD_memcpy_CE, "Host to device memcpy using the Copy Engine"),
+        Benchmark("device_to_host_memcpy_ce", launch_DtoH_memcpy_CE, "Device to host memcpy using the Copy Engine"),
+        Benchmark("host_to_device_bidirectional_memcpy_ce", launch_HtoD_memcpy_bidirectional_CE, "Bidirectional host to device memcpy using the Copy Engine"),
+        Benchmark("device_to_host_bidirectional_memcpy_ce", launch_DtoH_memcpy_bidirectional_CE, "Bidirectional device to host memcpy using the Copy Engine"),
+        Benchmark("device_to_device_memcpy_read_ce", launch_DtoD_memcpy_read_CE, "Device to device memcpy using the Copy Engine (read)"),
+        Benchmark("device_to_device_memcpy_write_ce", launch_DtoD_memcpy_write_CE, "Device to device memcpy using the Copy Engine (write)"),
+        Benchmark("device_to_device_bidirectional_memcpy_ce", launch_DtoD_memcpy_bidirectional_CE, "Bidirectional device to device memcpy using the Copy Engine"),
+        Benchmark("host_to_device_memcpy_sm", launch_HtoD_memcpy_SM, "Host to device memcpy using the Stream Multiprocessor"),
+        Benchmark("device_to_host_memcpy_sm", launch_DtoH_memcpy_SM, "Device to host memcpy using the Stream Multiprocessor"),
+        Benchmark("device_to_device_memcpy_read_sm", launch_DtoD_memcpy_read_SM, "Device to device memcpy using the Stream Multiprocessor (read)"),
+        Benchmark("device_to_device_memcpy_write_sm", launch_DtoD_memcpy_write_SM, "Device to device memcpy using the Stream Multiprocessor (write)"),
+        Benchmark("device_to_device_bidirectional_memcpy_read_sm", launch_DtoD_memcpy_bidirectional_read_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (read)"),
+        Benchmark("device_to_device_bidirectional_memcpy_write_sm", launch_DtoD_memcpy_bidirectional_write_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (write)")
+    };
 }
 
-void init() {
-    cuInit(0);
+Benchmark findBenchmark(std::vector<Benchmark> &benchmarks, std::string id) {
+    // Check if benchmark ID is index
+    char* p;
+    long index = strtol(id.c_str(), &p, 10);
+    if (*p) {
+        // Conversion failed so key is ID
+        auto it = find_if(benchmarks.begin(), benchmarks.end(), [&id](Benchmark& bench) {return bench.benchKey() == id;});
+        if (it != benchmarks.end()) {
+            return benchmarks.at(std::distance(benchmarks.begin(), it));
+        } else {
+            throw "Benchmark " + id + " not found!";
+        }
+    } else {
+        // ID is index
+        if (index >= benchmarks.size()) throw "Benchmark index " + id + " out of bound!";
+        return benchmarks.at(index);
+    }
+}
+
+void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string benchmarkID) {
+    CUcontext benchCtx;
+
+    try {
+        Benchmark bench = findBenchmark(benchmarks, benchmarkID);
+        std::cout << "Running benchmark " << bench.benchKey() << ".\n";
+        
+        cuInit(0);
+        CU_ASSERT(cuCtxCreate(&benchCtx, 0, 0));
+        CU_ASSERT(cuCtxSetCurrent(benchCtx));
+        
+        bench.benchFn()(defaultBufferSize, defaultLoopCount);
+
+        CU_ASSERT(cuCtxDestroy(benchCtx));
+    } catch (std::string s) {
+        std::cout << "ERROR: " << s << std::endl;
+    }
 }
 
 int main(int argc, char **argv) {
     averageLoopCount = defaultAverageLoopCount;
     disableP2P = true;
 
-    std::map<std::string, Benchmark> benchmarks = create_benchmarks();
-    std::string benchmark_name;
+    std::vector<Benchmark> benchmarks = createBenchmarks();
+    std::string benchmarkID;
 
     // Args parsing
     opt::options_description desc("NVBandwidth CLI");
@@ -84,7 +93,7 @@ int main(int argc, char **argv) {
         ("bufferSize", opt::value<unsigned long long int>(), "Memcpy buffer size")
         ("loopCount", opt::value<unsigned long long int>(), "Iterations of memcpy to be performed")
         ("list,l", "List available benchmarks")
-        ("benchmark,b", opt::value<std::string>(), "Benchmark to run")
+        ("benchmark,b", opt::value<std::string>(), "Benchmark to run (by key or index)")
         ("verbose,v", "Verbose output");
 
     opt::variables_map vm;
@@ -102,9 +111,9 @@ int main(int argc, char **argv) {
     }
 
     if (vm.count("list")) {
-        for (std::map<std::string, Benchmark>::iterator iter = benchmarks.begin();
-            iter != benchmarks.end(); ++iter) {
-            std::cout << iter->first << ":\n\t\t" << iter->second.description() << "\n";
+        size_t numBenchmarks = benchmarks.size();
+        for (unsigned int i = 0; i < numBenchmarks; i++) {
+            std::cout << "Index: " << i << ", Key: " << benchmarks.at(i).benchKey() << "\n - Description: " << benchmarks.at(i).benchDesc() << "\n\n";
         }
         return 0;
     }
@@ -116,24 +125,10 @@ int main(int argc, char **argv) {
     else verbose = false;
 
     if (vm.count("benchmark")) {
-        benchmark_name = vm["benchmark"].as<std::string>();
-        std::cout << "Running benchmark " << benchmark_name << ".\n";
+        benchmarkID = vm["benchmark"].as<std::string>();
     }
+    
+    runBenchmark(benchmarks, benchmarkID);
 
-    init();
-
-    // Run benchmark
-    try {
-        CUcontext benchCtx;
-        CU_ASSERT(cuCtxCreate(&benchCtx, 0, 0));
-        CU_ASSERT(cuCtxSetCurrent(benchCtx));
-        
-        Benchmark bench = benchmarks[benchmark_name];
-        bench.bench_fn()(defaultBufferSize, defaultLoopCount);
-
-        CU_ASSERT(cuCtxDestroy(benchCtx));
-    } catch (std::string s) {
-        std::cout << s << std::endl;
-    }
     return 0;
 }

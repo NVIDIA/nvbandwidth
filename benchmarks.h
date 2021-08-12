@@ -8,17 +8,20 @@
 typedef void (*benchfn_t)(unsigned long long, unsigned long long);
 
 class Benchmark {
-    benchfn_t benchmark_func;
+    std::string key;
     std::string desc;
+    benchfn_t benchmark_func;
 
 public:
     Benchmark() {}
 
-    Benchmark(benchfn_t benchmark_func, std::string desc): benchmark_func(benchmark_func), desc(desc) {}
+    Benchmark(std::string key, benchfn_t benchmark_func, std::string desc): key(key), benchmark_func(benchmark_func), desc(desc) {}
 
-    benchfn_t bench_fn() { return benchmark_func; }
+    std::string benchKey() { return key; }
 
-    std::string description() { return desc; }
+    benchfn_t benchFn() { return benchmark_func; }
+
+    std::string benchDesc() { return desc; }
 };
 
 inline void benchmark_prepare(CUcontext *ctx, int *deviceCount) {
