@@ -18,7 +18,6 @@ namespace opt = boost::program_options;
 unsigned int averageLoopCount;
 unsigned long long bufferSize;
 unsigned long long loopCount;
-bool skip_verif;
 
 bool disableP2P;
 bool verbose;
@@ -82,9 +81,11 @@ int main(int argc, char **argv) {
     opt::options_description desc("NVBandwidth CLI");
     desc.add_options()
         ("help,h", "Produce help message")
+        ("bufferSize", opt::value<unsigned long long int>(), "Memcpy buffer size")
+        ("loopCount", opt::value<unsigned long long int>(), "Iterations of memcpy to be performed")
         ("list,l", "List available benchmarks")
-        ("verbose,v", "Verbose output")
-        ("benchmark,b", opt::value<std::string>(), "Benchmark to run");
+        ("benchmark,b", opt::value<std::string>(), "Benchmark to run")
+        ("verbose,v", "Verbose output");
 
     opt::variables_map vm;
     try {
@@ -107,6 +108,9 @@ int main(int argc, char **argv) {
         }
         return 0;
     }
+
+    if (vm.count("bufferSize")) bufferSize = vm["bufferSize"].as<unsigned long long int>();;
+    if (vm.count("loopCount")) loopCount = vm["loopCount"].as<unsigned long long int>();;
 
     if (vm.count("verbose")) verbose = true;
     else verbose = false;
