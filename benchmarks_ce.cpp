@@ -148,7 +148,9 @@ static void unidirectional_memcpy(void *src, void *dst, unsigned long long *band
     for (unsigned int n = 0; n < averageLoopCount; n++) {
         memcpy_ce(dst, src, size, &bandwidth_current, loopCount);
         bandwidthStat((double)bandwidth_current);
+        VERBOSE << "\tSample " << n << ' ' << std::fixed << std::setprecision (2) << bandwidth_current * 1e-9 << " GB/s\n";
     }
+    VERBOSE << "       bandwidth: " << std::fixed << std::setprecision (2) << STAT_MEAN(bandwidthStat) * 1e-9 << "(+/- " << STAT_ERROR(bandwidthStat) * 1e-9 << ") GB/s\n";
     *bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
 }
 
@@ -162,7 +164,9 @@ static void bidirectional_memcpy(void *dst1, void *src1, CUcontext ctx1, void *d
     for (unsigned int n = 0; n < averageLoopCount; n++) {
         memcpy_ce_bidirectional(dst1, src1, ctx1, dst2, src2, ctx2, size,  &bandwidth_current, loopCount);
         bandwidthStat((double)bandwidth_current);
+        VERBOSE << "\tSample " << n << ' ' << std::fixed << std::setprecision (2) << bandwidth_current * 1e-9 << " GB/s\n";
     }
+    VERBOSE << "       bandwidth: " << std::fixed << std::setprecision (2) << STAT_MEAN(bandwidthStat) * 1e-9 << "(+/- " << STAT_ERROR(bandwidthStat) * 1e-9 << ") GB/s\n";
     *bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
 }
 

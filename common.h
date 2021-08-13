@@ -24,6 +24,16 @@ extern bool disableP2P;
 
 // Verbosity
 extern bool verbose;
+class Verbosity {
+public:    
+    Verbosity() = default;
+    template<typename T>
+    Verbosity& operator<<(T input) {
+      if (verbose) std::cout << input;
+      return *this;
+    }
+};
+extern Verbosity VERBOSE;
 
 // Rounds n up to the nearest multiple of "multiple".
 // if n is already a multiple of "multiple", n is returned unchanged.

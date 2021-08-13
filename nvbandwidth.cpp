@@ -21,6 +21,7 @@ unsigned long long loopCount;
 
 bool disableP2P;
 bool verbose;
+Verbosity VERBOSE;
 
 // Define benchmarks here
 std::vector<Benchmark> createBenchmarks() {
