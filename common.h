@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cuda.h>
+#include <nvml.h>
 #include <cuda_runtime.h>
 #include <float.h>
 #include <iomanip>
@@ -237,7 +238,7 @@ void calculateLeastSquares(const std::vector<T> &x, const std::vector<T> &y, dou
     intercept = y_avg - slope * x_avg;
 }
 
-// Error handling
+// CUDA Error handling
 inline void CU_ASSERT(CUresult cuResult, const char *msg = nullptr) {
     if (cuResult != CUDA_SUCCESS) {
         const char *errDescStr, *errNameStr;
@@ -248,6 +249,24 @@ inline void CU_ASSERT(CUresult cuResult, const char *msg = nullptr) {
         std::cout << std::endl;
         std::exit(1);
   }
+}
+
+// NVML Error handling
+inline void NVML_ASSERT(nvmlReturn_t nvmlResult, const char *msg = nullptr) {
+    if (nvmlResult != NVML_SUCCESS) {
+        std::cout << "[" << nvmlErrorString(nvmlResult) << "]";
+        if (msg != nullptr) std::cout << ":\n\t" << msg;
+        std::cout << std::endl;
+        std::exit(1);
+  }
+}
+
+// NUMA optimal affinity
+inline void setOptimalCpuAffinity(int cudaDeviceID) {
+    nvmlDevice_t device;
+
+    NVML_ASSERT(nvmlDeviceGetHandleByIndex_v2(cudaDeviceID, &device));
+    NVML_ASSERT(nvmlDeviceSetCpuAffinity(device));
 }
 
 #endif

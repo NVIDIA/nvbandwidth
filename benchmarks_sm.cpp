@@ -145,10 +145,10 @@ void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount
     std::vector<double> bandwidthValues(deviceCount);
 
     CU_ASSERT(cuMemHostAlloc(&srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
-    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++)
-    {
-        CUcontext srcCtx;
+    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        setOptimalCpuAffinity(currentDevice);
 
+        CUcontext srcCtx;
         CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
         CU_ASSERT(cuCtxSetCurrent(srcCtx));
 
@@ -180,10 +180,10 @@ void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount
     std::vector<double> bandwidthValues(deviceCount);
 
     CU_ASSERT(cuMemHostAlloc(&dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
-    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++)
-    {
-        CUcontext srcCtx;
+    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        setOptimalCpuAffinity(currentDevice);
 
+        CUcontext srcCtx;
         CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
         CU_ASSERT(cuCtxSetCurrent(srcCtx));
 
@@ -214,9 +214,10 @@ static void launch_DtoD_memcpy_SM(bool read, unsigned long long size, unsigned l
     PeerValueMatrix<double> bandwidth_matrix(deviceCount);
 
     for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        setOptimalCpuAffinity(currentDevice);
+
         unsigned long long currentSize = size;
         CUcontext srcCtx;
-
         CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
         CU_ASSERT(cuCtxSetCurrent(srcCtx));
 
@@ -283,6 +284,8 @@ static void launch_DtoD_memcpy_bidirectional_SM(bool read, unsigned long long si
     PeerValueMatrix<double> bandwidth_matrix(deviceCount);
 
     for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        setOptimalCpuAffinity(currentDevice);
+        
         CUcontext srcCtx;
         CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
         CU_ASSERT(cuCtxSetCurrent(srcCtx));

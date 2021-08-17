@@ -187,10 +187,10 @@ void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount
 
     cuMemHostAlloc(&srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE);
 
-    for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
-        int currentDevice = devIdx;
-        CUcontext srcCtx;
+    for (size_t currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        setOptimalCpuAffinity(currentDevice);
 
+        CUcontext srcCtx;
         CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
         CU_ASSERT(cuCtxSetCurrent(srcCtx));
             
@@ -233,10 +233,10 @@ void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount
 
     CU_ASSERT(cuMemHostAlloc(&dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
         
-    for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
-        int currentDevice = devIdx;
-        CUcontext srcCtx;
+    for (size_t currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        setOptimalCpuAffinity(currentDevice);
 
+        CUcontext srcCtx;
         CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
         CU_ASSERT(cuCtxSetCurrent(srcCtx));
         CU_ASSERT(cuMemAlloc((CUdeviceptr*)&srcBuffer, size));
@@ -284,8 +284,8 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     CU_ASSERT(cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
     CU_ASSERT(cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
 
-    for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
-        int currentDevice = devIdx;
+    for (size_t currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        setOptimalCpuAffinity(currentDevice);
 
         CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
         CU_ASSERT(cuCtxSetCurrent(srcCtx));
@@ -338,8 +338,8 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     CU_ASSERT(cuMemHostAlloc(&HtoD_srcBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
     CU_ASSERT(cuMemHostAlloc(&DtoH_dstBuffer, (size_t)size, CU_MEMHOSTALLOC_PORTABLE));
 
-    for (size_t devIdx = 0; devIdx < deviceCount; devIdx++) {
-        int currentDevice = devIdx;
+    for (size_t currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        setOptimalCpuAffinity(currentDevice);
 
         CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
         CU_ASSERT(cuCtxSetCurrent(srcCtx));
@@ -378,6 +378,8 @@ void launch_DtoD_memcpy_CE(bool read, unsigned long long size, unsigned long lon
     PeerValueMatrix<double> value_matrix(deviceCount);
 
     for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        setOptimalCpuAffinity(currentDevice);
+
         unsigned long long currentSize = size;
         CUcontext srcCtx;
 
@@ -445,6 +447,8 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     PeerValueMatrix<double> bandwidth_matrix(deviceCount);
 
     for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        setOptimalCpuAffinity(currentDevice);
+        
         CUcontext srcCtx;
         CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, currentDevice));
         CU_ASSERT(cuCtxSetCurrent(srcCtx));

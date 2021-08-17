@@ -1,7 +1,8 @@
 TARGET = nvbandwidth
-CXX = nvcc
+CXX = g++
+CUDA_CXX = nvcc
 CFLAGS =
-LIBS = -lboost_program_options -lcuda
+LIBS = -lboost_program_options -lcuda -lnvidia-ml
 
 .PHONY: default all clean
 
@@ -20,7 +21,7 @@ OBJECTS = benchmarks_ce.o benchmarks_sm.o memory_utils.o nvbandwidth.o
 HEADERS = $(wildcard *.h)
 
 %.o: %.cu $(HEADERS)
-	$(CXX) $(CFLAGS) -c $< -o $@
+	$(CUDA_CXX) $(CFLAGS) -c $< -o $@
 
 %.o: %.cpp $(HEADERS)
 	$(CXX) $(CFLAGS) -c $< -o $@

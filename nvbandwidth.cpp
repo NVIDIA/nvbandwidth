@@ -2,6 +2,7 @@
 #include <boost/program_options.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <cuda.h>
+#include <nvml.h>
 #include <iomanip>
 #include <iostream>
 #include <vector>
@@ -69,6 +70,7 @@ void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string benchmar
         std::cout << "Running benchmark " << bench.benchKey() << ".\n";
         
         cuInit(0);
+        nvmlInit();
         CU_ASSERT(cuCtxCreate(&benchCtx, 0, 0));
         CU_ASSERT(cuCtxSetCurrent(benchCtx));
         
