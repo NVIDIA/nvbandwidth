@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
     disableP2P = true;
 
     std::vector<Benchmark> benchmarks = createBenchmarks();
-    std::string benchmarkID;
+    std::vector<std::string> benchmarksToRun;
 
     // Args parsing
     opt::options_description desc("NVBandwidth CLI");
@@ -96,7 +96,7 @@ int main(int argc, char **argv) {
         ("bufferSize", opt::value<unsigned long long int>(), "Memcpy buffer size")
         ("loopCount", opt::value<unsigned long long int>(), "Iterations of memcpy to be performed")
         ("list,l", "List available benchmarks")
-        ("benchmark,b", opt::value<std::string>(), "Benchmark to run (by key or index)")
+        ("benchmark,b", opt::value<std::vector<std::string>>()->multitoken(), "Benchmark(s) to run (by name or index)")
         ("verbose,v", "Verbose output");
 
     opt::variables_map vm;
@@ -115,7 +115,7 @@ int main(int argc, char **argv) {
 
     if (vm.count("list")) {
         size_t numBenchmarks = benchmarks.size();
-        std::cout << "Index, Key:\n\tDescription\n";
+        std::cout << "Index, Name:\n\tDescription\n";
         std::cout << "=======================\n";
         for (unsigned int i = 0; i < numBenchmarks; i++) {
             std::cout << i << ", " << benchmarks.at(i).benchKey() << ":\n\t" << benchmarks.at(i).benchDesc() << "\n\n";
@@ -130,10 +130,12 @@ int main(int argc, char **argv) {
     else verbose = false;
 
     if (vm.count("benchmark")) {
-        benchmarkID = vm["benchmark"].as<std::string>();
+        benchmarksToRun = vm["benchmark"].as<std::vector<std::string>>();
     }
     
-    runBenchmark(benchmarks, benchmarkID);
+    for (auto benchmarkIdenx : benchmarksToRun) {
+        runBenchmark(benchmarks, benchmarkIdenx);
+    }
 
     return 0;
 }
