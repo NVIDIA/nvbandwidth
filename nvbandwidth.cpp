@@ -115,8 +115,10 @@ int main(int argc, char **argv) {
 
     if (vm.count("list")) {
         size_t numBenchmarks = benchmarks.size();
+        std::cout << "Index, Key:\n\tDescription\n";
+        std::cout << "=======================\n";
         for (unsigned int i = 0; i < numBenchmarks; i++) {
-            std::cout << "Index: " << i << ", Key: " << benchmarks.at(i).benchKey() << "\n - Description: " << benchmarks.at(i).benchDesc() << "\n\n";
+            std::cout << i << ", " << benchmarks.at(i).benchKey() << ":\n\t" << benchmarks.at(i).benchDesc() << "\n\n";
         }
         return 0;
     }
