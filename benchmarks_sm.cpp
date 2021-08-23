@@ -79,17 +79,15 @@ static void memcpy_sm(void *dst, void *src, CUcontext *ctx, unsigned long long s
     CU_ASSERT(memcpy_kernel((int4 *)dst, (int4 *)src, stream, adjustedSizeInElement, numThreadPerBlock, true, loopCount));
 
     CU_ASSERT(cuEventRecord(startEvent, stream));
-
-    // ensuring that all copies are launched at the same time
-    CU_ASSERT(cuStreamWaitEvent(stream, startEvent, 0));
-    CU_ASSERT(cuEventRecord(startEvent, stream));
     if (peerCtx != nullptr) {
-        CU_ASSERT(cuStreamWaitEvent(streamPeer, startEventPeer, 0));
+        // ensuring that all copies are launched at the same time
+        CU_ASSERT(cuStreamWaitEvent(streamPeer, startEvent, 0));
         CU_ASSERT(cuEventRecord(startEventPeer, streamPeer));
     }
 
     CU_ASSERT(memcpy_kernel((int4 *)dst, (int4 *)src, stream, adjustedSizeInElement, numThreadPerBlock, true, loopCount));
     CU_ASSERT(cuEventRecord(endEvent, stream));
+
     if (peerCtx != nullptr) {
         CU_ASSERT(memcpy_kernel((int4 *)src, (int4 *)dst, streamPeer, adjustedSizeInElement, numThreadPerBlock, true, loopCount));
         CU_ASSERT(cuEventRecord(endEventPeer, streamPeer));
@@ -118,10 +116,11 @@ static void memcpy_sm(void *dst, void *src, CUcontext *ctx, unsigned long long s
         timeWithEvents = 0.0;
         CU_ASSERT(cuCtxSetCurrent(*peerCtx));
         CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEventPeer, endEventPeer));
-        elapsedWithEventsInUs = (unsigned long long)(timeWithEvents * 1000.0f);
+        unsigned long long peerElapsedWithEventsInUs = (unsigned long long)(timeWithEvents * 1000.0f);
 
         // Bandwidth in Bytes per second
-        *bandwidth += (adjustedSizeInElement * sizeof(int4) * loopCount * 1000ull * 1000ull) / elapsedWithEventsInUs;
+        unsigned long long peerBandwidth = (adjustedSizeInElement * sizeof(int4) * loopCount * 1000ull * 1000ull) / elapsedWithEventsInUs;
+        *bandwidth += peerBandwidth;
 
         CU_ASSERT(cuMemcpy((CUdeviceptr)(((int4 *)src) + adjustedSizeInElement), (CUdeviceptr)(((int4 *)dst) + adjustedSizeInElement), 
             (size_t)((sizeInElement - adjustedSizeInElement) * sizeof(int4))));
