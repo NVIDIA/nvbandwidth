@@ -1,15 +1,11 @@
-#include <boost/exception/exception.hpp>
 #include <boost/program_options.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <cuda.h>
 #include <nvml.h>
-#include <iomanip>
 #include <iostream>
 #include <vector>
-#include <stdio.h>
-#include <string.h>
+#include <cstring>
 #include <string>
-#include <time.h>
 
 #include "benchmarks.h"
 #include "common.h"
@@ -19,8 +15,8 @@ namespace opt = boost::program_options;
 unsigned int averageLoopCount;
 unsigned long long bufferSize;
 unsigned long long loopCount;
-
 bool disableP2P;
+bool parallel;
 bool verbose;
 Verbosity VERBOSE;
 
@@ -62,7 +58,7 @@ Benchmark findBenchmark(std::vector<Benchmark> &benchmarks, std::string id) {
     }
 }
 
-void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string benchmarkID) {
+void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string &benchmarkID) {
     CUcontext benchCtx;
 
     try {
@@ -71,13 +67,14 @@ void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string benchmar
         
         cuInit(0);
         nvmlInit();
+
         CU_ASSERT(cuCtxCreate(&benchCtx, 0, 0));
         CU_ASSERT(cuCtxSetCurrent(benchCtx));
         
         bench.benchFn()(defaultBufferSize, defaultLoopCount);
 
         CU_ASSERT(cuCtxDestroy(benchCtx));
-    } catch (std::string s) {
+    } catch (std::string &s) {
         std::cout << "ERROR: " << s << std::endl;
     }
 }
@@ -95,8 +92,9 @@ int main(int argc, char **argv) {
         ("help,h", "Produce help message")
         ("bufferSize", opt::value<unsigned long long int>(), "Memcpy buffer size")
         ("loopCount", opt::value<unsigned long long int>(), "Iterations of memcpy to be performed")
+        ("parallel,p", "Run benchmark on each device at the same time")
         ("list,l", "List available benchmarks")
-        ("benchmark,b", opt::value<std::vector<std::string>>()->multitoken(), "Benchmark(s) to run (by name or index)")
+        ("benchmark,b", opt::value<std::vector<std::string>>()->multitoken(), "Benchmark(s) to doMemcpy (by name or index)")
         ("verbose,v", "Verbose output");
 
     opt::variables_map vm;
@@ -123,8 +121,11 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    if (vm.count("bufferSize")) bufferSize = vm["bufferSize"].as<unsigned long long int>();;
-    if (vm.count("loopCount")) loopCount = vm["loopCount"].as<unsigned long long int>();;
+    if (vm.count("bufferSize")) bufferSize = vm["bufferSize"].as<unsigned long long int>();
+    if (vm.count("loopCount")) loopCount = vm["loopCount"].as<unsigned long long int>();
+
+    if (vm.count("parallel")) parallel = true;
+    else parallel = false;
 
     if (vm.count("verbose")) verbose = true;
     else verbose = false;
@@ -132,9 +133,9 @@ int main(int argc, char **argv) {
     if (vm.count("benchmark")) {
         benchmarksToRun = vm["benchmark"].as<std::vector<std::string>>();
     }
-    
-    for (auto benchmarkIdenx : benchmarksToRun) {
-        runBenchmark(benchmarks, benchmarkIdenx);
+
+    for (const auto& benchmarkIndex : benchmarksToRun) {
+        runBenchmark(benchmarks, benchmarkIndex);
     }
 
     return 0;

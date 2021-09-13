@@ -20,9 +20,11 @@ const unsigned long long defaultLoopCount = 16;
 const unsigned long long defaultBufferSize = 1024 * 1024 * 64; // 64MB
 const unsigned int defaultAverageLoopCount = 3;
 const unsigned int _2MB = 1024 * 1024 * 2;
+const unsigned int numThreadPerBlock = 512;
+
 extern unsigned int averageLoopCount;
 extern bool disableP2P;
-
+extern bool parallel;
 // Verbosity
 extern bool verbose;
 class Verbosity {

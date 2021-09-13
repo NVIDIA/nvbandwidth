@@ -3,19 +3,21 @@
 
 #include "common.h"
 #include "memory_utils.h"
+#include "memcpy.h"
 #include <map>
+#include <utility>
 
 typedef void (*benchfn_t)(unsigned long long, unsigned long long);
 
 class Benchmark {
     std::string key;
     std::string desc;
-    benchfn_t benchmark_func;
+    benchfn_t benchmark_func{};
 
 public:
-    Benchmark() {}
+    Benchmark() = default;
 
-    Benchmark(std::string key, benchfn_t benchmark_func, std::string desc): key(key), benchmark_func(benchmark_func), desc(desc) {}
+    Benchmark(std::string key, benchfn_t benchmark_func, std::string desc): key(std::move(key)), benchmark_func(benchmark_func), desc(std::move(desc)) {}
 
     std::string benchKey() { return key; }
 

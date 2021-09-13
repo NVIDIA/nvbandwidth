@@ -2,7 +2,7 @@ TARGET = nvbandwidth
 CXX = g++
 CUDA_CXX = nvcc
 CFLAGS =
-LIBS = -lboost_program_options -lcuda -lnvidia-ml
+LIBS = -lboost_program_options -lcuda -lcudart -lnvidia-ml
 
 .PHONY: default all clean
 
@@ -16,8 +16,8 @@ release: $(TARGET)
 debug: CFLAGS += -DDEBUG -g
 debug: $(TARGET)
 
-CUDA_OBJECTS =
-OBJECTS = benchmarks_ce.o benchmarks_sm.o memory_utils.o nvbandwidth.o
+CUDA_OBJECTS = copy_kernel.o
+OBJECTS = benchmarks_ce.o benchmarks_sm.o memory_utils.o memcpy.o nvbandwidth.o
 HEADERS = $(wildcard *.h)
 
 %.o: %.cu $(HEADERS)
@@ -29,7 +29,7 @@ HEADERS = $(wildcard *.h)
 .PRECIOUS: $(TARGET) $(CUDA_OBJECTS) $(OBJECTS)
 
 $(TARGET): $(CUDA_OBJECTS) $(OBJECTS)
-	$(CXX) $(OBJECTS) $(LIBS) -o $@
+	$(CXX) $(CUDA_OBJECTS) $(OBJECTS) $(LIBS) -o $@
 
 clean:
 	-rm -f $(OBJECTS) $(CUDA_OBJECTS) $(TARGET)
