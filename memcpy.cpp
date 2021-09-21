@@ -140,9 +140,11 @@ void Memcpy::doMemcpy(DeviceNode *device, unsigned long long *bandwidth, bool us
     }
 
     CU_ASSERT(cuEventRecord(startEvent_dir1, stream_dir1));
-    if (biDirCopy != nullptr)  CU_ASSERT(cuStreamWaitEvent(stream_dir2, startEvent_dir1, 0));
+    if (biDirCopy != nullptr)  {
+        CU_ASSERT(cuStreamWaitEvent(stream_dir2, startEvent_dir1, 0));
+        CU_ASSERT(cuEventRecord(startEvent_dir2, stream_dir2));
+    }
 
-    loopCount = 1;
     for (unsigned int n = 0; n < loopCount; n++) {
         if (reverse) {
             CU_ASSERT(memcpyFunc((CUdeviceptr)target->getBuffer(), (CUdeviceptr)device->getBuffer(), size, stream_dir1));
@@ -192,11 +194,21 @@ void Memcpy::doMemcpy(DeviceNode *device, unsigned long long *bandwidth, bool us
     CU_ASSERT(cuStreamSynchronize(stream_dir1));
     if (biDirCopy != nullptr) CU_ASSERT(cuStreamSynchronize(stream_dir2));
 
+    CU_ASSERT(cuCtxSetCurrent(device->getPrimaryCtx()));
     float timeWithEvents = 0.0f;
     CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvent_dir1, endEvent_dir1));
     double elapsedWithEventsInUs = ((double)timeWithEvents * 1000.0);
 
-    *bandwidth = (size * (useSM ? sizeof(int4) : 1) * loopCount * 1000ull * 1000ull) / (unsigned long long)elapsedWithEventsInUs;
+    *bandwidth += (size * (useSM ? sizeof(int4) : 1 ) * loopCount * 1000ull * 1000ull) / (unsigned long long)elapsedWithEventsInUs;
+
+    if (useSM && biDirCopy != nullptr) {
+        CU_ASSERT(cuCtxSetCurrent(deviceBiDir->getPrimaryCtx()));
+        timeWithEvents = 0.0f;
+        CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvent_dir2, endEvent_dir2));
+        elapsedWithEventsInUs = ((double)timeWithEvents * 1000.0);
+
+        *bandwidth += (size * sizeof(int4) * loopCount * 1000ull * 1000ull) / (unsigned long long)elapsedWithEventsInUs;
+    }
 
     if (!disableP2P) {
         CU_ASSERT(cuMemFreeHost((void *)blockingVar));
