@@ -4,7 +4,9 @@
 #include "common.h"
 #include "memory_utils.h"
 
-typedef CUresult (*MemcpyFunc)(CUdeviceptr dst, CUdeviceptr src, size_t sizeInElement, CUstream stream);
+typedef CUresult (*MemcpyCEFunc)(CUdeviceptr dst, CUdeviceptr src, size_t sizeInElement, CUstream stream);
+typedef CUresult (*MemcpySMFunc)(CUdeviceptr dst, CUdeviceptr src, size_t sizeInElement, CUstream stream, unsigned long long loopCount);
+
 
 class MemcpyNode {
 protected:
@@ -18,8 +20,9 @@ class Memcpy;
 
 class HostNode : public MemcpyNode {
 public:
-    explicit HostNode(size_t bufferSize);
+    HostNode(size_t bufferSize, int targetDeviceId);
     ~HostNode();
+
     int getNodeIdx() const override;
 };
 
@@ -27,38 +30,45 @@ class DeviceNode : public MemcpyNode {
 private:
     int deviceIdx;
     CUcontext primaryCtx{};
-    Memcpy *copy;
 public:
-    DeviceNode(int deviceIdx, size_t bufferSize, Memcpy *copy);
+    DeviceNode(size_t bufferSize, int deviceIdx);
     ~DeviceNode();
+
     CUcontext getPrimaryCtx() const;
     int getNodeIdx() const override;
 };
 
 class Memcpy {
 private:
-    MemcpyNode *target;
     size_t copySize;
-    MemcpyFunc memcpyFunc;
-    unsigned long long loopCount;
-    int deviceCount{};
+    MemcpyCEFunc ceFunc{nullptr};
+    MemcpySMFunc smFunc{nullptr};
+    CUcontext copyCtx;
+    CUstream *masterStream{nullptr};
+    CUevent *masterEvent{nullptr}; // Other memcpy operations wait on this event to start at the same time
 
+    unsigned long long loopCount;
     size_t firstEnabledCPU;
     size_t *procMask;
-    bool d2d;
-    std::vector<bool> canAccessTarget;
-    PeerValueMatrix<double> *bandwidthValues{};
-    void doMemcpy(DeviceNode *device, unsigned long long *bandwidth, bool useSM, bool reverse, Memcpy *biDirCopy);
+
+    PeerValueMatrix<double> *bandwidthValues{nullptr};
+
+    void allocateBandwidthMatrix(bool hostVector = false);
+    size_t smCopySize() const;
+    unsigned long long doMemcpy(CUdeviceptr src, CUdeviceptr dst, bool skip = false);
 public:
-    Memcpy(size_t copySize, MemcpyFunc memcpyFunc, unsigned long long loopCount, bool d2d = false);
+
+    Memcpy(MemcpyCEFunc memcpyFunc, size_t copySize, unsigned long long loopCount);
+    Memcpy(MemcpySMFunc memcpyFunc, size_t copySize, unsigned long long loopCount);
+
     ~Memcpy();
-    void memcpy(bool useSM, bool reverse = false, Memcpy *biDirCopy = nullptr);
-    void setTarget(MemcpyNode *newTarget);
-    MemcpyNode *getTarget() const;
-    int getDeviceCount() const;
+
+    // To infer copy recipe
+    void doMemcpy(HostNode *srcNode, DeviceNode *dstNode);
+    void doMemcpy(DeviceNode *srcNode, HostNode *dstNode);
+    void doMemcpy(DeviceNode *srcNode, DeviceNode *dstNode);
+
     void printBenchmarkMatrix(bool reverse = false);
-    bool isD2d() const;
-    void prepareNodes(DeviceNode *peer);
 };
 
 #endif

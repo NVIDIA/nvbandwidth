@@ -6,7 +6,14 @@ void *MemcpyNode::getBuffer() {
     return buffer;
 }
 
-HostNode::HostNode(size_t bufferSize): MemcpyNode() {
+HostNode::HostNode(size_t bufferSize, int targetDeviceId): MemcpyNode() {
+    CUcontext targetCtx;
+
+    // Before allocating host memory, set correct NUMA afinity
+    setOptimalCpuAffinity(targetDeviceId);
+    CU_ASSERT(cuDevicePrimaryCtxRetain(&targetCtx, targetDeviceId));
+    CU_ASSERT(cuCtxSetCurrent(targetCtx));
+
     CU_ASSERT(cuMemHostAlloc(&buffer, bufferSize, CU_MEMHOSTALLOC_PORTABLE));
 }
 
@@ -23,25 +30,14 @@ int HostNode::getNodeIdx() const {
     return 0;
 }
 
-DeviceNode::DeviceNode(int deviceIdx, size_t bufferSize, Memcpy *copy): deviceIdx(deviceIdx), MemcpyNode(), copy(copy) {
-    setOptimalCpuAffinity(deviceIdx);
+DeviceNode::DeviceNode(size_t bufferSize, int deviceIdx): deviceIdx(deviceIdx), MemcpyNode() {
     CU_ASSERT(cuDevicePrimaryCtxRetain(&primaryCtx, deviceIdx));
     CU_ASSERT(cuCtxSetCurrent(primaryCtx));
     CU_ASSERT(cuMemAlloc((CUdeviceptr*)&buffer, bufferSize));
-
-    // Host allocations and device peer access operations have to happen after device initialization
-    copy->prepareNodes(this);
 }
 
 DeviceNode::~DeviceNode() {
     CU_ASSERT(cuCtxSetCurrent(primaryCtx));
-
-    // Host node is allocated/deallocated per device
-    if (!copy->isD2d() && copy->getTarget() != nullptr) {
-        delete (HostNode *)(copy->getTarget());
-        copy->setTarget(nullptr);
-    }
-
     CU_ASSERT(cuMemFree((CUdeviceptr)buffer));
     CU_ASSERT(cuDevicePrimaryCtxRelease(deviceIdx));
 }
@@ -54,10 +50,11 @@ int DeviceNode::getNodeIdx() const {
     return deviceIdx;
 }
 
-Memcpy::Memcpy(size_t copySize, MemcpyFunc memcpyFunc, unsigned long long loopCount, bool d2d): target(nullptr),
-    copySize(copySize), memcpyFunc(memcpyFunc), loopCount(loopCount), firstEnabledCPU(getFirstEnabledCPU()), d2d(d2d) {
-    CU_ASSERT(cuDeviceGetCount(&deviceCount));
-    bandwidthValues = new PeerValueMatrix<double>(d2d ? deviceCount : 1, deviceCount);
+Memcpy::Memcpy(MemcpyCEFunc memcpyFunc, size_t copySize, unsigned long long loopCount): ceFunc(memcpyFunc), copySize(copySize), loopCount(loopCount) {
+    procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
+    PROC_MASK_SET(procMask, firstEnabledCPU);
+}
+Memcpy::Memcpy(MemcpySMFunc memcpyFunc, size_t copySize, unsigned long long loopCount): smFunc(memcpyFunc), copySize(copySize), loopCount(loopCount) {
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
     PROC_MASK_SET(procMask, firstEnabledCPU);
 }
@@ -67,166 +64,128 @@ Memcpy::~Memcpy() {
     PROC_MASK_CLEAR(procMask, 0);
 }
 
-void Memcpy::memcpy(bool useSM, bool reverse, Memcpy *biDirCopy) {
-    std::vector<DeviceNode *> devices;
-    // Sequential loop to initiate devices and allocate buffers
-    for (size_t currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
-        devices.push_back(new DeviceNode(currentDevice, copySize, this));
-    }
-    // Parallel loop to run memcpy
-    #pragma omp parallel for if (parallel)
-    for (size_t currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
-        if (d2d) {
-            if (target->getNodeIdx() == currentDevice) continue;
-            if (!canAccessTarget[currentDevice]) continue;
-        }
-
-        unsigned long long bandwidth = 0;
-        cudaStat bandwidthStat;
-
-        for (unsigned int n = 0; n < averageLoopCount; n++) {
-            doMemcpy(devices[currentDevice], &bandwidth, useSM, reverse, biDirCopy);
-            bandwidthStat((double)bandwidth);
-            VERBOSE << "\tSample " << n << ' ' << std::fixed << std::setprecision (2) <<
-                (double)bandwidth * 1e-9 << " GB/s\n";
-        }
-        VERBOSE << "       bandwidth: " << std::fixed << std::setprecision (2) << STAT_MEAN(bandwidthStat) * 1e-9 <<
-            "(+/- " << STAT_ERROR(bandwidthStat) * 1e-9 << ") GB/s\n";
-        bandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
-        bandwidthValues->value(target->getNodeIdx(), devices[currentDevice]->getNodeIdx()) = (double)bandwidth * 1e-9;
-    }
-    // Sequential loop to delete devices and deallocate buffers
-    for (size_t currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
-        canAccessTarget.pop_back();
-        delete devices[currentDevice];
-    }
+void Memcpy::doMemcpy(HostNode *srcNode, DeviceNode *dstNode) {
+    allocateBandwidthMatrix(true);
+    // Set context of the copy
+    copyCtx = dstNode->getPrimaryCtx();
+    unsigned long long bandwidth = doMemcpy((CUdeviceptr)srcNode->getBuffer(), (CUdeviceptr)dstNode->getBuffer());
+    bandwidthValues->value(0, dstNode->getNodeIdx()) = (double)bandwidth * 1e-9;
 }
 
-void Memcpy::doMemcpy(DeviceNode *device, unsigned long long *bandwidth, bool useSM, bool reverse, Memcpy *biDirCopy) {
-    int dev1, dev2;
-    CUstream stream_dir1, stream_dir2;
-    CUevent startEvent_dir1, startEvent_dir2;
-    CUevent endEvent_dir1, endEvent_dir2;
-    DeviceNode *deviceBiDir;
+void Memcpy::doMemcpy(DeviceNode *srcNode, HostNode *dstNode) {
+    allocateBandwidthMatrix(true);
+    // Set context of the copy
+    copyCtx = srcNode->getPrimaryCtx();
+    unsigned long long bandwidth = doMemcpy((CUdeviceptr)srcNode->getBuffer(), (CUdeviceptr)dstNode->getBuffer());
+    bandwidthValues->value(0, srcNode->getNodeIdx()) = (double)bandwidth * 1e-9;
+}
 
-    CUdevice cudaDevice;
-    int multiProcessorCount;
+void Memcpy::doMemcpy(DeviceNode *srcNode, DeviceNode *dstNode) {
+    allocateBandwidthMatrix();
 
-    *bandwidth = 0;
-    size_t size = copySize;
-    if (useSM) {
-        size /= sizeof(int4);
-        CU_ASSERT(cuCtxGetDevice(&cudaDevice));
-        CU_ASSERT(cuDeviceGetAttribute(&multiProcessorCount,CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, cudaDevice));
-        unsigned long long totalThreadCount = (unsigned long long)(multiProcessorCount * numThreadPerBlock);
-        size = totalThreadCount * (size / totalThreadCount);
+    unsigned long long bandwidth = 0;
+    // Set context of the copy
+    copyCtx = srcNode->getPrimaryCtx();
+
+    /**
+     * The `skip` variable is needed because of OpenMP barriers. Barrier expects as many threads as deviceCount,
+     * therefore we need to call doMemcpy deviceCount times but we'll skip the memcpy ops that aren't
+     * supposed to happen (such as no peer access or src == dst).
+     */
+    bool skip = true;
+    // Benchmark against yourself?
+    if (srcNode->getNodeIdx() != dstNode->getNodeIdx()) {
+        int canAccessPeer = 0;
+        CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, srcNode->getNodeIdx(), dstNode->getNodeIdx()));
+        if (canAccessPeer) {
+            CUresult res;
+            res = cuCtxEnablePeerAccess(srcNode->getPrimaryCtx(), 0);
+            if (res != CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED) CU_ASSERT(res);
+            CU_ASSERT(cuCtxSetCurrent(srcNode->getPrimaryCtx()));
+            res = cuCtxEnablePeerAccess(dstNode->getPrimaryCtx(), 0);
+            if (res != CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED) CU_ASSERT(res);
+
+            cuCtxSetCurrent(srcNode->getPrimaryCtx());
+            skip = false;
+        }
     }
 
-    volatile int *blockingVar = nullptr;
+    bandwidth = doMemcpy((CUdeviceptr)srcNode->getBuffer(), (CUdeviceptr)dstNode->getBuffer(), skip);
+    bandwidthValues->value(dstNode->getNodeIdx(), srcNode->getNodeIdx()) = (double)bandwidth * 1e-9;
+}
 
-    CU_ASSERT(cuCtxSetCurrent(device->getPrimaryCtx()));
-    CU_ASSERT(cuCtxGetDevice(&dev1));
-    CU_ASSERT(cuStreamCreate(&stream_dir1, CU_STREAM_NON_BLOCKING));
-    CU_ASSERT(cuEventCreate(&startEvent_dir1, CU_EVENT_DEFAULT));
-    CU_ASSERT(cuEventCreate(&endEvent_dir1, CU_EVENT_DEFAULT));
+unsigned long long Memcpy::doMemcpy(CUdeviceptr src, CUdeviceptr dst, bool skip) {
+    CUstream stream;
+    CUevent startEvent;
+    CUevent endEvent;
+    cudaStat bandwidthStat;
 
-    if (biDirCopy != nullptr) {
-        deviceBiDir = new DeviceNode(device->getNodeIdx(), copySize, biDirCopy);
-        CU_ASSERT(cuCtxSetCurrent(deviceBiDir->getPrimaryCtx()));
-        CU_ASSERT(cuCtxGetDevice(&dev2));
-        CU_ASSERT(cuStreamCreate(&stream_dir2, CU_STREAM_NON_BLOCKING));
-        CU_ASSERT(cuEventCreate(&startEvent_dir2, CU_EVENT_DEFAULT));
-        CU_ASSERT(cuEventCreate(&endEvent_dir2, CU_EVENT_DEFAULT));
-    }
+    // This loop is for sampling the benchmark (which itself has a loop count)
+    for (unsigned int n = 0; n < averageLoopCount; n++) {
+        volatile int *blockingVar = nullptr;
+        bool useSM = smFunc != nullptr;
 
-    CU_ASSERT(cuEventRecord(startEvent_dir1, stream_dir1));
-    if (biDirCopy != nullptr)  {
-        CU_ASSERT(cuStreamWaitEvent(stream_dir2, startEvent_dir1, 0));
-        CU_ASSERT(cuEventRecord(startEvent_dir2, stream_dir2));
-    }
+        // Set context and create stream and events
+        CU_ASSERT(cuCtxSetCurrent(copyCtx));
+        CU_ASSERT(cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING));
+        CU_ASSERT(cuEventCreate(&startEvent, CU_EVENT_DEFAULT));
+        CU_ASSERT(cuEventCreate(&endEvent, CU_EVENT_DEFAULT));
 
-    for (unsigned int n = 0; n < loopCount; n++) {
-        if (reverse) {
-            CU_ASSERT(memcpyFunc((CUdeviceptr)target->getBuffer(), (CUdeviceptr)device->getBuffer(), size, stream_dir1));
-            if (biDirCopy != nullptr)  {
-                CU_ASSERT(memcpyFunc((CUdeviceptr)deviceBiDir->getBuffer(), (CUdeviceptr)biDirCopy->target->getBuffer(), size, stream_dir2));
+        if (parallel) {
+            #pragma omp critical
+            {
+                if (!skip) {
+                    // Synchronize all copy operations to start at the same time
+                    if (masterStream == nullptr) {
+                        masterStream = &stream;
+                        masterEvent = &startEvent;
+                    } else {
+                        // Ensure we start the copy when the master instance signals
+                        CU_ASSERT(cuStreamWaitEvent(stream, *masterEvent, 0));
+                    }
+                    CU_ASSERT(cuEventRecord(startEvent, stream));
+                }
             }
+            #pragma omp barrier
         } else {
-            CU_ASSERT(memcpyFunc((CUdeviceptr)device->getBuffer(), (CUdeviceptr)target->getBuffer(), size, stream_dir1));
-            if (biDirCopy != nullptr)  {
-                CU_ASSERT(memcpyFunc((CUdeviceptr)biDirCopy->target->getBuffer(), (CUdeviceptr)deviceBiDir->getBuffer(), size, stream_dir2));
-            }
+            CU_ASSERT(cuEventRecord(startEvent, stream));
         }
-    }
 
-    CU_ASSERT(cuEventRecord(endEvent_dir1, stream_dir1));
+        if (!skip) {
+            // Run and record memcpy
+            if (useSM) CU_ASSERT(smFunc(dst, src, smCopySize(), stream, loopCount));
+            else for (unsigned int l = 0; l < loopCount; l++) CU_ASSERT(ceFunc(dst, src, copySize, stream));
+            CU_ASSERT(cuEventRecord(endEvent, stream));
 
-    if (!disableP2P) {
-        CU_ASSERT(cuMemHostAlloc((void **)&blockingVar, sizeof(*blockingVar), CU_MEMHOSTALLOC_PORTABLE));
-        *blockingVar = 1;
-    }
-
-    if (biDirCopy != nullptr) {
-        // Now, we need to ensure there is always work in the stream2 pending, to
-        // ensure there always is interference to the stream1.
-        unsigned int extraIters = loopCount > 1 ? (unsigned int)loopCount / 2 : 1;
-        do {
-            // Enqueue extra work
-            for (unsigned int n = 0; n < extraIters; n++) {
-                CU_ASSERT(memcpyFunc((CUdeviceptr)biDirCopy->target->getBuffer(), (CUdeviceptr)device->getBuffer(), size, stream_dir2));
+            // Finish memcpy
+            if (!disableP2P) {
+                CU_ASSERT(cuMemHostAlloc((void **) &blockingVar, sizeof(*blockingVar), CU_MEMHOSTALLOC_PORTABLE));
+                *blockingVar = 1;
             }
+            CU_ASSERT(cuStreamSynchronize(stream));
 
-            // Record the event in the middle of interfering flow, to ensure the next
-            // batch starts enqueuing before the previous one finishes.
-            CU_ASSERT(cuEventRecord(endEvent_dir2, stream_dir2));
+            // Calculate bandwidth
+            CU_ASSERT(cuCtxSetCurrent(copyCtx));
+            float timeWithEvents = 0.0f;
+            CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvent, endEvent));
+            double elapsedWithEventsInUs = ((double) timeWithEvents * 1000.0);
+            unsigned long long bandwidth = (copySize * loopCount * 1000ull * 1000ull) / (unsigned long long) elapsedWithEventsInUs;
+            bandwidthStat((double) bandwidth);
+            VERBOSE << "\tSample " << n << ' ' << std::fixed << std::setprecision(2) << (double) bandwidth * 1e-9 << " GB/s\n";
 
-            // Add more iterations to hide latency of scheduling more work in the next
-            // iteration of loop.
-            for (unsigned int n = 0; n < extraIters; n++) {
-                CU_ASSERT(memcpyFunc((CUdeviceptr)biDirCopy->target->getBuffer(), (CUdeviceptr)deviceBiDir->getBuffer(), size, stream_dir2));
-            }
+            // Clean up
+            if (!disableP2P) CU_ASSERT(cuMemFreeHost((void *) blockingVar));
+            CU_ASSERT(cuCtxSynchronize());
+        }
 
-            // Wait until the flow in the interference stream2 is finished.
-            CU_ASSERT(cuEventSynchronize(endEvent_dir2));
-        } while (cuStreamQuery(stream_dir1) == CUDA_ERROR_NOT_READY);
+        #pragma omp barrier
+        // Reset master stream and event for next iteration
+        masterStream = nullptr;
+        masterEvent = nullptr;
+        #pragma omp barrier
     }
 
-    CU_ASSERT(cuStreamSynchronize(stream_dir1));
-    if (biDirCopy != nullptr) CU_ASSERT(cuStreamSynchronize(stream_dir2));
-
-    CU_ASSERT(cuCtxSetCurrent(device->getPrimaryCtx()));
-    float timeWithEvents = 0.0f;
-    CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvent_dir1, endEvent_dir1));
-    double elapsedWithEventsInUs = ((double)timeWithEvents * 1000.0);
-
-    *bandwidth += (size * (useSM ? sizeof(int4) : 1 ) * loopCount * 1000ull * 1000ull) / (unsigned long long)elapsedWithEventsInUs;
-
-    if (useSM && biDirCopy != nullptr) {
-        CU_ASSERT(cuCtxSetCurrent(deviceBiDir->getPrimaryCtx()));
-        timeWithEvents = 0.0f;
-        CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvent_dir2, endEvent_dir2));
-        elapsedWithEventsInUs = ((double)timeWithEvents * 1000.0);
-
-        *bandwidth += (size * sizeof(int4) * loopCount * 1000ull * 1000ull) / (unsigned long long)elapsedWithEventsInUs;
-    }
-
-    if (!disableP2P) {
-        CU_ASSERT(cuMemFreeHost((void *)blockingVar));
-    }
-
-    CU_ASSERT(cuCtxSynchronize());
-}
-
-int Memcpy::getDeviceCount() const {
-    return deviceCount;
-}
-
-void Memcpy::setTarget(MemcpyNode *newTarget) {
-    target = newTarget;
-}
-
-MemcpyNode *Memcpy::getTarget() const {
-    return target;
+    return (unsigned long long)(STAT_MEAN(bandwidthStat));
 }
 
 void Memcpy::printBenchmarkMatrix(bool reverse) {
@@ -234,29 +193,25 @@ void Memcpy::printBenchmarkMatrix(bool reverse) {
     std::cout << std::fixed << std::setprecision(2) << *bandwidthValues << std::endl;
 }
 
-bool Memcpy::isD2d() const {
-    return d2d;
+size_t Memcpy::smCopySize() const {
+    CUdevice cudaDevice;
+    int multiProcessorCount;
+    size_t size = copySize;
+
+    size /= sizeof(int4);
+    CU_ASSERT(cuCtxGetDevice(&cudaDevice));
+    CU_ASSERT(cuDeviceGetAttribute(&multiProcessorCount,CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, cudaDevice));
+    unsigned long long totalThreadCount = (unsigned long long)(multiProcessorCount * numThreadPerBlock);
+    size = totalThreadCount * (size / totalThreadCount);
+    return size;
 }
 
-void Memcpy::prepareNodes(DeviceNode *peer) {
-    if (d2d && target != nullptr && target != peer) { // Setup d2d peer access
-        CUresult res;
-        int canAccessPeer = 0;
-
-        CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, target->getNodeIdx(), peer->getNodeIdx()));
-        if (!canAccessPeer) {
-            canAccessTarget.push_back(false);
-        } else {
-            res = cuCtxEnablePeerAccess(((DeviceNode *)target)->getPrimaryCtx(), 0);
-            if (res != CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED) CU_ASSERT(res);
-            CU_ASSERT(cuCtxSetCurrent(((DeviceNode *)target)->getPrimaryCtx()));
-            res = cuCtxEnablePeerAccess(peer->getPrimaryCtx(), 0);
-            if (res != CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED) CU_ASSERT(res);
-
-            cuCtxSetCurrent(((DeviceNode *)target)->getPrimaryCtx());
-            canAccessTarget.push_back(true);
+void Memcpy::allocateBandwidthMatrix(bool hostVector) {
+    #pragma omp critical
+    {
+        if (bandwidthValues == nullptr) {
+            int rows = hostVector ? 1 : deviceCount;
+            bandwidthValues = new PeerValueMatrix<double>(rows, deviceCount);
         }
-    } else { // Setup host for h2d and d2h
-        if (target == nullptr) target = new HostNode(copySize);
     }
 }

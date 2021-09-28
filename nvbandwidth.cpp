@@ -12,6 +12,7 @@
 
 namespace opt = boost::program_options;
 
+int deviceCount;
 unsigned int averageLoopCount;
 unsigned long long bufferSize;
 unsigned long long loopCount;
@@ -64,13 +65,10 @@ void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string &benchma
     try {
         Benchmark bench = findBenchmark(benchmarks, benchmarkID);
         std::cout << "Running benchmark " << bench.benchKey() << ".\n";
-        
-        cuInit(0);
-        nvmlInit();
 
         CU_ASSERT(cuCtxCreate(&benchCtx, 0, 0));
         CU_ASSERT(cuCtxSetCurrent(benchCtx));
-        
+
         bench.benchFn()(defaultBufferSize, defaultLoopCount);
 
         CU_ASSERT(cuCtxDestroy(benchCtx));
@@ -134,6 +132,9 @@ int main(int argc, char **argv) {
         benchmarksToRun = vm["benchmark"].as<std::vector<std::string>>();
     }
 
+    cuInit(0);
+    nvmlInit();
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
     for (const auto& benchmarkIndex : benchmarksToRun) {
         runBenchmark(benchmarks, benchmarkIndex);
     }

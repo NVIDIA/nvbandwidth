@@ -22,6 +22,7 @@ const unsigned int defaultAverageLoopCount = 3;
 const unsigned int _2MB = 1024 * 1024 * 2;
 const unsigned int numThreadPerBlock = 512;
 
+extern int deviceCount;
 extern unsigned int averageLoopCount;
 extern bool disableP2P;
 extern bool parallel;
@@ -256,7 +257,7 @@ inline void CU_ASSERT(CUresult cuResult, const char *msg = nullptr) {
 // NVML Error handling
 inline void NVML_ASSERT(nvmlReturn_t nvmlResult, const char *msg = nullptr) {
     if (nvmlResult != NVML_SUCCESS) {
-        std::cout << "[" << nvmlErrorString(nvmlResult) << "]";
+        std::cout << "NVML_ERROR: [" << nvmlErrorString(nvmlResult) << "]";
         if (msg != nullptr) std::cout << ":\n\t" << msg;
         std::cout << std::endl;
         std::exit(1);
