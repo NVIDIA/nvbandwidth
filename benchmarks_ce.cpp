@@ -125,11 +125,13 @@ void launch_DtoD_memcpy_read_CE(unsigned long long size, unsigned long long loop
                 int deviceId = omp_get_thread_num();
                 DeviceNode *dst = new DeviceNode(size, deviceId);
                 memcpyInstance.doMemcpy(devices[targetDeviceId], dst);
+				delete dst;
             }
         } else {
             for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
                 DeviceNode *dst = new DeviceNode(size, deviceId);
                 memcpyInstance.doMemcpy(devices[targetDeviceId], dst);
+				delete dst;
             }
         }
     }
@@ -151,11 +153,13 @@ void launch_DtoD_memcpy_write_CE(unsigned long long size, unsigned long long loo
                 int deviceId = omp_get_thread_num();
                 DeviceNode *dst = new DeviceNode(size, deviceId);
                 memcpyInstance.doMemcpy(devices[targetDeviceId], dst);
+				delete dst;
             }
         } else {
             for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
                 DeviceNode *dst = new DeviceNode(size, deviceId);
                 memcpyInstance.doMemcpy(devices[targetDeviceId], dst);
+				delete dst;
             }
         }
     }
@@ -181,6 +185,7 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
                 DeviceNode *src = new DeviceNode(size, deviceId);
                 memcpyInstance.doMemcpy(devicesDir1[targetDeviceId], dst);
                 memcpyInstance.doMemcpy(src, devicesDir2[targetDeviceId]);
+                delete dst, delete src;
             }
         } else {
             for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -188,6 +193,7 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
                 DeviceNode *src = new DeviceNode(size, deviceId);
                 memcpyInstance.doMemcpy(devicesDir1[targetDeviceId], dst);
                 memcpyInstance.doMemcpy(src, devicesDir2[targetDeviceId]);
+                delete dst, delete src;
             }
         }
     }
