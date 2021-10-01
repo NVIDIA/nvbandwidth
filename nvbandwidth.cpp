@@ -1,17 +1,13 @@
 #include <boost/program_options.hpp>
-#include <boost/program_options/options_description.hpp>
 #include <cuda.h>
 #include <nvml.h>
 #include <iostream>
-#include <vector>
-#include <cstring>
-#include <string>
 
 #include "benchmarks.h"
-#include "common.h"
 
 namespace opt = boost::program_options;
 
+int deviceCount;
 unsigned int averageLoopCount;
 unsigned long long bufferSize;
 unsigned long long loopCount;
@@ -30,12 +26,16 @@ std::vector<Benchmark> createBenchmarks() {
         Benchmark("device_to_device_memcpy_read_ce", launch_DtoD_memcpy_read_CE, "Device to device memcpy using the Copy Engine (read)"),
         Benchmark("device_to_device_memcpy_write_ce", launch_DtoD_memcpy_write_CE, "Device to device memcpy using the Copy Engine (write)"),
         Benchmark("device_to_device_bidirectional_memcpy_ce", launch_DtoD_memcpy_bidirectional_CE, "Bidirectional device to device memcpy using the Copy Engine"),
+        Benchmark("device_to_device_paired_memcpy_read_ce", launch_DtoD_paired_memcpy_read_CE, "Paired device to device memcpy using the Copy Engine (read)"),
+        Benchmark("device_to_device_paired_memcpy_write_ce", launch_DtoD_paired_memcpy_write_CE, "Paired device to device memcpy using the Copy Engine (write)"),
         Benchmark("host_to_device_memcpy_sm", launch_HtoD_memcpy_SM, "Host to device memcpy using the Stream Multiprocessor"),
         Benchmark("device_to_host_memcpy_sm", launch_DtoH_memcpy_SM, "Device to host memcpy using the Stream Multiprocessor"),
         Benchmark("device_to_device_memcpy_read_sm", launch_DtoD_memcpy_read_SM, "Device to device memcpy using the Stream Multiprocessor (read)"),
         Benchmark("device_to_device_memcpy_write_sm", launch_DtoD_memcpy_write_SM, "Device to device memcpy using the Stream Multiprocessor (write)"),
         Benchmark("device_to_device_bidirectional_memcpy_read_sm", launch_DtoD_memcpy_bidirectional_read_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (read)"),
-        Benchmark("device_to_device_bidirectional_memcpy_write_sm", launch_DtoD_memcpy_bidirectional_write_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (write)")
+        Benchmark("device_to_device_bidirectional_memcpy_write_sm", launch_DtoD_memcpy_bidirectional_write_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (write)"),
+        Benchmark("device_to_device_paired_memcpy_read_sm", launch_DtoD_paired_memcpy_read_SM, "Paired device to device memcpy using the Stream Multiprocessor (read)"),
+        Benchmark("device_to_device_paired_memcpy_write_sm", launch_DtoD_paired_memcpy_write_SM, "Paired device to device memcpy using the Stream Multiprocessor (write)")
     };
 }
 
@@ -64,14 +64,11 @@ void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string &benchma
     try {
         Benchmark bench = findBenchmark(benchmarks, benchmarkID);
         std::cout << "Running benchmark " << bench.benchKey() << ".\n";
-        
-        cuInit(0);
-        nvmlInit();
 
         CU_ASSERT(cuCtxCreate(&benchCtx, 0, 0));
         CU_ASSERT(cuCtxSetCurrent(benchCtx));
-        
-        bench.benchFn()(defaultBufferSize, defaultLoopCount);
+
+        bench.benchFn()(bufferSize, loopCount);
 
         CU_ASSERT(cuCtxDestroy(benchCtx));
     } catch (std::string &s) {
@@ -122,7 +119,9 @@ int main(int argc, char **argv) {
     }
 
     if (vm.count("bufferSize")) bufferSize = vm["bufferSize"].as<unsigned long long int>();
+    else bufferSize = defaultBufferSize;
     if (vm.count("loopCount")) loopCount = vm["loopCount"].as<unsigned long long int>();
+    else loopCount = defaultLoopCount;
 
     if (vm.count("parallel")) parallel = true;
     else parallel = false;
@@ -134,6 +133,9 @@ int main(int argc, char **argv) {
         benchmarksToRun = vm["benchmark"].as<std::vector<std::string>>();
     }
 
+    cuInit(0);
+    nvmlInit();
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
     for (const auto& benchmarkIndex : benchmarksToRun) {
         runBenchmark(benchmarks, benchmarkIndex);
     }
