@@ -29,7 +29,6 @@ void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount
         delete hosts[deviceId];
         delete dstDevices[deviceId];
     }
-
     memcpyInstance.printBenchmarkMatrix();
 }
 

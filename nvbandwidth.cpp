@@ -69,7 +69,6 @@ void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string &benchma
         CU_ASSERT(cuCtxSetCurrent(benchCtx));
 
         bench.benchFn()(bufferSize, loopCount);
-
         CU_ASSERT(cuCtxDestroy(benchCtx));
     } catch (std::string &s) {
         std::cout << "ERROR: " << s << std::endl;
