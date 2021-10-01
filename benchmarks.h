@@ -16,13 +16,9 @@ class Benchmark {
 
 public:
     Benchmark() = default;
-
     Benchmark(std::string key, benchfn_t benchmark_func, std::string desc): key(std::move(key)), benchmark_func(benchmark_func), desc(std::move(desc)) {}
-
     std::string benchKey() { return key; }
-
     benchfn_t benchFn() { return benchmark_func; }
-
     std::string benchDesc() { return desc; }
 };
 

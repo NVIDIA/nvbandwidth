@@ -77,7 +77,7 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
         }
 
         if (parallel) {
-#pragma omp parallel num_threads(deviceCount)
+            #pragma omp parallel num_threads(deviceCount)
             {
                 int deviceId = omp_get_thread_num();
                 memcpyInstance.doMemcpy(hostsDir1[deviceId], devicesDir1[deviceId], hostsDir2[deviceId], devicesDir2[deviceId]);
@@ -235,28 +235,28 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
 void launch_DtoD_paired_memcpy_read_CE(unsigned long long size, unsigned long long loopCount) {
     Memcpy memcpyInstance = Memcpy(cuMemcpyAsync, size, loopCount);
 
-        std::vector<DeviceNode *> devices;
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            devices.push_back(new DeviceNode(size, deviceId));
-        }
+    std::vector<DeviceNode *> devices;
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        devices.push_back(new DeviceNode(size, deviceId));
+    }
 
-        if (parallel) {
-            #pragma omp parallel num_threads(deviceCount / 2)
-            {
-                int deviceId = omp_get_thread_num();
-                memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
-            }
-        } else {
-            parallel = 1;
-            for (int deviceId = 0; deviceId < deviceCount / 2; deviceId++) {
-                memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
-            }
-            parallel = 0;
+    if (parallel) {
+        #pragma omp parallel num_threads(deviceCount / 2)
+        {
+            int deviceId = omp_get_thread_num();
+            memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
         }
+    } else {
+        parallel = 1;
+        for (int deviceId = 0; deviceId < deviceCount / 2; deviceId++) {
+            memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
+        }
+        parallel = 0;
+    }
 
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            delete devices[deviceId];
-        }
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        delete devices[deviceId];
+    }
 
     memcpyInstance.printBenchmarkMatrix();
 }

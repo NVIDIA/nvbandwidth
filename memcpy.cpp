@@ -9,7 +9,7 @@ void *MemcpyNode::getBuffer() {
 HostNode::HostNode(size_t bufferSize, int targetDeviceId): MemcpyNode() {
     CUcontext targetCtx;
 
-    // Before allocating host memory, set correct NUMA afinity
+    // Before allocating host memory, set correct NUMA affinity
     setOptimalCpuAffinity(targetDeviceId);
     CU_ASSERT(cuDevicePrimaryCtxRetain(&targetCtx, targetDeviceId));
     CU_ASSERT(cuCtxSetCurrent(targetCtx));
@@ -54,6 +54,7 @@ Memcpy::Memcpy(MemcpyCEFunc memcpyFunc, size_t copySize, unsigned long long loop
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
     PROC_MASK_SET(procMask, getFirstEnabledCPU());
 }
+
 Memcpy::Memcpy(MemcpySMFunc memcpyFunc, size_t copySize, unsigned long long loopCount): smFunc(memcpyFunc), copySize(copySize), loopCount(loopCount) {
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
     PROC_MASK_SET(procMask, getFirstEnabledCPU());
@@ -64,6 +65,7 @@ Memcpy::~Memcpy() {
     PROC_MASK_CLEAR(procMask, 0);
 }
 
+// H2D and bidir H2D
 void Memcpy::doMemcpy(HostNode *srcNode, DeviceNode *dstNode, HostNode *biDirSrc, DeviceNode *biDirDst) {
     unsigned long long bandwidth, bandwidthBiDir = 0;
     allocateBandwidthMatrix(true);
@@ -74,6 +76,7 @@ void Memcpy::doMemcpy(HostNode *srcNode, DeviceNode *dstNode, HostNode *biDirSrc
     bandwidthValues->value(0, dstNode->getNodeIdx()) = (double)(biDirSrc? bandwidthBiDir : bandwidth) * 1e-9;
 }
 
+// D2H and bidir D2H
 void Memcpy::doMemcpy(DeviceNode *srcNode, HostNode *dstNode, DeviceNode *biDirSrc, HostNode *biDirDst) {
     unsigned long long bandwidth, bandwidthBiDir = 0;
     allocateBandwidthMatrix(true);
@@ -84,6 +87,7 @@ void Memcpy::doMemcpy(DeviceNode *srcNode, HostNode *dstNode, DeviceNode *biDirS
     bandwidthValues->value(0, srcNode->getNodeIdx()) = (double)(biDirSrc? bandwidthBiDir : bandwidth) * 1e-9;
 }
 
+// D2D and bidir D2D
 void Memcpy::doMemcpy(DeviceNode *srcNode, DeviceNode *dstNode, DeviceNode *biDirSrc, DeviceNode *biDirDst) {
     unsigned long long bandwidth, bandwidthBiDir = 0;
 
