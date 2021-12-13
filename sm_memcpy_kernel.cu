@@ -1,3 +1,10 @@
+/*
+ * Copyright 1993-2021 by NVIDIA Corporation.  All rights reserved.  All
+ * information contained herein is proprietary and confidential to NVIDIA
+ * Corporation.  Any use, reproduction, or disclosure without the written
+ * permission of NVIDIA Corporation is prohibited.
+ */
+
 #include <cuda.h>
 
 extern "C" __global__ void striding_memcpy_kernel(unsigned int totalThreadCount, unsigned long long loopCount, uint4* dst, uint4* src, unsigned long long chunkSizeInElement) {
