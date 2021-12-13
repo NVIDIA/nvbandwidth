@@ -2,7 +2,7 @@ TARGET = nvbandwidth
 CXX = g++
 CUDA_CXX = nvcc
 CFLAGS =
-LIBS = -lboost_program_options -lcuda -lnvidia-ml -lgomp -lcudart
+LIBS = -lboost_program_options -lcuda -lnvidia-ml -lgomp -L/usr/local/cuda/lib64 -lcudart
 INCLUDES = /usr/local/cuda/include
 
 .PHONY: default all clean
