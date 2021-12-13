@@ -93,12 +93,12 @@ int main(int argc, char **argv) {
     opt::options_description desc("NVBandwidth CLI");
     desc.add_options()
         ("help,h", "Produce help message")
-        ("bufferSize", opt::value<unsigned long long int>(), "Memcpy buffer size")
-        ("loopCount", opt::value<unsigned long long int>(), "Iterations of memcpy to be performed")
-        ("parallel,p", "Run benchmark on each device at the same time")
+        ("bufferSize", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size")
+        ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed")
+        ("parallel,p", opt::bool_switch(&parallel)->default_value(false), "Run benchmark on each device at the same time")
         ("list,l", "List available benchmarks")
-        ("benchmark,b", opt::value<std::vector<std::string>>()->multitoken(), "Benchmark(s) to doMemcpy (by name or index)")
-        ("verbose,v", "Verbose output");
+        ("benchmark,b", opt::value<std::vector<std::string>>(&benchmarksToRun)->multitoken(), "Benchmark(s) to doMemcpy (by name or index)")
+        ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output");
 
     opt::variables_map vm;
     try {
@@ -122,21 +122,6 @@ int main(int argc, char **argv) {
             std::cout << i << ", " << benchmarks.at(i).benchKey() << ":\n\t" << benchmarks.at(i).benchDesc() << "\n\n";
         }
         return 0;
-    }
-
-    if (vm.count("bufferSize")) bufferSize = vm["bufferSize"].as<unsigned long long int>();
-    else bufferSize = defaultBufferSize;
-    if (vm.count("loopCount")) loopCount = vm["loopCount"].as<unsigned long long int>();
-    else loopCount = defaultLoopCount;
-
-    if (vm.count("parallel")) parallel = true;
-    else parallel = false;
-
-    if (vm.count("verbose")) verbose = true;
-    else verbose = false;
-
-    if (vm.count("benchmark")) {
-        benchmarksToRun = vm["benchmark"].as<std::vector<std::string>>();
     }
 
     cuInit(0);
