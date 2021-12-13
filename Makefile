@@ -3,6 +3,7 @@ CXX = g++
 CUDA_CXX = nvcc
 CFLAGS =
 LIBS = -lboost_program_options -lcuda -lnvidia-ml -lgomp -lcudart
+INCLUDES = /usr/local/cuda/include
 
 .PHONY: default all clean
 
@@ -24,7 +25,7 @@ HEADERS = $(wildcard *.h)
 	$(CUDA_CXX) $(CFLAGS) -c $< -o $@
 
 %.o: %.cpp $(HEADERS)
-	$(CXX) $(CFLAGS) -c $< -o $@
+	$(CXX) $(CFLAGS) -c $< -o $@ -I$(INCLUDES)
 
 .PRECIOUS: $(TARGET) $(CUDA_OBJECTS) $(OBJECTS)
 
