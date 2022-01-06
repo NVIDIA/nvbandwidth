@@ -56,23 +56,22 @@ void launch_DtoD_paired_memcpy_write_SM(unsigned long long size, unsigned long l
 
 // Benchmark filters
 // TODO define in a cpp file, but benchmarks are declared here, defined in two different CPPs, and constructed in a different cpp
-static bool filter_has_accessible_peer_pairs()
-{
+static bool filter_has_accessible_peer_pairs() {
     int deviceCount = 0;
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
 
-    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++)
-    {
-        for (int peer = 0; peer < deviceCount; peer++)
-        {
+    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        for (int peer = 0; peer < deviceCount; peer++) {
             int canAccessPeer = 0;
 
-            if (peer == currentDevice)
+            if (peer == currentDevice) {
                 continue;
+            }
 
             CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, currentDevice, peer));
-            if (canAccessPeer)
+            if (canAccessPeer) {
                 return true;
+            }
         }
     }
 
