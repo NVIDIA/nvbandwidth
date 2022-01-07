@@ -30,19 +30,19 @@ std::vector<Benchmark> createBenchmarks() {
         Benchmark("device_to_host_memcpy_ce", launch_DtoH_memcpy_CE, "Device to host memcpy using the Copy Engine"),
         Benchmark("host_to_device_bidirectional_memcpy_ce", launch_HtoD_memcpy_bidirectional_CE, "Bidirectional host to device memcpy using the Copy Engine"),
         Benchmark("device_to_host_bidirectional_memcpy_ce", launch_DtoH_memcpy_bidirectional_CE, "Bidirectional device to host memcpy using the Copy Engine"),
-        Benchmark("device_to_device_memcpy_read_ce", launch_DtoD_memcpy_read_CE, "Device to device memcpy using the Copy Engine (read)"),
-        Benchmark("device_to_device_memcpy_write_ce", launch_DtoD_memcpy_write_CE, "Device to device memcpy using the Copy Engine (write)"),
-        Benchmark("device_to_device_bidirectional_memcpy_ce", launch_DtoD_memcpy_bidirectional_CE, "Bidirectional device to device memcpy using the Copy Engine"),
-        Benchmark("device_to_device_paired_memcpy_read_ce", launch_DtoD_paired_memcpy_read_CE, "Paired device to device memcpy using the Copy Engine (read)"),
-        Benchmark("device_to_device_paired_memcpy_write_ce", launch_DtoD_paired_memcpy_write_CE, "Paired device to device memcpy using the Copy Engine (write)"),
+        Benchmark("device_to_device_memcpy_read_ce", launch_DtoD_memcpy_read_CE, "Device to device memcpy using the Copy Engine (read)", filter_has_accessible_peer_pairs),
+        Benchmark("device_to_device_memcpy_write_ce", launch_DtoD_memcpy_write_CE, "Device to device memcpy using the Copy Engine (write)", filter_has_accessible_peer_pairs),
+        Benchmark("device_to_device_bidirectional_memcpy_ce", launch_DtoD_memcpy_bidirectional_CE, "Bidirectional device to device memcpy using the Copy Engine", filter_has_accessible_peer_pairs),
+        Benchmark("device_to_device_paired_memcpy_read_ce", launch_DtoD_paired_memcpy_read_CE, "Paired device to device memcpy using the Copy Engine (read)", filter_has_accessible_peer_pairs),
+        Benchmark("device_to_device_paired_memcpy_write_ce", launch_DtoD_paired_memcpy_write_CE, "Paired device to device memcpy using the Copy Engine (write)", filter_has_accessible_peer_pairs),
         Benchmark("host_to_device_memcpy_sm", launch_HtoD_memcpy_SM, "Host to device memcpy using the Stream Multiprocessor"),
         Benchmark("device_to_host_memcpy_sm", launch_DtoH_memcpy_SM, "Device to host memcpy using the Stream Multiprocessor"),
-        Benchmark("device_to_device_memcpy_read_sm", launch_DtoD_memcpy_read_SM, "Device to device memcpy using the Stream Multiprocessor (read)"),
-        Benchmark("device_to_device_memcpy_write_sm", launch_DtoD_memcpy_write_SM, "Device to device memcpy using the Stream Multiprocessor (write)"),
-        Benchmark("device_to_device_bidirectional_memcpy_read_sm", launch_DtoD_memcpy_bidirectional_read_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (read)"),
-        Benchmark("device_to_device_bidirectional_memcpy_write_sm", launch_DtoD_memcpy_bidirectional_write_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (write)"),
-        Benchmark("device_to_device_paired_memcpy_read_sm", launch_DtoD_paired_memcpy_read_SM, "Paired device to device memcpy using the Stream Multiprocessor (read)"),
-        Benchmark("device_to_device_paired_memcpy_write_sm", launch_DtoD_paired_memcpy_write_SM, "Paired device to device memcpy using the Stream Multiprocessor (write)")
+        Benchmark("device_to_device_memcpy_read_sm", launch_DtoD_memcpy_read_SM, "Device to device memcpy using the Stream Multiprocessor (read)", filter_has_accessible_peer_pairs),
+        Benchmark("device_to_device_memcpy_write_sm", launch_DtoD_memcpy_write_SM, "Device to device memcpy using the Stream Multiprocessor (write)", filter_has_accessible_peer_pairs),
+        Benchmark("device_to_device_bidirectional_memcpy_read_sm", launch_DtoD_memcpy_bidirectional_read_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (read)", filter_has_accessible_peer_pairs),
+        Benchmark("device_to_device_bidirectional_memcpy_write_sm", launch_DtoD_memcpy_bidirectional_write_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (write)", filter_has_accessible_peer_pairs),
+        Benchmark("device_to_device_paired_memcpy_read_sm", launch_DtoD_paired_memcpy_read_SM, "Paired device to device memcpy using the Stream Multiprocessor (read)", filter_has_accessible_peer_pairs),
+        Benchmark("device_to_device_paired_memcpy_write_sm", launch_DtoD_paired_memcpy_write_SM, "Paired device to device memcpy using the Stream Multiprocessor (write)", filter_has_accessible_peer_pairs)
     };
 }
 
@@ -70,6 +70,10 @@ void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string &benchma
 
     try {
         Benchmark bench = findBenchmark(benchmarks, benchmarkID);
+        if (!bench.filterFn()()) {
+            std::cout << "Waiving benchmark " << bench.benchKey() << "." << std::endl << std::endl;
+            return;
+        }
         std::cout << "Running benchmark " << bench.benchKey() << ".\n";
 
         CU_ASSERT(cuCtxCreate(&benchCtx, 0, 0));
@@ -127,8 +131,16 @@ int main(int argc, char **argv) {
     cuInit(0);
     nvmlInit();
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
-    for (const auto& benchmarkIndex : benchmarksToRun) {
-        runBenchmark(benchmarks, benchmarkIndex);
+
+    if (benchmarksToRun.size() == 0) {
+        // run all benchmarks
+        for (auto benchmark : benchmarks) {
+            runBenchmark(benchmarks, benchmark.benchKey());
+        }
+    } else {
+        for (const auto& benchmarkIndex : benchmarksToRun) {
+            runBenchmark(benchmarks, benchmarkIndex);
+        }
     }
 
     return 0;
