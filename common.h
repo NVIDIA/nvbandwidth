@@ -21,6 +21,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <unordered_set>
 
 // Default constants
 const unsigned long long defaultLoopCount = 16;
@@ -248,8 +249,22 @@ inline void NVML_ASSERT(nvmlReturn_t nvmlResult, const char *msg = nullptr) {
 // NUMA optimal affinity
 inline void setOptimalCpuAffinity(int cudaDeviceID) {
     nvmlDevice_t device;
+    CUuuid dev_uuid;
 
-    NVML_ASSERT(nvmlDeviceGetHandleByIndex_v2(cudaDeviceID, &device));
+    std::stringstream s;
+    std::unordered_set <unsigned char> dashPos {0, 4, 6, 8, 10};
+
+    CU_ASSERT(cuDeviceGetUuid(&dev_uuid, cudaDeviceID));
+
+    s << "GPU";
+    for (int i = 0; i < 16; i++) {
+        if (dashPos.count(i)) {
+            s << '-';
+        }
+        s << std::hex << std::setfill('0') << std::setw(2) << (0xFF & (int)dev_uuid.bytes[i]);
+    }
+
+    NVML_ASSERT(nvmlDeviceGetHandleByUUID(s.str().c_str(), &device));
     NVML_ASSERT(nvmlDeviceSetCpuAffinity(device));
 }
 
