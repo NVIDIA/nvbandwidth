@@ -222,32 +222,6 @@ std::ostream &printIndexVector(std::ostream &o, std::vector<T> &v, int field_wid
     return o;
 }
 
-/* Calculates the least-squares approximation of the linear data */
-template <class T>
-void calculateLeastSquares(const std::vector<T> &x, const std::vector<T> &y, double &slope, double &intercept) {
-    double x_avg = 0.0, y_avg = 0.0;
-    double rise = 0.0, run = 0.0;
-    ASSERT_GT(x.size(), 1U);
-    ASSERT_GT(y.size(), 1U);
-    ASSERT_EQ(x.size(), y.size());
-
-    for (size_t i = 0; i < x.size(); i++) {
-        x_avg += (double)x[i];
-        y_avg += (double)y[i];
-    }
-
-    x_avg /= x.size();
-    y_avg /= y.size();
-
-    for (size_t i = 0; i < x.size(); i++) {
-        rise += (x[i] - x_avg) * (y[i] - y_avg);
-        run += (x[i] - x_avg) * (x[i] - x_avg);
-    }
-
-    slope = rise / run;
-    intercept = y_avg - slope * x_avg;
-}
-
 // CUDA Error handling
 inline void CU_ASSERT(CUresult cuResult, const char *msg = nullptr) {
     if (cuResult != CUDA_SUCCESS) {
