@@ -21,6 +21,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <unordered_set>
 
 // Default constants
 const unsigned long long defaultLoopCount = 16;
@@ -222,32 +223,6 @@ std::ostream &printIndexVector(std::ostream &o, std::vector<T> &v, int field_wid
     return o;
 }
 
-/* Calculates the least-squares approximation of the linear data */
-template <class T>
-void calculateLeastSquares(const std::vector<T> &x, const std::vector<T> &y, double &slope, double &intercept) {
-    double x_avg = 0.0, y_avg = 0.0;
-    double rise = 0.0, run = 0.0;
-    ASSERT_GT(x.size(), 1U);
-    ASSERT_GT(y.size(), 1U);
-    ASSERT_EQ(x.size(), y.size());
-
-    for (size_t i = 0; i < x.size(); i++) {
-        x_avg += (double)x[i];
-        y_avg += (double)y[i];
-    }
-
-    x_avg /= x.size();
-    y_avg /= y.size();
-
-    for (size_t i = 0; i < x.size(); i++) {
-        rise += (x[i] - x_avg) * (y[i] - y_avg);
-        run += (x[i] - x_avg) * (x[i] - x_avg);
-    }
-
-    slope = rise / run;
-    intercept = y_avg - slope * x_avg;
-}
-
 // CUDA Error handling
 inline void CU_ASSERT(CUresult cuResult, const char *msg = nullptr) {
     if (cuResult != CUDA_SUCCESS) {
@@ -274,8 +249,22 @@ inline void NVML_ASSERT(nvmlReturn_t nvmlResult, const char *msg = nullptr) {
 // NUMA optimal affinity
 inline void setOptimalCpuAffinity(int cudaDeviceID) {
     nvmlDevice_t device;
+    CUuuid dev_uuid;
 
-    NVML_ASSERT(nvmlDeviceGetHandleByIndex_v2(cudaDeviceID, &device));
+    std::stringstream s;
+    std::unordered_set <unsigned char> dashPos {0, 4, 6, 8, 10};
+
+    CU_ASSERT(cuDeviceGetUuid(&dev_uuid, cudaDeviceID));
+
+    s << "GPU";
+    for (int i = 0; i < 16; i++) {
+        if (dashPos.count(i)) {
+            s << '-';
+        }
+        s << std::hex << std::setfill('0') << std::setw(2) << (0xFF & (int)dev_uuid.bytes[i]);
+    }
+
+    NVML_ASSERT(nvmlDeviceGetHandleByUUID(s.str().c_str(), &device));
     NVML_ASSERT(nvmlDeviceSetCpuAffinity(device));
 }
 
