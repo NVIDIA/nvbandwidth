@@ -166,14 +166,12 @@ public:
     double smallest(void) const { return m_smallest; }
 };
 
-typedef PerformanceStatistic cudaStat;
-
 #define STAT_MEAN(s) (s).average()
 #define STAT_ERROR(s) (s).stddev()
 #define STAT_MAX(s) (s).largest()
 #define STAT_MIN(s) (s).smallest()
 
-static std::ostream &operator<<(std::ostream &o, const cudaStat &s) {
+static std::ostream &operator<<(std::ostream &o, const PerformanceStatistic &s) {
     return o << STAT_MEAN(s) << "(+/- " << STAT_ERROR(s) << ')';
 }
 

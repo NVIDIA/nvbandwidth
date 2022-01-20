@@ -135,7 +135,7 @@ unsigned long long Memcpy::doMemcpy(CUdeviceptr src, CUdeviceptr dst, bool skip)
     CUstream stream;
     CUevent startEvent;
     CUevent endEvent;
-    cudaStat bandwidthStat;
+    PerformanceStatistic bandwidthStat;
 
     // This loop is for sampling the benchmark (which itself has a loop count)
     for (unsigned int n = 0; n < averageLoopCount; n++) {
