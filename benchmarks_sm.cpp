@@ -8,7 +8,7 @@
 #include <omp.h>
 
 #include "benchmarks.h"
-#include "copy_kernel.cuh"
+#include "kernels.cuh"
 
 void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount) {
     MemcpyOperation memcpyInstance(copyKernel, size, loopCount);
