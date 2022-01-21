@@ -11,7 +11,7 @@
 #include "benchmarks.h"
 
 void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount) {
-    MemcpyOperation memcpyInstance(cuMemcpyAsync, size, loopCount);
+    MemcpyOperationCE memcpyInstance(size, loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         HostNode hostNode(size, deviceId);
@@ -24,7 +24,7 @@ void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount
 }
 
 void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount) {
-    MemcpyOperation memcpyInstance(cuMemcpyAsync, size, loopCount);
+    MemcpyOperationCE memcpyInstance(size, loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         HostNode hostNode(size, deviceId);
@@ -37,7 +37,7 @@ void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount
 }
 
 void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long long loopCount) {
-    MemcpyOperation memcpyInstance(cuMemcpyAsync, size, loopCount);
+    MemcpyOperationCE memcpyInstance(size, loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         std::vector<MemcpyNode *> srcNodes = {new HostNode(size, deviceId), new DeviceNode(size, deviceId)};
@@ -53,7 +53,7 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
 }
 
 void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long long loopCount) {
-    MemcpyOperation memcpyInstance(cuMemcpyAsync, size, loopCount);
+    MemcpyOperationCE memcpyInstance(size, loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         std::vector<MemcpyNode *> srcNodes = {new DeviceNode(size, deviceId), new HostNode(size, deviceId)};
@@ -69,7 +69,7 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
 }
 
 void launch_DtoD_memcpy_read_CE(unsigned long long size, unsigned long long loopCount) {
-    MemcpyOperation memcpyInstance(cuMemcpyAsync, size, loopCount);
+    MemcpyOperationCE memcpyInstance(size, loopCount);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
         for (int dstDeviceId = 0; dstDeviceId < deviceCount; dstDeviceId++) {
@@ -121,7 +121,7 @@ void launch_DtoD_memcpy_write_CE(unsigned long long size, unsigned long long loo
 }
 
 void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long long loopCount) {
-    MemcpyOperation memcpyInstance = MemcpyOperation(cuMemcpyAsync, size, loopCount);
+    MemcpyOperationCE memcpyInstance(size, loopCount);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
         for (int dstDeviceId = 0; dstDeviceId < deviceCount; dstDeviceId++) {

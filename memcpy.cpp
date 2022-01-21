@@ -63,12 +63,7 @@ int DeviceNode::getNodeIdx() const {
     return deviceIdx;
 }
 
-MemcpyOperation::MemcpyOperation(MemcpyCEFunc memcpyFunc, size_t copySize, unsigned long long loopCount): ceFunc(memcpyFunc), copySize(copySize), loopCount(loopCount) {
-    procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
-    PROC_MASK_SET(procMask, getFirstEnabledCPU());
-}
-
-MemcpyOperation::MemcpyOperation(MemcpySMFunc memcpyFunc, size_t copySize, unsigned long long loopCount): smFunc(memcpyFunc), copySize(copySize), loopCount(loopCount) {
+MemcpyOperation::MemcpyOperation(size_t copySize, unsigned long long loopCount): copySize(copySize), loopCount(loopCount) {
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
     PROC_MASK_SET(procMask, getFirstEnabledCPU());
 }
@@ -134,13 +129,7 @@ void MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<Me
             CU_ASSERT(spinKernel(blockingVar, streams[i]));
 
             CU_ASSERT(cuEventRecord(startEvents[i], streams[i]));
-        
-            if (smFunc != nullptr) {
-                CU_ASSERT(smFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), smCopySize(), streams[i], loopCount));
-            } else {
-                for (unsigned int l = 0; l < loopCount; l++) CU_ASSERT(ceFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), copySize, streams[i]));
-            }
-
+            CU_ASSERT(memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i]));
             CU_ASSERT(cuEventRecord(endEvents[i], streams[i]));
         }
 
@@ -184,19 +173,6 @@ void MemcpyOperation::printBenchmarkMatrix(bool reverse) {
     std::cout << std::fixed << std::setprecision(2) << *bandwidthValues << std::endl;
 }
 
-size_t MemcpyOperation::smCopySize() const {
-    CUdevice cudaDevice;
-    int multiProcessorCount;
-    size_t size = copySize;
-
-    size /= sizeof(int4);
-    CU_ASSERT(cuCtxGetDevice(&cudaDevice));
-    CU_ASSERT(cuDeviceGetAttribute(&multiProcessorCount,CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, cudaDevice));
-    unsigned long long totalThreadCount = (unsigned long long)(multiProcessorCount * numThreadPerBlock);
-    size = totalThreadCount * (size / totalThreadCount);
-    return size;
-}
-
 void MemcpyOperation::allocateBandwidthMatrix(bool hostVector) {
     #pragma omp critical
     {
@@ -205,4 +181,32 @@ void MemcpyOperation::allocateBandwidthMatrix(bool hostVector) {
             bandwidthValues = new PeerValueMatrix<double>(rows, deviceCount);
         }
     }
+}
+
+MemcpyOperationSM::MemcpyOperationSM(size_t copySize, unsigned long long loopCount) : MemcpyOperation(copySize, loopCount) {}
+
+CUresult MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream) {
+    CUdevice cudaDevice;
+    int multiProcessorCount;
+    size_t size = copySize;
+
+    size /= sizeof(int4);
+    CU_ASSERT(cuCtxGetDevice(&cudaDevice));
+    CU_ASSERT(cuDeviceGetAttribute(&multiProcessorCount, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, cudaDevice));
+    unsigned long long totalThreadCount = (unsigned long long)(multiProcessorCount * numThreadPerBlock);
+    size = totalThreadCount * (size / totalThreadCount);
+
+    CU_ASSERT(copyKernel(dst, src, size, stream, loopCount));
+
+    return CUDA_SUCCESS;
+}
+
+MemcpyOperationCE::MemcpyOperationCE(size_t copySize, unsigned long long loopCount) : MemcpyOperation(copySize, loopCount) {}
+
+CUresult MemcpyOperationCE::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream) {
+    for (unsigned int l = 0; l < loopCount; l++) {
+        CU_ASSERT(cuMemcpyAsync(dst, src, copySize, stream));
+    }
+
+    return CUDA_SUCCESS;
 }

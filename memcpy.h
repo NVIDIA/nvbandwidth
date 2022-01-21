@@ -11,12 +11,6 @@
 #include "common.h"
 #include "memory_utils.h"
 
-// Signature of a CE copy function (e.g. cuMemcpyAsync)
-typedef CUresult (*MemcpyCEFunc)(CUdeviceptr dst, CUdeviceptr src, size_t sizeInElement, CUstream stream);
-// Signature of an SM copy function (e.g. copyKernel)
-typedef CUresult (*MemcpySMFunc)(CUdeviceptr dst, CUdeviceptr src, size_t sizeInElement, CUstream stream, unsigned long long loopCount);
-
-
 class MemcpyNode {
 protected:
     void* buffer{};
@@ -54,11 +48,8 @@ public:
 
 // Abstraction of a memcpy operation
 class MemcpyOperation {
-private:
+protected:
     size_t copySize;
-    MemcpyCEFunc ceFunc{nullptr};
-    MemcpySMFunc smFunc{nullptr};
-
     unsigned long long loopCount;
     size_t *procMask;
 
@@ -66,14 +57,12 @@ private:
 
     // Allocate the bandwidth values matrix
     void allocateBandwidthMatrix(bool hostVector = false);
-    // Because of the parallel nature of copy kernel, the size of data passed is different from cuMemcpyAsync
-    size_t smCopySize() const;
+
+    // Pure virtual function for implementation of the actual memcpy function
+    virtual CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream) = 0;
 public:
-
-    MemcpyOperation(MemcpyCEFunc memcpyFunc, size_t copySize, unsigned long long loopCount);
-    MemcpyOperation(MemcpySMFunc memcpyFunc, size_t copySize, unsigned long long loopCount);
-
-    ~MemcpyOperation();
+    MemcpyOperation(size_t copySize, unsigned long long loopCount);
+    virtual ~MemcpyOperation();
 
     // Copy direction is determined by node type
     // lists of paired nodes will be executed sumultaneously
@@ -81,6 +70,20 @@ public:
     void doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode);
 
     void printBenchmarkMatrix(bool reverse = false);
+};
+
+class MemcpyOperationSM : public MemcpyOperation {
+private:
+    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream);
+public:
+    MemcpyOperationSM(size_t copySize, unsigned long long loopCount);
+};
+
+class MemcpyOperationCE : public MemcpyOperation {
+private:
+    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream);
+public:
+    MemcpyOperationCE(size_t copySize, unsigned long long loopCount);
 };
 
 #endif
