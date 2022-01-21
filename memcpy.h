@@ -53,11 +53,6 @@ protected:
     unsigned long long loopCount;
     size_t *procMask;
 
-    PeerValueMatrix<double> *bandwidthValues{nullptr};
-
-    // Allocate the bandwidth values matrix
-    void allocateBandwidthMatrix(bool hostVector = false);
-
     // Pure virtual function for implementation of the actual memcpy function
     virtual CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream) = 0;
 public:
@@ -66,10 +61,8 @@ public:
 
     // Copy direction is determined by node type
     // lists of paired nodes will be executed sumultaneously
-    void doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes);
-    void doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode);
-
-    void printBenchmarkMatrix(bool reverse = false);
+    double doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes);
+    double doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode);
 };
 
 class MemcpyOperationSM : public MemcpyOperation {

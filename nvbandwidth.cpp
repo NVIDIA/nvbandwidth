@@ -10,7 +10,7 @@
 #include <nvml.h>
 #include <iostream>
 
-#include "benchmarks.h"
+#include "benchmark.h"
 
 namespace opt = boost::program_options;
 
@@ -70,7 +70,7 @@ void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string &benchma
 
     try {
         Benchmark bench = findBenchmark(benchmarks, benchmarkID);
-        if (!bench.filterFn()()) {
+        if (!bench.filter()) {
             std::cout << "Waiving benchmark " << bench.benchKey() << "." << std::endl << std::endl;
             return;
         }
@@ -79,7 +79,7 @@ void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string &benchma
         CU_ASSERT(cuCtxCreate(&benchCtx, 0, 0));
         CU_ASSERT(cuCtxSetCurrent(benchCtx));
         // Run the launch_* benchmark
-        bench.benchFn()(bufferSize, loopCount);
+        bench.run(bufferSize, loopCount);
         CU_ASSERT(cuCtxDestroy(benchCtx));
     } catch (std::string &s) {
         std::cout << "ERROR: " << s << std::endl;

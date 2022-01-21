@@ -18,7 +18,7 @@ debug: CFLAGS += -DDEBUG -g
 debug: $(TARGET)
 
 CUDA_OBJECTS = kernels.o
-OBJECTS = benchmarks_ce.o benchmarks_sm.o memory_utils.o nvbandwidth.o memcpy.o
+OBJECTS = benchmark.o benchmarks_ce.o benchmarks_sm.o memory_utils.o nvbandwidth.o memcpy.o
 HEADERS = $(wildcard *.h)
 
 %.o: %.cu $(HEADERS)

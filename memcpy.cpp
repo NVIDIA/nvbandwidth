@@ -69,36 +69,22 @@ MemcpyOperation::MemcpyOperation(size_t copySize, unsigned long long loopCount):
 }
 
 MemcpyOperation::~MemcpyOperation() {
-    delete bandwidthValues;
     PROC_MASK_CLEAR(procMask, 0);
 }
 
-void MemcpyOperation::doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode) {
+double MemcpyOperation::doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode) {
     std::vector<MemcpyNode*> srcNodes = {srcNode};
     std::vector<MemcpyNode*> dstNodes = {dstNode};
-    doMemcpy(srcNodes, dstNodes);
+    return doMemcpy(srcNodes, dstNodes);
 }
 
-void MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes) {
-    bool isAnyHost = false;
-    unsigned long long avgBandwidth = 0;
+double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes) {
     PerformanceStatistic bandwidthStat;
     volatile int* blockingVar;
     std::vector<CUcontext> contexts(srcNodes.size());
     std::vector<CUstream> streams(srcNodes.size());
     std::vector<CUevent> startEvents(srcNodes.size());
     std::vector<CUevent> endEvents(srcNodes.size());
-
-    // TODO this could be better
-    for (int i = 0; i < srcNodes.size(); i++) {
-        if (srcNodes[i]->getPrimaryCtx() != nullptr || dstNodes[i]->getPrimaryCtx() != nullptr) {
-            isAnyHost = true;
-            break;
-        }
-    }
-
-    // allocate resources
-    allocateBandwidthMatrix(isAnyHost);
 
     CU_ASSERT(cuMemHostAlloc((void **)&blockingVar, sizeof(*blockingVar), CU_MEMHOSTALLOC_PORTABLE));
 
@@ -158,29 +144,7 @@ void MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<Me
         CU_ASSERT(cuEventDestroy(endEvents[i]));
     }
 
-    avgBandwidth = (unsigned long long)(STAT_MEAN(bandwidthStat));
-
-    if (isAnyHost) {
-        bandwidthValues->value(0, std::max(srcNodes[0]->getNodeIdx(), dstNodes[0]->getNodeIdx())) = (double)avgBandwidth * 1e-9;
-    } else {
-        bandwidthValues->value(srcNodes[0]->getNodeIdx(), dstNodes[0]->getNodeIdx()) = (double)avgBandwidth * 1e-9;
-    }
-}
-
-void MemcpyOperation::printBenchmarkMatrix(bool reverse) {
-    // TODO this is wrong
-    std::cout << "memcpy CE GPU(row) " << (reverse ? "->" : "<-") << " GPU(column) bandwidth (GB/s):" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << *bandwidthValues << std::endl;
-}
-
-void MemcpyOperation::allocateBandwidthMatrix(bool hostVector) {
-    #pragma omp critical
-    {
-        if (bandwidthValues == nullptr) {
-            int rows = hostVector ? 1 : deviceCount;
-            bandwidthValues = new PeerValueMatrix<double>(rows, deviceCount);
-        }
-    }
+    return (double)(STAT_MEAN(bandwidthStat) * 1e-9);
 }
 
 MemcpyOperationSM::MemcpyOperationSM(size_t copySize, unsigned long long loopCount) : MemcpyOperation(copySize, loopCount) {}
