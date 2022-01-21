@@ -19,13 +19,14 @@ typedef CUresult (*MemcpySMFunc)(CUdeviceptr dst, CUdeviceptr src, size_t sizeIn
 
 class MemcpyNode {
 protected:
-  void *buffer{};
+    void* buffer{};
 public:
     explicit MemcpyNode();
-    void *getBuffer();
+    CUdeviceptr getBuffer();
+
     virtual int getNodeIdx() const = 0;
+    virtual CUcontext getPrimaryCtx() const = 0;
 };
-class Memcpy;
 
 // Represents the host buffer abstraction
 class HostNode : public MemcpyNode {
@@ -35,6 +36,7 @@ public:
     ~HostNode();
 
     int getNodeIdx() const override;
+    CUcontext getPrimaryCtx() const override;
 };
 
 // Represents the device buffer and context abstraction
@@ -46,12 +48,12 @@ public:
     DeviceNode(size_t bufferSize, int deviceIdx);
     ~DeviceNode();
 
-    CUcontext getPrimaryCtx() const;
     int getNodeIdx() const override;
+    CUcontext getPrimaryCtx() const override;
 };
 
 // Abstraction of a memcpy operation
-class Memcpy {
+class MemcpyOperation {
 private:
     size_t copySize;
     MemcpyCEFunc ceFunc{nullptr};
@@ -70,18 +72,18 @@ private:
     // Because of the parallel nature of copy kernel, the size of data passed is different from cuMemcpyAsync
     size_t smCopySize() const;
     // The main memcpy abstraction, it calls ceFunc/smFunc
-    unsigned long long doMemcpy(CUdeviceptr src, CUdeviceptr dst, bool skip = false);
+    unsigned long long _memcpy(MemcpyNode* src, MemcpyNode* dst, bool skip = false);
 public:
 
-    Memcpy(MemcpyCEFunc memcpyFunc, size_t copySize, unsigned long long loopCount);
-    Memcpy(MemcpySMFunc memcpyFunc, size_t copySize, unsigned long long loopCount);
+    MemcpyOperation(MemcpyCEFunc memcpyFunc, size_t copySize, unsigned long long loopCount);
+    MemcpyOperation(MemcpySMFunc memcpyFunc, size_t copySize, unsigned long long loopCount);
 
-    ~Memcpy();
+    ~MemcpyOperation();
 
-    // To infer copy recipe (H2D, D2H, D2D)
-    void doMemcpy(HostNode *srcNode, DeviceNode *dstNode, HostNode *biDirSrc = nullptr, DeviceNode *biDirDst = nullptr);
-    void doMemcpy(DeviceNode *srcNode, HostNode *dstNode, DeviceNode *biDirSrc = nullptr, HostNode *biDirDst = nullptr);
-    void doMemcpy(DeviceNode *srcNode, DeviceNode *dstNode, DeviceNode *biDirSrc = nullptr, DeviceNode *biDirDst = nullptr);
+    // Copy direction is determined by node type
+    // lists of paired nodes will be executed sumultaneously
+    void doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes);
+    void doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode);
 
     void printBenchmarkMatrix(bool reverse = false);
 };
