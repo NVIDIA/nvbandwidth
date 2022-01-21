@@ -58,9 +58,6 @@ private:
     size_t copySize;
     MemcpyCEFunc ceFunc{nullptr};
     MemcpySMFunc smFunc{nullptr};
-    CUcontext copyCtx;
-    CUstream *masterStream{nullptr};
-    CUevent *masterEvent{nullptr}; // Other memcpy operations wait on this event to start at the same time
 
     unsigned long long loopCount;
     size_t *procMask;
@@ -71,8 +68,6 @@ private:
     void allocateBandwidthMatrix(bool hostVector = false);
     // Because of the parallel nature of copy kernel, the size of data passed is different from cuMemcpyAsync
     size_t smCopySize() const;
-    // The main memcpy abstraction, it calls ceFunc/smFunc
-    unsigned long long _memcpy(MemcpyNode* src, MemcpyNode* dst, bool skip = false);
 public:
 
     MemcpyOperation(MemcpyCEFunc memcpyFunc, size_t copySize, unsigned long long loopCount);
