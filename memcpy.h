@@ -59,10 +59,10 @@ public:
     MemcpyOperation(size_t copySize, unsigned long long loopCount);
     virtual ~MemcpyOperation();
 
-    // Copy direction is determined by node type
-    // lists of paired nodes will be executed sumultaneously
-    double doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes);
-    double doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode);
+    // Lists of paired nodes will be executed sumultaneously
+    // context of srcNodes is preferred (if not host) unless otherwise specified
+    double doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes, bool preferSrcCtx = true);
+    double doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode, bool preferSrcCtx = true);
 };
 
 class MemcpyOperationSM : public MemcpyOperation {

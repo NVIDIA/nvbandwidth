@@ -76,59 +76,49 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
+// DtoD Read test - copy from dst to src (backwards) using src contxt
 void launch_DtoD_memcpy_read_CE(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
     MemcpyOperationCE memcpyInstance(size, loopCount);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
-        for (int dstDeviceId = 0; dstDeviceId < deviceCount; dstDeviceId++) {
-            if (dstDeviceId == srcDeviceId) {
+        for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+            if (peerDeviceId == srcDeviceId) {
                 continue;
             }
 
             DeviceNode srcNode(size, srcDeviceId);
-            DeviceNode dstNode(size, dstDeviceId);
+            DeviceNode peerNode(size, peerDeviceId);
 
-            bandwidthValues.value(srcDeviceId, dstDeviceId) = memcpyInstance.doMemcpy(&srcNode, &dstNode);
+            // swap src and peer nodes, but use srcNodes (the copy's destination) context
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&peerNode, &srcNode, false);
         }
     }
 
-    // TODO - fix arrow for read/write
     std::cout << "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
+// DtoD Write test - copy from src to dst using src context
 void launch_DtoD_memcpy_write_CE(unsigned long long size, unsigned long long loopCount) {
-    // this is no different than the read test, other than src and dst and swapped, but the matrix printed is identical
-    // I assume the intent was to swap the context, such that the copy context was the dst instead of the source, but that is not the case here
-    // Memcpy memcpyInstance = Memcpy(cuMemcpyAsync, size, loopCount);
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+    MemcpyOperationCE memcpyInstance(size, loopCount);
 
-    // for (int targetDeviceId = 0; targetDeviceId < deviceCount; targetDeviceId++) {
-    //     std::vector<DeviceNode *> devices, dstDevices;
-    //     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-    //         devices.push_back(new DeviceNode(size, targetDeviceId));
-    //         dstDevices.push_back(new DeviceNode(size, deviceId));
-    //     }
+    for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
+        for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+            if (peerDeviceId == srcDeviceId) {
+                continue;
+            }
 
-    //     if (parallel) {
-    //         #pragma omp parallel num_threads(deviceCount)
-    //         {
-    //             int deviceId = omp_get_thread_num();
-    //             memcpyInstance.doMemcpy(devices[deviceId], dstDevices[deviceId]);
-    //         }
-    //     } else {
-    //         for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-    //             memcpyInstance.doMemcpy(devices[deviceId], dstDevices[deviceId]);
-    //         }
-    //     }
+            DeviceNode srcNode(size, srcDeviceId);
+            DeviceNode peerNode(size, peerDeviceId);
 
-    //     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-    //         delete devices[deviceId];
-    //         delete dstDevices[deviceId];
-    //     }
-    // }
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&srcNode, &peerNode);
+        }
+    }
 
-    // memcpyInstance.printBenchmarkMatrix();
+    std::cout << "memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
 void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long long loopCount) {

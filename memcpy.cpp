@@ -72,13 +72,13 @@ MemcpyOperation::~MemcpyOperation() {
     PROC_MASK_CLEAR(procMask, 0);
 }
 
-double MemcpyOperation::doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode) {
+double MemcpyOperation::doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode, bool preferSrcCtx) {
     std::vector<MemcpyNode*> srcNodes = {srcNode};
     std::vector<MemcpyNode*> dstNodes = {dstNode};
-    return doMemcpy(srcNodes, dstNodes);
+    return doMemcpy(srcNodes, dstNodes, preferSrcCtx);
 }
 
-double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes) {
+double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes, bool preferSrcCtx) {
     PerformanceStatistic bandwidthStat;
     volatile int* blockingVar;
     std::vector<CUcontext> contexts(srcNodes.size());
@@ -90,7 +90,7 @@ double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<
 
     for (int i = 0; i < srcNodes.size(); i++) {
         // prefer source context
-        if (srcNodes[i]->getPrimaryCtx() != nullptr) {
+        if (preferSrcCtx && srcNodes[i]->getPrimaryCtx() != nullptr) {
             CU_ASSERT(cuCtxSetCurrent(srcNodes[i]->getPrimaryCtx()));
             contexts[i] = srcNodes[i]->getPrimaryCtx();
         } else if (dstNodes[i]->getPrimaryCtx() != nullptr) {
