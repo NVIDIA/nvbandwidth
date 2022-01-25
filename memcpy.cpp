@@ -8,6 +8,8 @@
 #include "memcpy.h"
 #include "kernels.cuh"
 
+#define WARMUP_COUNT 4
+
 MemcpyNode::MemcpyNode(): buffer(nullptr) {}
 
 CUdeviceptr MemcpyNode::getBuffer() {
@@ -135,9 +137,23 @@ double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<
 
             // start the spin kernel on the stream
             CU_ASSERT(spinKernel(blockingVar, streams[i]));
+            
+            // warmup
+            CU_ASSERT(memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], WARMUP_COUNT));
+        }
 
+        CU_ASSERT(cuCtxSetCurrent(contexts[0]));
+        CU_ASSERT(cuEventRecord(startEvents[0], streams[0]));
+        for (int i = 1; i < srcNodes.size(); i++) {
+            // ensure that all copies are launched at the same time
+            CU_ASSERT(cuCtxSetCurrent(contexts[i]));
+            CU_ASSERT(cuStreamWaitEvent(streams[i], startEvents[0], 0));
             CU_ASSERT(cuEventRecord(startEvents[i], streams[i]));
-            CU_ASSERT(memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i]));
+        }
+
+        for (int i = 0; i < srcNodes.size(); i++) {
+            CU_ASSERT(cuCtxSetCurrent(contexts[i]));
+            CU_ASSERT(memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], loopCount));
             CU_ASSERT(cuEventRecord(endEvents[i], streams[i]));
         }
 
@@ -181,7 +197,7 @@ double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<
 MemcpyOperationSM::MemcpyOperationSM(size_t copySize, unsigned long long loopCount, bool preferSrcCtx, bool sumResults) : 
         MemcpyOperation(copySize, loopCount, preferSrcCtx, sumResults) {}
 
-CUresult MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream) {
+CUresult MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, unsigned long long loopCount) {
     CUdevice cudaDevice;
     int multiProcessorCount;
     size_t size = copySize;
@@ -200,7 +216,7 @@ CUresult MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstrea
 MemcpyOperationCE::MemcpyOperationCE(size_t copySize, unsigned long long loopCount, bool preferSrcCtx, bool sumResults) : 
         MemcpyOperation(copySize, loopCount, preferSrcCtx, sumResults) {}
 
-CUresult MemcpyOperationCE::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream) {
+CUresult MemcpyOperationCE::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, unsigned long long loopCount) {
     for (unsigned int l = 0; l < loopCount; l++) {
         CU_ASSERT(cuMemcpyAsync(dst, src, copySize, stream));
     }

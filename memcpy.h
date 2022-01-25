@@ -50,15 +50,17 @@ public:
 
 // Abstraction of a memcpy operation
 class MemcpyOperation {
+private:
+    unsigned long long loopCount;
+
 protected:
     size_t copySize;
-    unsigned long long loopCount;
     size_t *procMask;
     bool preferSrcCtx;
     bool sumResults;
 
     // Pure virtual function for implementation of the actual memcpy function
-    virtual CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream) = 0;
+    virtual CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, unsigned long long loopCount) = 0;
 public:
     MemcpyOperation(size_t copySize, unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
     virtual ~MemcpyOperation();
@@ -71,14 +73,14 @@ public:
 
 class MemcpyOperationSM : public MemcpyOperation {
 private:
-    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream);
+    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, unsigned long long loopCount);
 public:
     MemcpyOperationSM(size_t copySize, unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
 };
 
 class MemcpyOperationCE : public MemcpyOperation {
 private:
-    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream);
+    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, unsigned long long loopCount);
 public:
     MemcpyOperationCE(size_t copySize, unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
 };
