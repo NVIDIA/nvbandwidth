@@ -43,7 +43,7 @@ void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount
 // DtoD Read test - copy from dst to src (backwards) using src contxt
 void launch_DtoD_memcpy_read_SM(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
-    MemcpyOperationSM memcpyInstance(size, loopCount);
+    MemcpyOperationSM memcpyInstance(size, loopCount, false);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
@@ -54,8 +54,12 @@ void launch_DtoD_memcpy_read_SM(unsigned long long size, unsigned long long loop
             DeviceNode srcNode(size, srcDeviceId);
             DeviceNode peerNode(size, peerDeviceId);
 
+            if (!srcNode.enablePeerAcess(&peerNode)) {
+                continue;
+            }
+
             // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&peerNode, &srcNode, false);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&peerNode, &srcNode);
         }
     }
 
@@ -77,6 +81,10 @@ void launch_DtoD_memcpy_write_SM(unsigned long long size, unsigned long long loo
             DeviceNode srcNode(size, srcDeviceId);
             DeviceNode peerNode(size, peerDeviceId);
 
+            if (!srcNode.enablePeerAcess(&peerNode)) {
+                continue;
+            }
+
             bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&srcNode, &peerNode);
         }
     }
@@ -88,7 +96,7 @@ void launch_DtoD_memcpy_write_SM(unsigned long long size, unsigned long long loo
 // DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
 void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
-    MemcpyOperationSM memcpyInstance(size, loopCount);
+    MemcpyOperationSM memcpyInstance(size, loopCount, false, true);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
@@ -96,14 +104,18 @@ void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned 
                 continue;
             }
 
+            DeviceNode src1(size, srcDeviceId), src2(size, srcDeviceId);
+            DeviceNode peer1(size, peerDeviceId), peer2(size, peerDeviceId);
+
+            if (!src1.enablePeerAcess(&peer1)) {
+                continue;
+            }
+
             // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            std::vector<MemcpyNode *> srcNodes = {new DeviceNode(size, peerDeviceId), new DeviceNode(size, srcDeviceId)};
-            std::vector<MemcpyNode *> peerNodes = {new DeviceNode(size, srcDeviceId), new DeviceNode(size, peerDeviceId)};
+            std::vector<MemcpyNode*> srcNodes = {&peer1, &src1};
+            std::vector<MemcpyNode*> peerNodes = {&src2, &peer2};
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes, false);
-
-            for (auto node : srcNodes) delete node;
-            for (auto node : peerNodes) delete node;
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
         }
     }
 
@@ -115,7 +127,7 @@ void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned 
 // DtoD Bidir Write test - copy from src to dst using src context
 void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
-    MemcpyOperationSM memcpyInstance(size, loopCount);
+    MemcpyOperationSM memcpyInstance(size, loopCount, true, true);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
@@ -123,14 +135,17 @@ void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned
                 continue;
             }
 
-            // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            std::vector<MemcpyNode *> srcNodes = {new DeviceNode(size, srcDeviceId), new DeviceNode(size, peerDeviceId)};
-            std::vector<MemcpyNode *> peerNodes = {new DeviceNode(size, peerDeviceId), new DeviceNode(size, srcDeviceId)};
+            DeviceNode src1(size, srcDeviceId), src2(size, srcDeviceId);
+            DeviceNode peer1(size, peerDeviceId), peer2(size, peerDeviceId);
+
+            if (!src1.enablePeerAcess(&peer1)) {
+                continue;
+            }
+
+            std::vector<MemcpyNode*> srcNodes = {&src1, &peer1};
+            std::vector<MemcpyNode*> peerNodes = {&peer2, &src2};
 
             bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
-
-            for (auto node : srcNodes) delete node;
-            for (auto node : peerNodes) delete node;
         }
     }
 

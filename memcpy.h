@@ -44,6 +44,8 @@ public:
 
     int getNodeIdx() const override;
     CUcontext getPrimaryCtx() const override;
+
+    bool enablePeerAcess(const DeviceNode *peerNode);
 };
 
 // Abstraction of a memcpy operation
@@ -52,31 +54,33 @@ protected:
     size_t copySize;
     unsigned long long loopCount;
     size_t *procMask;
+    bool preferSrcCtx;
+    bool sumResults;
 
     // Pure virtual function for implementation of the actual memcpy function
     virtual CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream) = 0;
 public:
-    MemcpyOperation(size_t copySize, unsigned long long loopCount);
+    MemcpyOperation(size_t copySize, unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
     virtual ~MemcpyOperation();
 
     // Lists of paired nodes will be executed sumultaneously
     // context of srcNodes is preferred (if not host) unless otherwise specified
-    double doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes, bool preferSrcCtx = true);
-    double doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode, bool preferSrcCtx = true);
+    double doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes);
+    double doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode);
 };
 
 class MemcpyOperationSM : public MemcpyOperation {
 private:
     CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream);
 public:
-    MemcpyOperationSM(size_t copySize, unsigned long long loopCount);
+    MemcpyOperationSM(size_t copySize, unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
 };
 
 class MemcpyOperationCE : public MemcpyOperation {
 private:
     CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream);
 public:
-    MemcpyOperationCE(size_t copySize, unsigned long long loopCount);
+    MemcpyOperationCE(size_t copySize, unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
 };
 
 #endif

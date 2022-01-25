@@ -45,13 +45,13 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     MemcpyOperationCE memcpyInstance(size, loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        std::vector<MemcpyNode *> srcNodes = {new HostNode(size, deviceId), new DeviceNode(size, deviceId)};
-        std::vector<MemcpyNode *> dstNodes = {new DeviceNode(size, deviceId), new HostNode(size, deviceId)};
+        HostNode host1(size, deviceId), host2(size, deviceId);
+        DeviceNode dev1(size, deviceId), dev2(size, deviceId);
+
+        std::vector<MemcpyNode*> srcNodes = {&host1, &dev1};
+        std::vector<MemcpyNode*> dstNodes = {&dev2, &host2};
 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
-
-        for (auto node : srcNodes) delete node;
-        for (auto node : dstNodes) delete node;
     }
 
     std::cout << "memcpy CE CPU <-> GPU bandwidth (GB/s)" << std::endl;
@@ -63,13 +63,13 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     MemcpyOperationCE memcpyInstance(size, loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        std::vector<MemcpyNode *> srcNodes = {new DeviceNode(size, deviceId), new HostNode(size, deviceId)};
-        std::vector<MemcpyNode *> dstNodes = {new HostNode(size, deviceId), new DeviceNode(size, deviceId)};
+        HostNode host1(size, deviceId), host2(size, deviceId);
+        DeviceNode dev1(size, deviceId), dev2(size, deviceId);
+
+        std::vector<MemcpyNode*> srcNodes = {&dev1, &host1};
+        std::vector<MemcpyNode*> dstNodes = {&host2, &dev2};
 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
-
-        for (auto node : srcNodes) delete node;
-        for (auto node : dstNodes) delete node;
     }
 
     std::cout << "memcpy CE GPU <-> CPU bandwidth (GB/s)" << std::endl;
@@ -90,8 +90,12 @@ void launch_DtoD_memcpy_read_CE(unsigned long long size, unsigned long long loop
             DeviceNode srcNode(size, srcDeviceId);
             DeviceNode peerNode(size, peerDeviceId);
 
+            if (!srcNode.enablePeerAcess(&peerNode)) {
+                continue;
+            }
+
             // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&peerNode, &srcNode, false);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&peerNode, &srcNode);
         }
     }
 
@@ -113,6 +117,10 @@ void launch_DtoD_memcpy_write_CE(unsigned long long size, unsigned long long loo
             DeviceNode srcNode(size, srcDeviceId);
             DeviceNode peerNode(size, peerDeviceId);
 
+            if (!srcNode.enablePeerAcess(&peerNode)) {
+                continue;
+            }
+
             bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&srcNode, &peerNode);
         }
     }
@@ -126,18 +134,22 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     MemcpyOperationCE memcpyInstance(size, loopCount);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
-        for (int dstDeviceId = 0; dstDeviceId < deviceCount; dstDeviceId++) {
-            if (dstDeviceId == srcDeviceId) {
+        for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+            if (peerDeviceId == srcDeviceId) {
                 continue;
             }
 
-            std::vector<MemcpyNode *> srcNodes = {new DeviceNode(size, srcDeviceId), new DeviceNode(size, dstDeviceId)};
-            std::vector<MemcpyNode *> dstNodes = {new DeviceNode(size, dstDeviceId), new DeviceNode(size, srcDeviceId)};
+            DeviceNode src1(size, srcDeviceId), src2(size, srcDeviceId);
+            DeviceNode peer1(size, peerDeviceId), peer2(size, peerDeviceId);
 
-            bandwidthValues.value(srcDeviceId, dstDeviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+            if (!src1.enablePeerAcess(&peer1)) {
+                continue;
+            }
 
-            for (auto node : srcNodes) delete node;
-            for (auto node : dstNodes) delete node;
+            std::vector<MemcpyNode*> srcNodes = {&src1, &peer1};
+            std::vector<MemcpyNode*> peerNodes = {&peer2, &src2};
+
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
         }
     }
 
