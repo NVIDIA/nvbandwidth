@@ -43,7 +43,6 @@ const unsigned int numThreadPerBlock = 512;
 extern int deviceCount;
 extern unsigned int averageLoopCount;
 extern bool disableP2P;
-extern bool parallel;
 // Verbosity
 extern bool verbose;
 class Verbosity {

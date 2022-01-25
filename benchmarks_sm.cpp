@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-#include <omp.h>
-
 #include "benchmark.h"
 #include "kernels.cuh"
 
