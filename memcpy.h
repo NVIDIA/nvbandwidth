@@ -9,7 +9,6 @@
 #define MEMCPY_H
 
 #include "common.h"
-#include "memory_utils.h"
 
 class MemcpyNode {
 protected:

@@ -9,7 +9,6 @@
 #define BENCHMARK_H
 
 #include "common.h"
-#include "memory_utils.h"
 #include "memcpy.h"
 #include <map>
 #include <utility>

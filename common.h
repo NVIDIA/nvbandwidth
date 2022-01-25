@@ -266,4 +266,15 @@ inline void setOptimalCpuAffinity(int cudaDeviceID) {
     NVML_ASSERT(nvmlDeviceSetCpuAffinity(device));
 }
 
+inline bool isMemoryOwnedByCUDA(void *memory) {
+    CUmemorytype memorytype;
+    CUresult status = cuPointerGetAttribute(&memorytype, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (CUdeviceptr)memory);
+    if (status == CUDA_ERROR_INVALID_VALUE) {
+        return false;
+    } else {
+        CU_ASSERT(status);
+        return true;
+    }
+}
+
 #endif
