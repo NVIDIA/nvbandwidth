@@ -157,7 +157,7 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_DtoD_paired_memcpy_read_CE(unsigned long long size, unsigned long long loopCount) {
+//void launch_DtoD_paired_memcpy_read_CE(unsigned long long size, unsigned long long loopCount) {
     //TODO fix me
     // Memcpy memcpyInstance = Memcpy(cuMemcpyAsync, size, loopCount);
 
@@ -185,9 +185,9 @@ void launch_DtoD_paired_memcpy_read_CE(unsigned long long size, unsigned long lo
     // }
 
     // memcpyInstance.printBenchmarkMatrix();
-}
+//}
 
-void launch_DtoD_paired_memcpy_write_CE(unsigned long long size, unsigned long long loopCount) {
+//void launch_DtoD_paired_memcpy_write_CE(unsigned long long size, unsigned long long loopCount) {
     // TODO fix me
 //     Memcpy memcpyInstance = Memcpy(cuMemcpyAsync, size, loopCount);
 
@@ -215,4 +215,4 @@ void launch_DtoD_paired_memcpy_write_CE(unsigned long long size, unsigned long l
 //     }
 
 //     memcpyInstance.printBenchmarkMatrix();
-}
+//}

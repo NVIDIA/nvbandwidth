@@ -153,7 +153,7 @@ void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_DtoD_paired_memcpy_read_SM(unsigned long long size, unsigned long long loopCount) {
+//void launch_DtoD_paired_memcpy_read_SM(unsigned long long size, unsigned long long loopCount) {
     // Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
 
     // std::vector<DeviceNode *> devices;
@@ -180,9 +180,9 @@ void launch_DtoD_paired_memcpy_read_SM(unsigned long long size, unsigned long lo
     // }
 
     // memcpyInstance.printBenchmarkMatrix();
-}
+//}
 
-void launch_DtoD_paired_memcpy_write_SM(unsigned long long size, unsigned long long loopCount) {
+//void launch_DtoD_paired_memcpy_write_SM(unsigned long long size, unsigned long long loopCount) {
     // Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
 
     // std::vector<DeviceNode *> devices;
@@ -209,4 +209,4 @@ void launch_DtoD_paired_memcpy_write_SM(unsigned long long size, unsigned long l
     // }
 
     // memcpyInstance.printBenchmarkMatrix();
-}
+//}

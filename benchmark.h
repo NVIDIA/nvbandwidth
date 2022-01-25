@@ -43,8 +43,8 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
 void launch_DtoD_memcpy_read_CE(unsigned long long size, unsigned long long loopCount);
 void launch_DtoD_memcpy_write_CE(unsigned long long size, unsigned long long loopCount);
 void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long long loopCount);
-void launch_DtoD_paired_memcpy_read_CE(unsigned long long size, unsigned long long loopCount);
-void launch_DtoD_paired_memcpy_write_CE(unsigned long long size, unsigned long long loopCount);
+//void launch_DtoD_paired_memcpy_read_CE(unsigned long long size, unsigned long long loopCount);
+//void launch_DtoD_paired_memcpy_write_CE(unsigned long long size, unsigned long long loopCount);
 // SM Benchmarks
 void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount);
 void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount);
@@ -52,8 +52,8 @@ void launch_DtoD_memcpy_read_SM(unsigned long long size, unsigned long long loop
 void launch_DtoD_memcpy_write_SM(unsigned long long size, unsigned long long loopCount);
 void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned long long loopCount);
 void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned long long loopCount);
-void launch_DtoD_paired_memcpy_read_SM(unsigned long long size, unsigned long long loopCount);
-void launch_DtoD_paired_memcpy_write_SM(unsigned long long size, unsigned long long loopCount);
+//void launch_DtoD_paired_memcpy_read_SM(unsigned long long size, unsigned long long loopCount);
+//void launch_DtoD_paired_memcpy_write_SM(unsigned long long size, unsigned long long loopCount);
 
 // Benchmark filters
 bool filter_has_accessible_peer_pairs();
