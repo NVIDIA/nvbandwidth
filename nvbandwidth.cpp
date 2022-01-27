@@ -29,7 +29,6 @@ unsigned int averageLoopCount;
 unsigned long long bufferSize;
 unsigned long long loopCount;
 bool disableP2P;
-bool parallel;
 bool verbose;
 Verbosity VERBOSE;
 
@@ -109,7 +108,6 @@ int main(int argc, char **argv) {
         ("help,h", "Produce help message")
         ("bufferSize", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size")
         ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed")
-        ("parallel,p", opt::bool_switch(&parallel)->default_value(false), "Run benchmark on each device at the same time")
         ("list,l", "List available benchmarks")
         ("benchmark,b", opt::value<std::vector<std::string>>(&benchmarksToRun)->multitoken(), "Benchmark(s) to doMemcpy (by name or index)")
         ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output");

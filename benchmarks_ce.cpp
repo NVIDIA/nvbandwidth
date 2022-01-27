@@ -16,7 +16,6 @@
  */
 
 #include <cuda.h>
-#include <omp.h>
 
 #include "benchmark.h"
 
