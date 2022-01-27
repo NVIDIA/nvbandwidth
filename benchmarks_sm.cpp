@@ -7,254 +7,206 @@
 
 #include <omp.h>
 
-#include "benchmarks.h"
-#include "copy_kernel.cuh"
+#include "benchmark.h"
+#include "kernels.cuh"
 
 void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount) {
-    Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
-
-    std::vector<HostNode *> hosts;
-    std::vector<DeviceNode *> dstDevices;
-    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        hosts.push_back(new HostNode(size, deviceId));
-        dstDevices.push_back(new DeviceNode(size, deviceId));
-    }
-
-    if (parallel) {
-        #pragma omp parallel num_threads(deviceCount)
-        {
-            int deviceId = omp_get_thread_num();
-            memcpyInstance.doMemcpy(hosts[deviceId], dstDevices[deviceId]);
-        }
-    } else {
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            memcpyInstance.doMemcpy(hosts[deviceId], dstDevices[deviceId]);
-        }
-    }
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+    MemcpyOperationSM memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        delete hosts[deviceId];
-        delete dstDevices[deviceId];
+        HostNode hostNode(size, deviceId);
+        DeviceNode deviceNode(size, deviceId);
+
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(&hostNode, &deviceNode);
     }
-    memcpyInstance.printBenchmarkMatrix();
+
+    std::cout << "memcpy SM CPU -> GPU bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
 void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount) {
-    Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
-
-    std::vector<HostNode *> hosts;
-    std::vector<DeviceNode *> dstDevices;
-    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        hosts.push_back(new HostNode(size, deviceId));
-        dstDevices.push_back(new DeviceNode(size, deviceId));
-    }
-
-    if (parallel) {
-        #pragma omp parallel num_threads(deviceCount)
-        {
-            int deviceId = omp_get_thread_num();
-            memcpyInstance.doMemcpy(dstDevices[deviceId], hosts[deviceId]);
-        }
-    } else {
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            memcpyInstance.doMemcpy(dstDevices[deviceId], hosts[deviceId]);
-        }
-    }
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+    MemcpyOperationSM memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        delete hosts[deviceId];
-        delete dstDevices[deviceId];
+        HostNode hostNode(size, deviceId);
+        DeviceNode deviceNode(size, deviceId);
+
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(&deviceNode, &hostNode);
     }
 
-    memcpyInstance.printBenchmarkMatrix();
+    std::cout << "memcpy SM GPU -> CPU bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
+// DtoD Read test - copy from dst to src (backwards) using src contxt
 void launch_DtoD_memcpy_read_SM(unsigned long long size, unsigned long long loopCount) {
-    Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+    MemcpyOperationSM memcpyInstance(loopCount, false);
 
-    for (int targetDeviceId = 0; targetDeviceId < deviceCount; targetDeviceId++) {
-        std::vector<DeviceNode *> devices, dstDevices;
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            devices.push_back(new DeviceNode(size, targetDeviceId));
-            dstDevices.push_back(new DeviceNode(size, deviceId));
-        }
-
-        if (parallel) {
-            #pragma omp parallel num_threads(deviceCount)
-            {
-                int deviceId = omp_get_thread_num();
-                memcpyInstance.doMemcpy(dstDevices[deviceId], devices[deviceId]);
+    for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
+        for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+            if (peerDeviceId == srcDeviceId) {
+                continue;
             }
-        } else {
-            for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-                memcpyInstance.doMemcpy(dstDevices[deviceId], devices[deviceId]);
-            }
-        }
 
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            delete devices[deviceId];
-            delete dstDevices[deviceId];
+            DeviceNode srcNode(size, srcDeviceId);
+            DeviceNode peerNode(size, peerDeviceId);
+
+            if (!srcNode.enablePeerAcess(&peerNode)) {
+                continue;
+            }
+
+            // swap src and peer nodes, but use srcNodes (the copy's destination) context
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&peerNode, &srcNode);
         }
     }
 
-    memcpyInstance.printBenchmarkMatrix();
+    std::cout << "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
+// DtoD Write test - copy from src to dst using src context
 void launch_DtoD_memcpy_write_SM(unsigned long long size, unsigned long long loopCount) {
-    Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+    MemcpyOperationSM memcpyInstance(loopCount);
 
-    for (int targetDeviceId = 0; targetDeviceId < deviceCount; targetDeviceId++) {
-        std::vector<DeviceNode *> devices, dstDevices;
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            devices.push_back(new DeviceNode(size, targetDeviceId));
-            dstDevices.push_back(new DeviceNode(size, deviceId));
-        }
-
-        if (parallel) {
-            #pragma omp parallel num_threads(deviceCount)
-            {
-                int deviceId = omp_get_thread_num();
-                memcpyInstance.doMemcpy(devices[deviceId], dstDevices[deviceId]);
+    for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
+        for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+            if (peerDeviceId == srcDeviceId) {
+                continue;
             }
-        } else {
-            for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-                memcpyInstance.doMemcpy(devices[deviceId], dstDevices[deviceId]);
-            }
-        }
 
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            delete devices[deviceId];
-            delete dstDevices[deviceId];
+            DeviceNode srcNode(size, srcDeviceId);
+            DeviceNode peerNode(size, peerDeviceId);
+
+            if (!srcNode.enablePeerAcess(&peerNode)) {
+                continue;
+            }
+
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&srcNode, &peerNode);
         }
     }
 
-    memcpyInstance.printBenchmarkMatrix();
+    std::cout << "memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
+// DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
 void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned long long loopCount) {
-    Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+    MemcpyOperationSM memcpyInstance(loopCount, false, true);
 
-    for (int targetDeviceId = 0; targetDeviceId < deviceCount; targetDeviceId++) {
-        std::vector<DeviceNode *> devicesDir1, devicesDir2, dstDevicesDir1, dstDevicesDir2;
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            devicesDir1.push_back(new DeviceNode(size, targetDeviceId));
-            devicesDir2.push_back(new DeviceNode(size, targetDeviceId));
-            dstDevicesDir1.push_back(new DeviceNode(size, deviceId));
-            dstDevicesDir2.push_back(new DeviceNode(size, deviceId));
-        }
-
-        if (parallel) {
-            #pragma omp parallel num_threads(deviceCount)
-            {
-                int deviceId = omp_get_thread_num();
-                memcpyInstance.doMemcpy(dstDevicesDir1[deviceId], devicesDir1[deviceId], dstDevicesDir2[deviceId], devicesDir2[deviceId]);
+    for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
+        for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+            if (peerDeviceId == srcDeviceId) {
+                continue;
             }
-        } else {
-            parallel = 1;
-            for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-                memcpyInstance.doMemcpy(dstDevicesDir1[deviceId], devicesDir1[deviceId], dstDevicesDir2[deviceId], devicesDir2[deviceId]);
-            }
-            parallel = 0;
-        }
 
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            delete devicesDir1[deviceId], devicesDir2[deviceId];
-            delete dstDevicesDir1[deviceId], dstDevicesDir2[deviceId];
+            DeviceNode src1(size, srcDeviceId), src2(size, srcDeviceId);
+            DeviceNode peer1(size, peerDeviceId), peer2(size, peerDeviceId);
+
+            if (!src1.enablePeerAcess(&peer1)) {
+                continue;
+            }
+
+            // swap src and peer nodes, but use srcNodes (the copy's destination) context
+            std::vector<MemcpyNode*> srcNodes = {&peer1, &src1};
+            std::vector<MemcpyNode*> peerNodes = {&src2, &peer2};
+
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
         }
     }
 
-    memcpyInstance.printBenchmarkMatrix();
+    std::cout << "memcpy SM GPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
+
+// DtoD Bidir Write test - copy from src to dst using src context
 void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned long long loopCount) {
-    Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+    MemcpyOperationSM memcpyInstance(loopCount, true, true);
 
-    for (int targetDeviceId = 0; targetDeviceId < deviceCount; targetDeviceId++) {
-        std::vector<DeviceNode *> devicesDir1, devicesDir2, dstDevicesDir1, dstDevicesDir2;
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            devicesDir1.push_back(new DeviceNode(size, targetDeviceId));
-            devicesDir2.push_back(new DeviceNode(size, targetDeviceId));
-            dstDevicesDir1.push_back(new DeviceNode(size, deviceId));
-            dstDevicesDir2.push_back(new DeviceNode(size, deviceId));
-        }
-
-        if (parallel) {
-            #pragma omp parallel num_threads(deviceCount)
-            {
-                int deviceId = omp_get_thread_num();
-                memcpyInstance.doMemcpy(devicesDir1[deviceId], dstDevicesDir1[deviceId], devicesDir2[deviceId], dstDevicesDir2[deviceId]);
+    for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
+        for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+            if (peerDeviceId == srcDeviceId) {
+                continue;
             }
-        } else {
-            parallel = 1;
-            for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-                memcpyInstance.doMemcpy(devicesDir1[deviceId], dstDevicesDir1[deviceId], devicesDir2[deviceId], dstDevicesDir2[deviceId]);
+
+            DeviceNode src1(size, srcDeviceId), src2(size, srcDeviceId);
+            DeviceNode peer1(size, peerDeviceId), peer2(size, peerDeviceId);
+
+            if (!src1.enablePeerAcess(&peer1)) {
+                continue;
             }
-            parallel = 0;
-        }
 
-        for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-            delete devicesDir1[deviceId], devicesDir2[deviceId];
-            delete dstDevicesDir1[deviceId], dstDevicesDir2[deviceId];
+            std::vector<MemcpyNode*> srcNodes = {&src1, &peer1};
+            std::vector<MemcpyNode*> peerNodes = {&peer2, &src2};
+
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
         }
     }
 
-    memcpyInstance.printBenchmarkMatrix();
+    std::cout << "memcpy SM GPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_DtoD_paired_memcpy_read_SM(unsigned long long size, unsigned long long loopCount) {
-    Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
+//void launch_DtoD_paired_memcpy_read_SM(unsigned long long size, unsigned long long loopCount) {
+    // Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
 
-    std::vector<DeviceNode *> devices;
-    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        devices.push_back(new DeviceNode(size, deviceId));
-    }
+    // std::vector<DeviceNode *> devices;
+    // for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+    //     devices.push_back(new DeviceNode(size, deviceId));
+    // }
 
-    if (parallel) {
-        #pragma omp parallel num_threads(deviceCount / 2)
-        {
-            int deviceId = omp_get_thread_num();
-            memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
-        }
-    } else {
-        parallel = 1;
-        for (int deviceId = 0; deviceId < deviceCount / 2; deviceId++) {
-            memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
-        }
-        parallel = 0;
-    }
+    // if (parallel) {
+    //     #pragma omp parallel num_threads(deviceCount / 2)
+    //     {
+    //         int deviceId = omp_get_thread_num();
+    //         memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
+    //     }
+    // } else {
+    //     parallel = 1;
+    //     for (int deviceId = 0; deviceId < deviceCount / 2; deviceId++) {
+    //         memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
+    //     }
+    //     parallel = 0;
+    // }
 
-    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        delete devices[deviceId];
-    }
+    // for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+    //     delete devices[deviceId];
+    // }
 
-    memcpyInstance.printBenchmarkMatrix();
-}
+    // memcpyInstance.printBenchmarkMatrix();
+//}
 
-void launch_DtoD_paired_memcpy_write_SM(unsigned long long size, unsigned long long loopCount) {
-    Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
+//void launch_DtoD_paired_memcpy_write_SM(unsigned long long size, unsigned long long loopCount) {
+    // Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
 
-    std::vector<DeviceNode *> devices;
-    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        devices.push_back(new DeviceNode(size, deviceId));
-    }
+    // std::vector<DeviceNode *> devices;
+    // for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+    //     devices.push_back(new DeviceNode(size, deviceId));
+    // }
 
-    if (parallel) {
-        #pragma omp parallel num_threads(deviceCount / 2)
-        {
-            int deviceId = omp_get_thread_num();
-            memcpyInstance.doMemcpy(devices[deviceId + (deviceCount / 2)], devices[deviceId]);
-        }
-    } else {
-        parallel = 1;
-        for (int deviceId = 0; deviceId < deviceCount / 2; deviceId++) {
-            memcpyInstance.doMemcpy(devices[deviceId + (deviceCount / 2)], devices[deviceId]);
-        }
-        parallel = 0;
-    }
+    // if (parallel) {
+    //     #pragma omp parallel num_threads(deviceCount / 2)
+    //     {
+    //         int deviceId = omp_get_thread_num();
+    //         memcpyInstance.doMemcpy(devices[deviceId + (deviceCount / 2)], devices[deviceId]);
+    //     }
+    // } else {
+    //     parallel = 1;
+    //     for (int deviceId = 0; deviceId < deviceCount / 2; deviceId++) {
+    //         memcpyInstance.doMemcpy(devices[deviceId + (deviceCount / 2)], devices[deviceId]);
+    //     }
+    //     parallel = 0;
+    // }
 
-    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        delete devices[deviceId];
-    }
+    // for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+    //     delete devices[deviceId];
+    // }
 
-    memcpyInstance.printBenchmarkMatrix();
-}
+    // memcpyInstance.printBenchmarkMatrix();
+//}

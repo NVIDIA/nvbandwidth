@@ -9,23 +9,19 @@
 #define MEMCPY_H
 
 #include "common.h"
-#include "memory_utils.h"
-
-// Signature of a CE copy function (e.g. cuMemcpyAsync)
-typedef CUresult (*MemcpyCEFunc)(CUdeviceptr dst, CUdeviceptr src, size_t sizeInElement, CUstream stream);
-// Signature of an SM copy function (e.g. copyKernel)
-typedef CUresult (*MemcpySMFunc)(CUdeviceptr dst, CUdeviceptr src, size_t sizeInElement, CUstream stream, unsigned long long loopCount);
-
 
 class MemcpyNode {
 protected:
-  void *buffer{};
+    void* buffer{};
+    size_t bufferSize;
 public:
-    explicit MemcpyNode();
-    void *getBuffer();
+    MemcpyNode(size_t bufferSize);
+    CUdeviceptr getBuffer();
+    size_t getBufferSize();
+
     virtual int getNodeIdx() const = 0;
+    virtual CUcontext getPrimaryCtx() const = 0;
 };
-class Memcpy;
 
 // Represents the host buffer abstraction
 class HostNode : public MemcpyNode {
@@ -35,6 +31,7 @@ public:
     ~HostNode();
 
     int getNodeIdx() const override;
+    CUcontext getPrimaryCtx() const override;
 };
 
 // Represents the device buffer and context abstraction
@@ -46,44 +43,46 @@ public:
     DeviceNode(size_t bufferSize, int deviceIdx);
     ~DeviceNode();
 
-    CUcontext getPrimaryCtx() const;
     int getNodeIdx() const override;
+    CUcontext getPrimaryCtx() const override;
+
+    bool enablePeerAcess(const DeviceNode *peerNode);
 };
 
 // Abstraction of a memcpy operation
-class Memcpy {
+class MemcpyOperation {
 private:
-    size_t copySize;
-    MemcpyCEFunc ceFunc{nullptr};
-    MemcpySMFunc smFunc{nullptr};
-    CUcontext copyCtx;
-    CUstream *masterStream{nullptr};
-    CUevent *masterEvent{nullptr}; // Other memcpy operations wait on this event to start at the same time
-
     unsigned long long loopCount;
+
+protected:
     size_t *procMask;
+    bool preferSrcCtx;
+    bool sumResults;
 
-    PeerValueMatrix<double> *bandwidthValues{nullptr};
-
-    // Allocate the bandwidth values matrix
-    void allocateBandwidthMatrix(bool hostVector = false);
-    // Because of the parallel nature of copy kernel, the size of data passed is different from cuMemcpyAsync
-    size_t smCopySize() const;
-    // The main memcpy abstraction, it calls ceFunc/smFunc
-    unsigned long long doMemcpy(CUdeviceptr src, CUdeviceptr dst, bool skip = false);
+    // Pure virtual function for implementation of the actual memcpy function
+    virtual CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) = 0;
 public:
+    MemcpyOperation(unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
+    virtual ~MemcpyOperation();
 
-    Memcpy(MemcpyCEFunc memcpyFunc, size_t copySize, unsigned long long loopCount);
-    Memcpy(MemcpySMFunc memcpyFunc, size_t copySize, unsigned long long loopCount);
+    // Lists of paired nodes will be executed sumultaneously
+    // context of srcNodes is preferred (if not host) unless otherwise specified
+    double doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes);
+    double doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode);
+};
 
-    ~Memcpy();
+class MemcpyOperationSM : public MemcpyOperation {
+private:
+    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
+public:
+    MemcpyOperationSM(unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
+};
 
-    // To infer copy recipe (H2D, D2H, D2D)
-    void doMemcpy(HostNode *srcNode, DeviceNode *dstNode, HostNode *biDirSrc = nullptr, DeviceNode *biDirDst = nullptr);
-    void doMemcpy(DeviceNode *srcNode, HostNode *dstNode, DeviceNode *biDirSrc = nullptr, HostNode *biDirDst = nullptr);
-    void doMemcpy(DeviceNode *srcNode, DeviceNode *dstNode, DeviceNode *biDirSrc = nullptr, DeviceNode *biDirDst = nullptr);
-
-    void printBenchmarkMatrix(bool reverse = false);
+class MemcpyOperationCE : public MemcpyOperation {
+private:
+    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
+public:
+    MemcpyOperationCE(unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
 };
 
 #endif

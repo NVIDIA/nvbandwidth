@@ -5,7 +5,7 @@
  * permission of NVIDIA Corporation is prohibited.
  */
 
-#include "copy_kernel.cuh"
+#include "kernels.cuh"
 
 __global__ void stridingMemcpyKernel(unsigned int totalThreadCount, unsigned long long loopCount, uint4* dst, uint4* src, unsigned long long chunkSizeInElement) {
     volatile unsigned long long elapsed = 0;
@@ -78,5 +78,33 @@ CUresult copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t sizeInE
     dim3 gridDim(numSm, 1, 1);
     dim3 blockDim(numThreadPerBlock, 1, 1);
     stridingMemcpyKernel<<<gridDim, blockDim, sharedMemoryBytes, stream>>> (totalThreadCount, loopCount, dst, src, chunkSizeInElement);
+    return CUDA_SUCCESS;
+}
+
+__global__ void spinKernel(volatile int *latch, const unsigned long long timeoutClocks)
+{
+    register unsigned long long endTime = clock64() + timeoutClocks;
+    while (!*latch) {
+        if (timeoutClocks != ~0ULL && clock64() > endTime) {
+            break;
+        }
+    }
+}
+
+CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long timeoutNs)
+{
+    int clocksPerMs = 0;
+    CUcontext ctx;
+    CUdevice dev;
+
+    CU_ASSERT(cuStreamGetCtx(stream, &ctx));
+    CU_ASSERT(cuCtxGetDevice(&dev));
+
+    CU_ASSERT(cuDeviceGetAttribute(&clocksPerMs, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, dev));
+
+    unsigned long long timeoutClocks = (clocksPerMs * timeoutNs) / 1000;
+
+    spinKernel<<<1, 1, 0, stream>>>(latch, timeoutClocks);
+
     return CUDA_SUCCESS;
 }

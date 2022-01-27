@@ -166,14 +166,12 @@ public:
     double smallest(void) const { return m_smallest; }
 };
 
-typedef PerformanceStatistic cudaStat;
-
 #define STAT_MEAN(s) (s).average()
 #define STAT_ERROR(s) (s).stddev()
 #define STAT_MAX(s) (s).largest()
 #define STAT_MIN(s) (s).smallest()
 
-static std::ostream &operator<<(std::ostream &o, const cudaStat &s) {
+static std::ostream &operator<<(std::ostream &o, const PerformanceStatistic &s) {
     return o << STAT_MEAN(s) << "(+/- " << STAT_ERROR(s) << ')';
 }
 
@@ -266,6 +264,17 @@ inline void setOptimalCpuAffinity(int cudaDeviceID) {
 
     NVML_ASSERT(nvmlDeviceGetHandleByUUID(s.str().c_str(), &device));
     NVML_ASSERT(nvmlDeviceSetCpuAffinity(device));
+}
+
+inline bool isMemoryOwnedByCUDA(void *memory) {
+    CUmemorytype memorytype;
+    CUresult status = cuPointerGetAttribute(&memorytype, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (CUdeviceptr)memory);
+    if (status == CUDA_ERROR_INVALID_VALUE) {
+        return false;
+    } else {
+        CU_ASSERT(status);
+        return true;
+    }
 }
 
 #endif
