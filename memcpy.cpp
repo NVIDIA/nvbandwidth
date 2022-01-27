@@ -10,13 +10,17 @@
 
 #define WARMUP_COUNT 4
 
-MemcpyNode::MemcpyNode(): buffer(nullptr) {}
+MemcpyNode::MemcpyNode(size_t bufferSize): bufferSize(bufferSize), buffer(nullptr) {}
 
 CUdeviceptr MemcpyNode::getBuffer() {
     return (CUdeviceptr)buffer;
 }
 
-HostNode::HostNode(size_t bufferSize, int targetDeviceId): MemcpyNode() {
+size_t MemcpyNode::getBufferSize() {
+    return bufferSize;
+}
+
+HostNode::HostNode(size_t bufferSize, int targetDeviceId): MemcpyNode(bufferSize) {
     CUcontext targetCtx;
 
     // Before allocating host memory, set correct NUMA affinity
@@ -45,7 +49,7 @@ int HostNode::getNodeIdx() const {
     return 0;
 }
 
-DeviceNode::DeviceNode(size_t bufferSize, int deviceIdx): deviceIdx(deviceIdx), MemcpyNode() {
+DeviceNode::DeviceNode(size_t bufferSize, int deviceIdx): deviceIdx(deviceIdx), MemcpyNode(bufferSize) {
     CU_ASSERT(cuDevicePrimaryCtxRetain(&primaryCtx, deviceIdx));
     CU_ASSERT(cuCtxSetCurrent(primaryCtx));
     CU_ASSERT(cuMemAlloc((CUdeviceptr*)&buffer, bufferSize));
@@ -85,8 +89,8 @@ bool DeviceNode::enablePeerAcess(const DeviceNode *peerNode) {
     return false;
 }
 
-MemcpyOperation::MemcpyOperation(size_t copySize, unsigned long long loopCount, bool preferSrcCtx, bool sumResults) : 
-        copySize(copySize), loopCount(loopCount), preferSrcCtx(preferSrcCtx), sumResults(sumResults)
+MemcpyOperation::MemcpyOperation(unsigned long long loopCount, bool preferSrcCtx, bool sumResults) : 
+        loopCount(loopCount), preferSrcCtx(preferSrcCtx), sumResults(sumResults)
 {
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
     PROC_MASK_SET(procMask, getFirstEnabledCPU());
@@ -139,7 +143,7 @@ double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<
             CU_ASSERT(spinKernel(blockingVar, streams[i]));
             
             // warmup
-            CU_ASSERT(memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], WARMUP_COUNT));
+            CU_ASSERT(memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), WARMUP_COUNT));
         }
 
         CU_ASSERT(cuCtxSetCurrent(contexts[0]));
@@ -153,7 +157,8 @@ double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<
 
         for (int i = 0; i < srcNodes.size(); i++) {
             CU_ASSERT(cuCtxSetCurrent(contexts[i]));
-            CU_ASSERT(memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], loopCount));
+            assert(srcNodes[i]->getBufferSize() == dstNodes[i]->getBufferSize());
+            CU_ASSERT(memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), loopCount));
             CU_ASSERT(cuEventRecord(endEvents[i], streams[i]));
         }
 
@@ -165,10 +170,10 @@ double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<
         }
 
         for (int i = 0; i < bandwidthStats.size(); i++) {
-        float timeWithEvents = 0.0f;
-        CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvents[0], endEvents[0]));
+            float timeWithEvents = 0.0f;
+            CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvents[i], endEvents[i]));
             double elapsedWithEventsInUs = ((double) timeWithEvents * 1000.0);
-            unsigned long long bandwidth = (copySize * loopCount * 1000ull * 1000ull) / (unsigned long long) elapsedWithEventsInUs;
+            unsigned long long bandwidth = (srcNodes[i]->getBufferSize() * loopCount * 1000ull * 1000ull) / (unsigned long long) elapsedWithEventsInUs;
             bandwidthStats[i]((double) bandwidth);
             VERBOSE << "\tSample " << n << ' ' << std::fixed << std::setprecision(2) << (double) bandwidth * 1e-9 << " GB/s\n";
         }
@@ -186,7 +191,7 @@ double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<
     if (sumResults) {
         double sum = 0.0;
         for (auto stat : bandwidthStats) {
-            sum += (double)(STAT_MEAN(bandwidthStats[0]) * 1e-9);
+            sum += (double)(STAT_MEAN(stat) * 1e-9);
         }
         return sum;
     } else {
@@ -194,10 +199,10 @@ double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<
     }
 }
 
-MemcpyOperationSM::MemcpyOperationSM(size_t copySize, unsigned long long loopCount, bool preferSrcCtx, bool sumResults) : 
-        MemcpyOperation(copySize, loopCount, preferSrcCtx, sumResults) {}
+MemcpyOperationSM::MemcpyOperationSM(unsigned long long loopCount, bool preferSrcCtx, bool sumResults) : 
+        MemcpyOperation(loopCount, preferSrcCtx, sumResults) {}
 
-CUresult MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, unsigned long long loopCount) {
+CUresult MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
     CUdevice cudaDevice;
     int multiProcessorCount;
     size_t size = copySize;
@@ -213,10 +218,10 @@ CUresult MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstrea
     return CUDA_SUCCESS;
 }
 
-MemcpyOperationCE::MemcpyOperationCE(size_t copySize, unsigned long long loopCount, bool preferSrcCtx, bool sumResults) : 
-        MemcpyOperation(copySize, loopCount, preferSrcCtx, sumResults) {}
+MemcpyOperationCE::MemcpyOperationCE(unsigned long long loopCount, bool preferSrcCtx, bool sumResults) : 
+        MemcpyOperation(loopCount, preferSrcCtx, sumResults) {}
 
-CUresult MemcpyOperationCE::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, unsigned long long loopCount) {
+CUresult MemcpyOperationCE::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
     for (unsigned int l = 0; l < loopCount; l++) {
         CU_ASSERT(cuMemcpyAsync(dst, src, copySize, stream));
     }

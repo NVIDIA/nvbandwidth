@@ -13,9 +13,11 @@
 class MemcpyNode {
 protected:
     void* buffer{};
+    size_t bufferSize;
 public:
-    explicit MemcpyNode();
+    MemcpyNode(size_t bufferSize);
     CUdeviceptr getBuffer();
+    size_t getBufferSize();
 
     virtual int getNodeIdx() const = 0;
     virtual CUcontext getPrimaryCtx() const = 0;
@@ -53,15 +55,14 @@ private:
     unsigned long long loopCount;
 
 protected:
-    size_t copySize;
     size_t *procMask;
     bool preferSrcCtx;
     bool sumResults;
 
     // Pure virtual function for implementation of the actual memcpy function
-    virtual CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, unsigned long long loopCount) = 0;
+    virtual CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) = 0;
 public:
-    MemcpyOperation(size_t copySize, unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
+    MemcpyOperation(unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
     virtual ~MemcpyOperation();
 
     // Lists of paired nodes will be executed sumultaneously
@@ -72,16 +73,16 @@ public:
 
 class MemcpyOperationSM : public MemcpyOperation {
 private:
-    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, unsigned long long loopCount);
+    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
 public:
-    MemcpyOperationSM(size_t copySize, unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
+    MemcpyOperationSM(unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
 };
 
 class MemcpyOperationCE : public MemcpyOperation {
 private:
-    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, unsigned long long loopCount);
+    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
 public:
-    MemcpyOperationCE(size_t copySize, unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
+    MemcpyOperationCE(unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
 };
 
 #endif
