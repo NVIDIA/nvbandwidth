@@ -61,18 +61,32 @@ public:
 
 // Abstraction of a memcpy operation
 class MemcpyOperation {
+public:
+    // Specifies the preferred node's context to do the operation from
+    // It's only a preference because of the preferred node is a HostNode, it has no context and will fall back to the other node
+    enum ContextPreference { 
+            PREFER_SRC_CONTEXT,    // Prefer the source Node's context if available
+            PREFER_DST_CONTEXT     // Prefer the destination Node's context if available
+    };
+
+    // Specifies which bandwidths to use for the final result of simultaneous copies
+    enum BandwidthValue { 
+            USE_FIRST_BW,      // Use the bandwidth of the first copy in the simultaneous copy list
+            SUM_BW             // Use the sum of all bandwidths from the simultaneous copy list
+    };
+    
 private:
     unsigned long long loopCount;
 
 protected:
     size_t *procMask;
-    bool preferSrcCtx;
-    bool sumResults;
+    ContextPreference ctxPreference;
+    BandwidthValue bandwidthValue;
 
     // Pure virtual function for implementation of the actual memcpy function
     virtual CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) = 0;
 public:
-    MemcpyOperation(unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
+    MemcpyOperation(unsigned long long loopCount, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
     virtual ~MemcpyOperation();
 
     // Lists of paired nodes will be executed sumultaneously
@@ -85,14 +99,14 @@ class MemcpyOperationSM : public MemcpyOperation {
 private:
     CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
 public:
-    MemcpyOperationSM(unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
+    MemcpyOperationSM(unsigned long long loopCount, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::SUM_BW);
 };
 
 class MemcpyOperationCE : public MemcpyOperation {
 private:
     CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
 public:
-    MemcpyOperationCE(unsigned long long loopCount, bool preferSrcCtx = true, bool sumResults = false);
+    MemcpyOperationCE(unsigned long long loopCount, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
 };
 
 #endif
