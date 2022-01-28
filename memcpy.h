@@ -63,7 +63,7 @@ public:
 class MemcpyOperation {
 public:
     // Specifies the preferred node's context to do the operation from
-    // It's only a preference because of the preferred node is a HostNode, it has no context and will fall back to the other node
+    // It's only a preference because if the preferred node is a HostNode, it has no context and will fall back to the other node
     enum ContextPreference { 
             PREFER_SRC_CONTEXT,    // Prefer the source Node's context if available
             PREFER_DST_CONTEXT     // Prefer the destination Node's context if available
@@ -74,7 +74,7 @@ public:
             USE_FIRST_BW,      // Use the bandwidth of the first copy in the simultaneous copy list
             SUM_BW             // Use the sum of all bandwidths from the simultaneous copy list
     };
-    
+
 private:
     unsigned long long loopCount;
 
