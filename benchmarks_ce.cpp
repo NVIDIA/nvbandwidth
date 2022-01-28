@@ -90,7 +90,7 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
 // DtoD Read test - copy from dst to src (backwards) using src contxt
 void launch_DtoD_memcpy_read_CE(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
-    MemcpyOperationCE memcpyInstance(loopCount);
+    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {

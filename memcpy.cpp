@@ -99,8 +99,8 @@ bool DeviceNode::enablePeerAcess(const DeviceNode *peerNode) {
     return false;
 }
 
-MemcpyOperation::MemcpyOperation(unsigned long long loopCount, bool preferSrcCtx, bool sumResults) : 
-        loopCount(loopCount), preferSrcCtx(preferSrcCtx), sumResults(sumResults)
+MemcpyOperation::MemcpyOperation(unsigned long long loopCount, ContextPreference ctxPreference, BandwidthValue bandwidthValue) : 
+        loopCount(loopCount), ctxPreference(ctxPreference), bandwidthValue(bandwidthValue)
 {
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
     PROC_MASK_SET(procMask, getFirstEnabledCPU());
@@ -128,7 +128,7 @@ double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<
 
     for (int i = 0; i < srcNodes.size(); i++) {
         // prefer source context
-        if (preferSrcCtx && srcNodes[i]->getPrimaryCtx() != nullptr) {
+        if (ctxPreference == MemcpyOperation::PREFER_SRC_CONTEXT && srcNodes[i]->getPrimaryCtx() != nullptr) {
             CU_ASSERT(cuCtxSetCurrent(srcNodes[i]->getPrimaryCtx()));
             contexts[i] = srcNodes[i]->getPrimaryCtx();
         } else if (dstNodes[i]->getPrimaryCtx() != nullptr) {
@@ -198,7 +198,7 @@ double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<
         CU_ASSERT(cuEventDestroy(endEvents[i]));
     }
 
-    if (sumResults) {
+    if (bandwidthValue == BandwidthValue::SUM_BW) {
         double sum = 0.0;
         for (auto stat : bandwidthStats) {
             sum += (double)(STAT_MEAN(stat) * 1e-9);
@@ -209,8 +209,8 @@ double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<
     }
 }
 
-MemcpyOperationSM::MemcpyOperationSM(unsigned long long loopCount, bool preferSrcCtx, bool sumResults) : 
-        MemcpyOperation(loopCount, preferSrcCtx, sumResults) {}
+MemcpyOperationSM::MemcpyOperationSM(unsigned long long loopCount, ContextPreference ctxPreference, BandwidthValue bandwidthValue) : 
+        MemcpyOperation(loopCount, ctxPreference, bandwidthValue) {}
 
 CUresult MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
     CUdevice cudaDevice;
@@ -228,8 +228,8 @@ CUresult MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstrea
     return CUDA_SUCCESS;
 }
 
-MemcpyOperationCE::MemcpyOperationCE(unsigned long long loopCount, bool preferSrcCtx, bool sumResults) : 
-        MemcpyOperation(loopCount, preferSrcCtx, sumResults) {}
+MemcpyOperationCE::MemcpyOperationCE(unsigned long long loopCount, ContextPreference ctxPreference, BandwidthValue bandwidthValue) : 
+        MemcpyOperation(loopCount, ctxPreference, bandwidthValue) {}
 
 CUresult MemcpyOperationCE::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
     for (unsigned int l = 0; l < loopCount; l++) {
