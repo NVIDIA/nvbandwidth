@@ -120,8 +120,8 @@ void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned 
             }
 
             // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            std::vector<MemcpyNode*> srcNodes = {&peer1, &src1};
-            std::vector<MemcpyNode*> peerNodes = {&src2, &peer2};
+            std::vector<MemcpyNode*> srcNodes = {&peer1, &src2};
+            std::vector<MemcpyNode*> peerNodes = {&src1, &peer2};
 
             bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
         }
@@ -150,8 +150,8 @@ void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned
                 continue;
             }
 
-            std::vector<MemcpyNode*> srcNodes = {&src1, &peer1};
-            std::vector<MemcpyNode*> peerNodes = {&peer2, &src2};
+            std::vector<MemcpyNode*> srcNodes = {&src1, &peer2};
+            std::vector<MemcpyNode*> peerNodes = {&peer1, &src2};
 
             bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
         }
