@@ -2,11 +2,11 @@
 Memory copy performance microbenchmark.
 
 ## Dependencies
-To build and run NVBandwidth please install the Boost program_options (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html) and Boost exceptions (https://www.boost.org/doc/libs/1_66_0/libs/exception/doc/boost-exception.html).
+To build and run NVBandwidth please install the Boost program_options (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html).
 
 Ubuntu/Debian users can run the following to install:
 ```
-apt install libboost-exception-dev libboost-program-options-dev
+apt install libboost-program-options-dev
 ```
 
 ## Build
@@ -14,11 +14,7 @@ To build the `nvbandwidth` executable:
 ```
 make
 ```
-
-If you plan on making changes to `sm_memcpy_kernel.cu` which is the module containing the memcpy kernel used for SM tests, run
-```
-nvcc -ptx -c sm_memcpy_kernel.cu -o sm_memcpy_kernel.ptx
-```
+CUDA is assumed to be installed in /usr/local/cuda
 
 ## Usage:
 To list available benchmarks:
@@ -26,7 +22,12 @@ To list available benchmarks:
 ./nvbandwidth -l
 ```
 
-To run a benchmarks:
+To run all benchmarks:
+```
+./nvbandwidth
+```
+
+To run a specific benchmark:
 ```
 ./nvbandwidth -b host_to_device_bidirectional_memcpy_ce
 ```
