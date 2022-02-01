@@ -26,8 +26,8 @@ protected:
     size_t bufferSize;
 public:
     MemcpyNode(size_t bufferSize);
-    CUdeviceptr getBuffer();
-    size_t getBufferSize();
+    CUdeviceptr getBuffer() const;
+    size_t getBufferSize() const;
 
     virtual int getNodeIdx() const = 0;
     virtual CUcontext getPrimaryCtx() const = 0;
@@ -56,7 +56,7 @@ public:
     int getNodeIdx() const override;
     CUcontext getPrimaryCtx() const override;
 
-    bool enablePeerAcess(const DeviceNode *peerNode);
+    bool enablePeerAcess(const DeviceNode &peerNode);
 };
 
 // Abstraction of a memcpy operation
@@ -91,8 +91,8 @@ public:
 
     // Lists of paired nodes will be executed sumultaneously
     // context of srcNodes is preferred (if not host) unless otherwise specified
-    double doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes);
-    double doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode);
+    double doMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes);
+    double doMemcpy(const MemcpyNode &srcNode, const MemcpyNode &dstNode);
 };
 
 class MemcpyOperationSM : public MemcpyOperation {

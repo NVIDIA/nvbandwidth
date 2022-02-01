@@ -22,11 +22,11 @@
 
 MemcpyNode::MemcpyNode(size_t bufferSize): bufferSize(bufferSize), buffer(nullptr) {}
 
-CUdeviceptr MemcpyNode::getBuffer() {
+CUdeviceptr MemcpyNode::getBuffer() const {
     return (CUdeviceptr)buffer;
 }
 
-size_t MemcpyNode::getBufferSize() {
+size_t MemcpyNode::getBufferSize() const {
     return bufferSize;
 }
 
@@ -79,18 +79,18 @@ int DeviceNode::getNodeIdx() const {
     return deviceIdx;
 }
 
-bool DeviceNode::enablePeerAcess(const DeviceNode *peerNode) {
+bool DeviceNode::enablePeerAcess(const DeviceNode &peerNode) {
     int canAccessPeer = 0;
-    CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, getNodeIdx(), peerNode->getNodeIdx()));
+    CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, getNodeIdx(), peerNode.getNodeIdx()));
     if (canAccessPeer) {
         CUresult res;
-        CU_ASSERT(cuCtxSetCurrent(peerNode->getPrimaryCtx()));
+        CU_ASSERT(cuCtxSetCurrent(peerNode.getPrimaryCtx()));
         res = cuCtxEnablePeerAccess(getPrimaryCtx(), 0);
         if (res != CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED)
             CU_ASSERT(res);
 
         CU_ASSERT(cuCtxSetCurrent(getPrimaryCtx()));
-        res = cuCtxEnablePeerAccess(peerNode->getPrimaryCtx(), 0);
+        res = cuCtxEnablePeerAccess(peerNode.getPrimaryCtx(), 0);
         if (res != CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED)
             CU_ASSERT(res);
 
@@ -110,13 +110,13 @@ MemcpyOperation::~MemcpyOperation() {
     PROC_MASK_CLEAR(procMask, 0);
 }
 
-double MemcpyOperation::doMemcpy(MemcpyNode* srcNode, MemcpyNode* dstNode) {
-    std::vector<MemcpyNode*> srcNodes = {srcNode};
-    std::vector<MemcpyNode*> dstNodes = {dstNode};
+double MemcpyOperation::doMemcpy(const MemcpyNode &srcNode, const MemcpyNode &dstNode) {
+    std::vector<const MemcpyNode*> srcNodes = {&srcNode};
+    std::vector<const MemcpyNode*> dstNodes = {&dstNode};
     return doMemcpy(srcNodes, dstNodes);
 }
 
-double MemcpyOperation::doMemcpy(std::vector<MemcpyNode*> srcNodes, std::vector<MemcpyNode*> dstNodes) {
+double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes) {
     volatile int* blockingVar;
     std::vector<CUcontext> contexts(srcNodes.size());
     std::vector<CUstream> streams(srcNodes.size());
