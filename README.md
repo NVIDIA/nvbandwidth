@@ -2,7 +2,7 @@
 Memory copy performance microbenchmark.
 
 ## Dependencies
-To build and run NVBandwidth please install the Boost program_options (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html).
+To build and run NVBandwidth please install the Boost program_options library (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html).
 
 Ubuntu/Debian users can run the following to install:
 ```
