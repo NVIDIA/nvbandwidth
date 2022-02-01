@@ -185,8 +185,9 @@ void launch_AlltoH_memcpy_CE(unsigned long long size, unsigned long long loopCou
                 continue;
             }
 
-            deviceNodes.push_back(new DeviceNode(size, interferenceDeviceId));
-            hostNodes.push_back(new HostNode(size, interferenceDeviceId));
+            // Double the size of the interference copy to ensure it interferes correctly
+            deviceNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
+            hostNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
         }
 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNodes, hostNodes);
@@ -220,8 +221,9 @@ void launch_HtoAll_memcpy_CE(unsigned long long size, unsigned long long loopCou
                 continue;
             }
 
-            deviceNodes.push_back(new DeviceNode(size, interferenceDeviceId));
-            hostNodes.push_back(new HostNode(size, interferenceDeviceId));
+            // Double the size of the interference copy to ensure it interferes correctly
+            deviceNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
+            hostNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
         }
 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNodes, deviceNodes);
