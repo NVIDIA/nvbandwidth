@@ -26,7 +26,7 @@ void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount
         HostNode hostNode(size, deviceId);
         DeviceNode deviceNode(size, deviceId);
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(&hostNode, &deviceNode);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNode, deviceNode);
     }
 
     std::cout << "memcpy SM CPU -> GPU bandwidth (GB/s)" << std::endl;
@@ -41,7 +41,7 @@ void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount
         HostNode hostNode(size, deviceId);
         DeviceNode deviceNode(size, deviceId);
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(&deviceNode, &hostNode);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNode, hostNode);
     }
 
     std::cout << "memcpy SM GPU -> CPU bandwidth (GB/s)" << std::endl;
@@ -62,12 +62,12 @@ void launch_DtoD_memcpy_read_SM(unsigned long long size, unsigned long long loop
             DeviceNode srcNode(size, srcDeviceId);
             DeviceNode peerNode(size, peerDeviceId);
 
-            if (!srcNode.enablePeerAcess(&peerNode)) {
+            if (!srcNode.enablePeerAcess(peerNode)) {
                 continue;
             }
 
             // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&peerNode, &srcNode);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(peerNode, srcNode);
         }
     }
 
@@ -89,11 +89,11 @@ void launch_DtoD_memcpy_write_SM(unsigned long long size, unsigned long long loo
             DeviceNode srcNode(size, srcDeviceId);
             DeviceNode peerNode(size, peerDeviceId);
 
-            if (!srcNode.enablePeerAcess(&peerNode)) {
+            if (!srcNode.enablePeerAcess(peerNode)) {
                 continue;
             }
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&srcNode, &peerNode);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNode, peerNode);
         }
     }
 
@@ -115,13 +115,13 @@ void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned 
             DeviceNode src1(size, srcDeviceId), src2(size, srcDeviceId);
             DeviceNode peer1(size, peerDeviceId), peer2(size, peerDeviceId);
 
-            if (!src1.enablePeerAcess(&peer1)) {
+            if (!src1.enablePeerAcess(peer1)) {
                 continue;
             }
 
             // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            std::vector<MemcpyNode*> srcNodes = {&peer1, &src2};
-            std::vector<MemcpyNode*> peerNodes = {&src1, &peer2};
+            std::vector<const MemcpyNode*> srcNodes = {&peer1, &src2};
+            std::vector<const MemcpyNode*> peerNodes = {&src1, &peer2};
 
             bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
         }
@@ -146,12 +146,12 @@ void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned
             DeviceNode src1(size, srcDeviceId), src2(size, srcDeviceId);
             DeviceNode peer1(size, peerDeviceId), peer2(size, peerDeviceId);
 
-            if (!src1.enablePeerAcess(&peer1)) {
+            if (!src1.enablePeerAcess(peer1)) {
                 continue;
             }
 
-            std::vector<MemcpyNode*> srcNodes = {&src1, &peer2};
-            std::vector<MemcpyNode*> peerNodes = {&peer1, &src2};
+            std::vector<const MemcpyNode*> srcNodes = {&src1, &peer2};
+            std::vector<const MemcpyNode*> peerNodes = {&peer1, &src2};
 
             bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
         }
@@ -160,61 +160,3 @@ void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned
     std::cout << "memcpy SM GPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
-
-//void launch_DtoD_paired_memcpy_read_SM(unsigned long long size, unsigned long long loopCount) {
-    // Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
-
-    // std::vector<DeviceNode *> devices;
-    // for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-    //     devices.push_back(new DeviceNode(size, deviceId));
-    // }
-
-    // if (parallel) {
-    //     #pragma omp parallel num_threads(deviceCount / 2)
-    //     {
-    //         int deviceId = omp_get_thread_num();
-    //         memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
-    //     }
-    // } else {
-    //     parallel = 1;
-    //     for (int deviceId = 0; deviceId < deviceCount / 2; deviceId++) {
-    //         memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
-    //     }
-    //     parallel = 0;
-    // }
-
-    // for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-    //     delete devices[deviceId];
-    // }
-
-    // memcpyInstance.printBenchmarkMatrix();
-//}
-
-//void launch_DtoD_paired_memcpy_write_SM(unsigned long long size, unsigned long long loopCount) {
-    // Memcpy memcpyInstance = Memcpy(copyKernel, size, loopCount);
-
-    // std::vector<DeviceNode *> devices;
-    // for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-    //     devices.push_back(new DeviceNode(size, deviceId));
-    // }
-
-    // if (parallel) {
-    //     #pragma omp parallel num_threads(deviceCount / 2)
-    //     {
-    //         int deviceId = omp_get_thread_num();
-    //         memcpyInstance.doMemcpy(devices[deviceId + (deviceCount / 2)], devices[deviceId]);
-    //     }
-    // } else {
-    //     parallel = 1;
-    //     for (int deviceId = 0; deviceId < deviceCount / 2; deviceId++) {
-    //         memcpyInstance.doMemcpy(devices[deviceId + (deviceCount / 2)], devices[deviceId]);
-    //     }
-    //     parallel = 0;
-    // }
-
-    // for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-    //     delete devices[deviceId];
-    // }
-
-    // memcpyInstance.printBenchmarkMatrix();
-//}

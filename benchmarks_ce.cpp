@@ -27,7 +27,7 @@ void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount
         HostNode hostNode(size, deviceId);
         DeviceNode deviceNode(size, deviceId);
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(&hostNode, &deviceNode);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNode, deviceNode);
     }
 
     std::cout << "memcpy CE CPU -> GPU bandwidth (GB/s)" << std::endl;
@@ -42,7 +42,7 @@ void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount
         HostNode hostNode(size, deviceId);
         DeviceNode deviceNode(size, deviceId);
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(&deviceNode, &hostNode);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNode, hostNode);
     }
 
     std::cout << "memcpy CE GPU -> CPU bandwidth (GB/s)" << std::endl;
@@ -58,8 +58,8 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
         HostNode host1(size, deviceId), host2(size * 2, deviceId);
         DeviceNode dev1(size, deviceId), dev2(size * 2, deviceId);
 
-        std::vector<MemcpyNode*> srcNodes = {&host1, &dev2};
-        std::vector<MemcpyNode*> dstNodes = {&dev1, &host2};
+        std::vector<const MemcpyNode*> srcNodes = {&host1, &dev2};
+        std::vector<const MemcpyNode*> dstNodes = {&dev1, &host2};
 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
     }
@@ -77,8 +77,8 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
         HostNode host1(size, deviceId), host2(size * 2, deviceId);
         DeviceNode dev1(size, deviceId), dev2(size * 2, deviceId);
 
-        std::vector<MemcpyNode*> srcNodes = {&dev1, &host2};
-        std::vector<MemcpyNode*> dstNodes = {&host1, &dev2};
+        std::vector<const MemcpyNode*> srcNodes = {&dev1, &host2};
+        std::vector<const MemcpyNode*> dstNodes = {&host1, &dev2};
 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
     }
@@ -101,12 +101,12 @@ void launch_DtoD_memcpy_read_CE(unsigned long long size, unsigned long long loop
             DeviceNode srcNode(size, srcDeviceId);
             DeviceNode peerNode(size, peerDeviceId);
 
-            if (!srcNode.enablePeerAcess(&peerNode)) {
+            if (!srcNode.enablePeerAcess(peerNode)) {
                 continue;
             }
 
             // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&peerNode, &srcNode);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(peerNode, srcNode);
         }
     }
 
@@ -128,11 +128,11 @@ void launch_DtoD_memcpy_write_CE(unsigned long long size, unsigned long long loo
             DeviceNode srcNode(size, srcDeviceId);
             DeviceNode peerNode(size, peerDeviceId);
 
-            if (!srcNode.enablePeerAcess(&peerNode)) {
+            if (!srcNode.enablePeerAcess(peerNode)) {
                 continue;
             }
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(&srcNode, &peerNode);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNode, peerNode);
         }
     }
 
@@ -154,12 +154,12 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
             DeviceNode src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
             DeviceNode peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
 
-            if (!src1.enablePeerAcess(&peer1)) {
+            if (!src1.enablePeerAcess(peer1)) {
                 continue;
             }
 
-            std::vector<MemcpyNode*> srcNodes = {&src1, &peer2};
-            std::vector<MemcpyNode*> peerNodes = {&peer1, &src2};
+            std::vector<const MemcpyNode*> srcNodes = {&src1, &peer2};
+            std::vector<const MemcpyNode*> peerNodes = {&peer1, &src2};
 
             bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
         }
@@ -169,62 +169,74 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-//void launch_DtoD_paired_memcpy_read_CE(unsigned long long size, unsigned long long loopCount) {
-    //TODO fix me
-    // Memcpy memcpyInstance = Memcpy(cuMemcpyAsync, size, loopCount);
+void launch_AlltoH_memcpy_CE(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+    MemcpyOperationCE memcpyInstance(loopCount);
 
-    // std::vector<DeviceNode *> devices;
-    // for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-    //     devices.push_back(new DeviceNode(size, deviceId));
-    // }
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        std::vector<const MemcpyNode*> deviceNodes;
+        std::vector<const MemcpyNode*> hostNodes;
 
-    // if (parallel) {
-    //     #pragma omp parallel num_threads(deviceCount / 2)
-    //     {
-    //         int deviceId = omp_get_thread_num();
-    //         memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
-    //     }
-    // } else {
-    //     parallel = 1;
-    //     for (int deviceId = 0; deviceId < deviceCount / 2; deviceId++) {
-    //         memcpyInstance.doMemcpy(devices[deviceId], devices[deviceId + (deviceCount / 2)]);
-    //     }
-    //     parallel = 0;
-    // }
+        deviceNodes.push_back(new DeviceNode(size, deviceId));
+        hostNodes.push_back(new HostNode(size, deviceId));
 
-    // for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-    //     delete devices[deviceId];
-    // }
+        for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
+            if (interferenceDeviceId == deviceId) {
+                continue;
+            }
 
-    // memcpyInstance.printBenchmarkMatrix();
-//}
+            // Double the size of the interference copy to ensure it interferes correctly
+            deviceNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
+            hostNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
+        }
 
-//void launch_DtoD_paired_memcpy_write_CE(unsigned long long size, unsigned long long loopCount) {
-    // TODO fix me
-//     Memcpy memcpyInstance = Memcpy(cuMemcpyAsync, size, loopCount);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNodes, hostNodes);
 
-//     std::vector<DeviceNode *> devices;
-//     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-//         devices.push_back(new DeviceNode(size, deviceId));
-//     }
+        for (auto node : deviceNodes) {
+            delete node;
+        }
 
-//     if (parallel) {
-//         #pragma omp parallel num_threads(deviceCount / 2)
-//         {
-//             int deviceId = omp_get_thread_num();
-//             memcpyInstance.doMemcpy(devices[deviceId + (deviceCount / 2)], devices[deviceId]);
-//         }
-//     } else {
-//         parallel = 1;
-//         for (int deviceId = 0; deviceId < deviceCount / 2; deviceId++) {
-//             memcpyInstance.doMemcpy(devices[deviceId + (deviceCount / 2)], devices[deviceId]);
-//         }
-//         parallel = 0;
-//     }
+        for (auto node : hostNodes) {
+            delete node;
+        }
+    }
 
-//     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-//         delete devices[deviceId];
-//     }
+    std::cout << "memcpy CE GPU -> CPU bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
 
-//     memcpyInstance.printBenchmarkMatrix();
-//}
+void launch_HtoAll_memcpy_CE(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+    MemcpyOperationCE memcpyInstance(loopCount);
+
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        std::vector<const MemcpyNode*> deviceNodes;
+        std::vector<const MemcpyNode*> hostNodes;
+
+        deviceNodes.push_back(new DeviceNode(size, deviceId));
+        hostNodes.push_back(new HostNode(size, deviceId));
+
+        for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
+            if (interferenceDeviceId == deviceId) {
+                continue;
+            }
+
+            // Double the size of the interference copy to ensure it interferes correctly
+            deviceNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
+            hostNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
+        }
+
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNodes, deviceNodes);
+
+        for (auto node : deviceNodes) {
+            delete node;
+        }
+
+        for (auto node : hostNodes) {
+            delete node;
+        }
+    }
+
+    std::cout << "memcpy CE CPU -> GPU bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
