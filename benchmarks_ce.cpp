@@ -30,7 +30,7 @@ void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNode, deviceNode);
     }
 
-    std::cout << "memcpy CE CPU -> GPU bandwidth (GB/s)" << std::endl;
+    std::cout << "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
@@ -45,7 +45,7 @@ void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNode, hostNode);
     }
 
-    std::cout << "memcpy CE GPU -> CPU bandwidth (GB/s)" << std::endl;
+    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
@@ -64,7 +64,7 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
     }
 
-    std::cout << "memcpy CE CPU <-> GPU bandwidth (GB/s)" << std::endl;
+    std::cout << "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
@@ -83,7 +83,7 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
     }
 
-    std::cout << "memcpy CE GPU <-> CPU bandwidth (GB/s)" << std::endl;
+    std::cout << "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
@@ -201,7 +201,7 @@ void launch_AlltoH_memcpy_CE(unsigned long long size, unsigned long long loopCou
         }
     }
 
-    std::cout << "memcpy CE GPU -> CPU bandwidth (GB/s)" << std::endl;
+    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
@@ -237,6 +237,6 @@ void launch_HtoAll_memcpy_CE(unsigned long long size, unsigned long long loopCou
         }
     }
 
-    std::cout << "memcpy CE CPU -> GPU bandwidth (GB/s)" << std::endl;
+    std::cout << "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
