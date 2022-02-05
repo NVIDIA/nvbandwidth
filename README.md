@@ -62,7 +62,7 @@ memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)
 
 Unidirectional tests measure the bandwidth between each pair in the output matrix individually. Traffic is not sent simultaneously.
 
-### Bidirectional Bandiwdth Tests
+### Bidirectional Host <-> Device Bandwidth Tests
 ```
 Running benchmark host_to_device_bidirectional_memcpy_ce.
 memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)
@@ -76,3 +76,21 @@ The setup for bidirectional host to device bandwidth transfer is shown below:
 Stream 0 (measured stream) performs writes to the device, while the interfering stream in the opposite direction produces reads. This pattern is reversed for measuring bidirectional device to host bandwidth as shown below.
 
 ![](diagrams/DtoHBidir.png)
+
+### Bidirectional Device <-> Device Bandwidth Tests
+The setup for bidirectional device to device transfers is shown below:
+
+![](diagrams/DtoDBidir.png)
+
+The test launches traffic on two streams: stream 0 launched on device 0 performs writes from device 0 to device 1 while the interference stream 1 launches opposite traffic performing writes from device 1 to device 0.
+
+CE bidirectional bandwidth tests calculate bandwidth on the measured stream:
+```
+CE bidir. bandwidth = (size of data on measured stream) / (time on measured stream)
+```
+However, SM bidirectional test launches memcpy kernels on source and peer GPUs as independent streams and calculates bandwidth as:
+```
+SM bidir. bandwidth = size/(time on stream1) + size/(time on stream2)
+```
+As a result, bidirectional bandwidth will appear approximately twice the unidirectional bandwidth for SM transfers, but the same metric will appear closer to unidirectional bandwidth for CE transfers. This is only a side-effect of how the final metric is computed.
+
