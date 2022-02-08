@@ -21,7 +21,7 @@ CUDA is assumed to be installed in /usr/local/cuda
 ./nvbandwidth -h
 NVBandwidth CLI:
   -h [ --help ]                Produce help message
-  --bufferSize arg (=67108864) Memcpy buffer size
+  --bufferSize arg (=67108864) Memcpy buffer size in bytes
   --loopCount arg (=16)        Iterations of memcpy to be performed
   -l [ --list ]                List available benchmarks
   -b [ --benchmark ] arg       Benchmark(s) to doMemcpy (by name or index)
@@ -55,7 +55,7 @@ CE copies use memcpy APIs. SM copies use kernels.
 ### Measurement Details
 ![](diagrams/measurement.png)
 
-A blocking kernel and CUDA Events are used to measure time to perform copies via SM or CE, and bandwidth is calculated from a series of copies.
+A blocking kernel and CUDA events are used to measure time to perform copies via SM or CE, and bandwidth is calculated from a series of copies.
 
 First, we enqueue a spin kernel that spins on a flag in host memory. The spin kernel spins on the device until all events for measurement have been fully enqueued into the measurement streams. This ensures that the overhead of enqueuing operations is excluded from the measurement of actual transfer over the interconnect. Next, we enqueue a start event, one or more iterations of memcpy and finally a stop event. Finally, we release the flag to start the measurement.
 
@@ -99,5 +99,3 @@ However, SM bidirectional test launches memcpy kernels on source and peer GPUs a
 ```
 SM bidir. bandwidth = size/(time on stream1) + size/(time on stream2)
 ```
-As a result, bidirectional bandwidth will appear approximately twice the unidirectional bandwidth for SM transfers, but the same metric will appear closer to unidirectional bandwidth for CE transfers. This is only a side-effect of how the final metric is computed.
-
