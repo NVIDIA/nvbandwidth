@@ -29,7 +29,7 @@ void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNode, deviceNode);
     }
 
-    std::cout << "memcpy SM CPU -> GPU bandwidth (GB/s)" << std::endl;
+    std::cout << "memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
@@ -44,7 +44,7 @@ void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNode, hostNode);
     }
 
-    std::cout << "memcpy SM GPU -> CPU bandwidth (GB/s)" << std::endl;
+    std::cout << "memcpy SM CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 

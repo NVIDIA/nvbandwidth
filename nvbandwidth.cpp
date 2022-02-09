@@ -104,7 +104,7 @@ int main(int argc, char **argv) {
     opt::options_description desc("NVBandwidth CLI");
     desc.add_options()
         ("help,h", "Produce help message")
-        ("bufferSize", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size")
+        ("bufferSize", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size in bytes")
         ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed")
         ("list,l", "List available benchmarks")
         ("benchmark,b", opt::value<std::vector<std::string>>(&benchmarksToRun)->multitoken(), "Benchmark(s) to doMemcpy (by name or index)")
