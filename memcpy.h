@@ -26,6 +26,7 @@ protected:
     size_t bufferSize;
 public:
     MemcpyNode(size_t bufferSize);
+    virtual ~MemcpyNode() {}
     CUdeviceptr getBuffer() const;
     size_t getBufferSize() const;
 
