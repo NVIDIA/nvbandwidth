@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
     std::vector<std::string> benchmarksToRun;
 
     // Args parsing
-    opt::options_description desc("NVBandwidth CLI");
+    opt::options_description desc("nvbandwidth CLI");
     desc.add_options()
         ("help,h", "Produce help message")
         ("bufferSize", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size in MiB")

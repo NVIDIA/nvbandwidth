@@ -1,8 +1,11 @@
-# NVBandwidth
-Memory copy performance microbenchmark.
+# nvbandwidth
+A tool for bandwidth measurements on NVIDIA GPUs.
+
+Measures bandwidth for various memcpy patterns across different links using copy engine or kernel copy methods.
+nvbandwidth does not guarantee accuracy across all systems. Sytem specific tuning may be required to achieve maximum bandwidth.
 
 ## Dependencies
-To build and run NVBandwidth please install the Boost program_options library (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html).
+To build and run nvbandwidth please install the Boost program_options library (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html).
 
 Ubuntu/Debian users can run the following to install:
 ```
@@ -20,7 +23,7 @@ You may need to set the BOOST_ROOT environment variable on Windows to tell CMake
 ## Usage:
 ```
 ./nvbandwidth -h
-NVBandwidth CLI:
+nvbandwidth CLI:
   -h [ --help ]                Produce help message
   --bufferSize arg (=67108864) Memcpy buffer size in bytes
   --loopCount arg (=16)        Iterations of memcpy to be performed
