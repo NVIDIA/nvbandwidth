@@ -21,6 +21,7 @@
 #include <iostream>
 
 #include "benchmark.h"
+#include "version.h"
 
 namespace opt = boost::program_options;
 
@@ -97,6 +98,9 @@ int main(int argc, char **argv) {
     averageLoopCount = defaultAverageLoopCount;
     disableP2P = true;
 
+    std::cout << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
+    std::cout << "Built from: " << GIT_VERSION << std::endl << std::endl;
+    
     std::vector<Benchmark> benchmarks = createBenchmarks();
     std::vector<std::string> benchmarksToRun;
 
@@ -137,6 +141,14 @@ int main(int argc, char **argv) {
     cuInit(0);
     nvmlInit();
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
+
+    int cudaVersion;
+    CU_ASSERT(cuDriverGetVersion(&cudaVersion));
+    std::cout << "Using CUDA Driver Version: " << cudaVersion << std::endl;
+
+    char driverVersion[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE];
+    NVML_ASSERT(nvmlSystemGetDriverVersion(driverVersion, NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE));
+    std::cout << "Using Driver Version: " << driverVersion << std::endl << std::endl;
 
     if (benchmarksToRun.size() == 0) {
         // run all benchmarks

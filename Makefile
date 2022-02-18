@@ -1,7 +1,8 @@
 TARGET = nvbandwidth
 CXX = g++
 CUDA_CXX = nvcc
-CFLAGS = 
+GIT_VERSION := "$(shell git describe --always --tags)"
+CFLAGS = -DGIT_VERSION=\"$(GIT_VERSION)\"
 LIBS = -lboost_program_options -lcuda -lnvidia-ml -L/usr/local/cuda/lib64 -lcudart
 INCLUDES = /usr/local/cuda/include
 
