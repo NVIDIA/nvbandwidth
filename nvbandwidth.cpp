@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
 
     char driverVersion[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE];
     NVML_ASSERT(nvmlSystemGetDriverVersion(driverVersion, NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE));
-    std::cout << "Using Driver Versions: " << driverVersion << std::endl << std::endl;
+    std::cout << "Using Driver Version: " << driverVersion << std::endl << std::endl;
 
     if (benchmarksToRun.size() == 0) {
         // run all benchmarks
