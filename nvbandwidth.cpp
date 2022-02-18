@@ -21,6 +21,7 @@
 #include <iostream>
 
 #include "benchmark.h"
+#include "version.h"
 
 namespace opt = boost::program_options;
 
@@ -97,6 +98,9 @@ int main(int argc, char **argv) {
     averageLoopCount = defaultAverageLoopCount;
     disableP2P = true;
 
+    std::cout << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
+    std::cout << "Built from: " << GIT_VERSION << std::endl << std::endl;
+    
     std::vector<Benchmark> benchmarks = createBenchmarks();
     std::vector<std::string> benchmarksToRun;
 
