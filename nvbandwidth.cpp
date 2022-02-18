@@ -138,6 +138,14 @@ int main(int argc, char **argv) {
     nvmlInit();
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
 
+    int cudaVersion;
+    CU_ASSERT(cuDriverGetVersion(&cudaVersion));
+    std::cout << "Using CUDA Version: " << cudaVersion << std::endl;
+
+    char driverVersion[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE];
+    NVML_ASSERT(nvmlSystemGetDriverVersion(driverVersion, NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE));
+    std::cout << "Using Driver Versions: " << driverVersion << std::endl << std::endl;
+
     if (benchmarksToRun.size() == 0) {
         // run all benchmarks
         for (auto benchmark : benchmarks) {
