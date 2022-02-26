@@ -31,6 +31,12 @@ execute_process(
 )
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGIT_VERSION=\\\"\"${GIT_VERSION}\"\\\"")
 
+if(WIN32)
+    set(NVML_LIB_NAME "nvml")
+else()
+    set(NVML_LIB_NAME "nvidia-ml")
+endif()
+
 add_executable(nvbandwidth ${src})
 target_include_directories(nvbandwidth PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES} .)
-target_link_libraries(nvbandwidth Boost::program_options nvidia-ml cuda)
+target_link_libraries(nvbandwidth Boost::program_options ${NVML_LIB_NAME} cuda)
