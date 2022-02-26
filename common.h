@@ -29,6 +29,7 @@
 #include <iostream>
 #include <ostream>
 #include <string>
+#include <sstream>
 #include <thread>
 #include <vector>
 #include <unordered_set>
