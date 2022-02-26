@@ -213,19 +213,7 @@ MemcpyOperationSM::MemcpyOperationSM(unsigned long long loopCount, ContextPrefer
         MemcpyOperation(loopCount, ctxPreference, bandwidthValue) {}
 
 CUresult MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
-    CUdevice cudaDevice;
-    int multiProcessorCount;
-    size_t size = copySize;
-
-    size /= sizeof(int4);
-    CU_ASSERT(cuCtxGetDevice(&cudaDevice));
-    CU_ASSERT(cuDeviceGetAttribute(&multiProcessorCount, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, cudaDevice));
-    unsigned long long totalThreadCount = (unsigned long long)(multiProcessorCount * numThreadPerBlock);
-    size = totalThreadCount * (size / totalThreadCount);
-
-    CU_ASSERT(copyKernel(dst, src, size, stream, loopCount));
-
-    return CUDA_SUCCESS;
+    return copyKernel(dst, src, copySize, stream, loopCount);
 }
 
 MemcpyOperationCE::MemcpyOperationCE(unsigned long long loopCount, ContextPreference ctxPreference, BandwidthValue bandwidthValue) : 

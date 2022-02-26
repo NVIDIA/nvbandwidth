@@ -35,9 +35,9 @@
 
 // Default constants
 const unsigned long long defaultLoopCount = 16;
-const unsigned long long defaultBufferSize = 1024 * 1024 * 64; // 64MB
+const unsigned long long defaultBufferSize = 64; // 64MB
 const unsigned int defaultAverageLoopCount = 3;
-const unsigned int _2MB = 1024 * 1024 * 2;
+const unsigned int _MiB = 1024 * 1024;
 const unsigned int numThreadPerBlock = 512;
 
 extern int deviceCount;
