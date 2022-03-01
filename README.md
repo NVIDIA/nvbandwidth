@@ -15,7 +15,7 @@ To build the `nvbandwidth` executable:
 cmake .
 make
 ```
-CUDA is assumed to be installed in /usr/local/cuda
+You may need to set the BOOST_ROOT environment variable on Windows to tell CMake where to find your Boost installation.
 
 ## Usage:
 ```
