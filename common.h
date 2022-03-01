@@ -29,6 +29,7 @@
 #include <iostream>
 #include <ostream>
 #include <string>
+#include <sstream>
 #include <thread>
 #include <vector>
 #include <unordered_set>
@@ -250,11 +251,15 @@ inline void NVML_ASSERT(nvmlReturn_t nvmlResult, const char *msg = nullptr) {
         if (msg != nullptr) std::cout << ":\n\t" << msg;
         std::cout << std::endl;
         std::exit(1);
-  }
+    }
 }
 
 // NUMA optimal affinity
 inline void setOptimalCpuAffinity(int cudaDeviceID) {
+#ifdef _WIN32
+    // NVML doesn't support setting affinity on Windows
+    return;
+#endif
     nvmlDevice_t device;
     CUuuid dev_uuid;
 
@@ -272,7 +277,10 @@ inline void setOptimalCpuAffinity(int cudaDeviceID) {
     }
 
     NVML_ASSERT(nvmlDeviceGetHandleByUUID(s.str().c_str(), &device));
-    NVML_ASSERT(nvmlDeviceSetCpuAffinity(device));
+    nvmlReturn_t result = nvmlDeviceSetCpuAffinity(device);
+    if (result != NVML_ERROR_NOT_SUPPORTED) {
+        NVML_ASSERT(result);
+    }
 }
 
 inline bool isMemoryOwnedByCUDA(void *memory) {

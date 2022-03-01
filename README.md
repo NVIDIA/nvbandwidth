@@ -12,6 +12,7 @@ apt install libboost-program-options-dev
 ## Build
 To build the `nvbandwidth` executable:
 ```
+cmake .
 make
 ```
 CUDA is assumed to be installed in /usr/local/cuda
