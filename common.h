@@ -23,7 +23,6 @@
 #include <cstdlib>
 #include <cuda.h>
 #include <nvml.h>
-#include <cuda_runtime.h>
 #include <float.h>
 #include <iomanip>
 #include <iostream>

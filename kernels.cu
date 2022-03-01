@@ -63,7 +63,7 @@ __global__ void stridingMemcpyKernel(unsigned int totalThreadCount, unsigned lon
     }
 }
 
-CUresult copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUstream stream, unsigned long long loopCount) {
+size_t copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUstream stream, unsigned long long loopCount) {
     CUdevice dev;
     CUcontext ctx;
 
@@ -76,19 +76,16 @@ CUresult copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, C
 
     // adjust size to elements (size is multiple of MB, so no truncation here)
     size_t sizeInElement = size / sizeof(uint4);
-    // TODO this truncates the copy, making bandwidth calculations incorrect
+    // this truncates the copy
     sizeInElement = totalThreadCount * (sizeInElement / totalThreadCount);
 
     size_t chunkSizeInElement = sizeInElement / totalThreadCount;
 
-    if (sizeInElement % totalThreadCount != 0) {
-        return CUDA_ERROR_INVALID_VALUE;
-    }
-
     dim3 gridDim(numSm, 1, 1);
     dim3 blockDim(numThreadPerBlock, 1, 1);
     stridingMemcpyKernel<<<gridDim, blockDim, 0, stream>>> (totalThreadCount, loopCount, (uint4 *)dstBuffer, (uint4 *)srcBuffer, chunkSizeInElement);
-    return CUDA_SUCCESS;
+
+    return sizeInElement * sizeof(uint4);
 }
 
 __global__ void spinKernel(volatile int *latch, const unsigned long long timeoutClocks)
