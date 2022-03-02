@@ -23,7 +23,7 @@
 
 const unsigned long long DEFAULT_SPIN_KERNEL_TIMEOUT = 10000000000ULL;   // 10 seconds
 
-CUresult copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t sizeInElement, CUstream stream, unsigned long long loopCount);
+size_t copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUstream stream, unsigned long long loopCount);
 CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long timeoutNs = DEFAULT_SPIN_KERNEL_TIMEOUT);
 
 #endif //NVBANDWIDTH__KERNELS_CUH

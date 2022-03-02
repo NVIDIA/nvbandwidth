@@ -17,9 +17,7 @@
 
 #include "kernels.cuh"
 
-__global__ void stridingMemcpyKernel(unsigned int totalThreadCount, unsigned long long loopCount, uint4* dst, uint4* src, unsigned long long chunkSizeInElement) {
-    volatile unsigned long long elapsed = 0;
-    volatile unsigned long long start = 0;
+__global__ void stridingMemcpyKernel(unsigned int totalThreadCount, unsigned long long loopCount, uint4* dst, uint4* src, size_t chunkSizeInElement) {
     unsigned long long from = blockDim.x * blockIdx.x + threadIdx.x;
     unsigned long long bigChunkSizeInElement = chunkSizeInElement / 12;
     dst += from;
@@ -65,11 +63,7 @@ __global__ void stridingMemcpyKernel(unsigned int totalThreadCount, unsigned lon
     }
 }
 
-CUresult copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t sizeInElement, CUstream stream, unsigned long long loopCount) {
-    auto dst = (uint4 *)dstBuffer;
-    auto src = (uint4 *)srcBuffer;
-    unsigned int sharedMemoryBytes = 0;
-
+size_t copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUstream stream, unsigned long long loopCount) {
     CUdevice dev;
     CUcontext ctx;
 
@@ -79,16 +73,19 @@ CUresult copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t sizeInE
     int numSm;
     CU_ASSERT(cuDeviceGetAttribute(&numSm, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, dev));
     unsigned int totalThreadCount = numSm * numThreadPerBlock;
-    unsigned long long chunkSizeInElement = sizeInElement / totalThreadCount;
 
-    if (sizeInElement % totalThreadCount != 0) {
-        return CUDA_ERROR_INVALID_VALUE;
-    }
+    // adjust size to elements (size is multiple of MB, so no truncation here)
+    size_t sizeInElement = size / sizeof(uint4);
+    // this truncates the copy
+    sizeInElement = totalThreadCount * (sizeInElement / totalThreadCount);
+
+    size_t chunkSizeInElement = sizeInElement / totalThreadCount;
 
     dim3 gridDim(numSm, 1, 1);
     dim3 blockDim(numThreadPerBlock, 1, 1);
-    stridingMemcpyKernel<<<gridDim, blockDim, sharedMemoryBytes, stream>>> (totalThreadCount, loopCount, dst, src, chunkSizeInElement);
-    return CUDA_SUCCESS;
+    stridingMemcpyKernel<<<gridDim, blockDim, 0, stream>>> (totalThreadCount, loopCount, (uint4 *)dstBuffer, (uint4 *)srcBuffer, chunkSizeInElement);
+
+    return sizeInElement * sizeof(uint4);
 }
 
 __global__ void spinKernel(volatile int *latch, const unsigned long long timeoutClocks)

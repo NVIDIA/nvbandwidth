@@ -97,7 +97,7 @@ void launch_DtoD_memcpy_write_SM(unsigned long long size, unsigned long long loo
         }
     }
 
-    std::cout << "memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << "memcpy SM GPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 

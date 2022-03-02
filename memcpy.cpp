@@ -123,6 +123,7 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
     std::vector<CUevent> startEvents(srcNodes.size());
     std::vector<CUevent> endEvents(srcNodes.size());
     std::vector<PerformanceStatistic> bandwidthStats(srcNodes.size());
+    std::vector<size_t> adjustedCopySizes(srcNodes.size());
 
     CU_ASSERT(cuMemHostAlloc((void **)&blockingVar, sizeof(*blockingVar), CU_MEMHOSTALLOC_PORTABLE));
 
@@ -153,7 +154,7 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
             CU_ASSERT(spinKernel(blockingVar, streams[i]));
             
             // warmup
-            CU_ASSERT(memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), WARMUP_COUNT));
+            memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), WARMUP_COUNT);
         }
 
         CU_ASSERT(cuCtxSetCurrent(contexts[0]));
@@ -168,7 +169,7 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
         for (int i = 0; i < srcNodes.size(); i++) {
             CU_ASSERT(cuCtxSetCurrent(contexts[i]));
             assert(srcNodes[i]->getBufferSize() == dstNodes[i]->getBufferSize());
-            CU_ASSERT(memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), loopCount));
+            adjustedCopySizes[i] = memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), loopCount);
             CU_ASSERT(cuEventRecord(endEvents[i], streams[i]));
         }
 
@@ -183,7 +184,7 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
             float timeWithEvents = 0.0f;
             CU_ASSERT(cuEventElapsedTime(&timeWithEvents, startEvents[i], endEvents[i]));
             double elapsedWithEventsInUs = ((double) timeWithEvents * 1000.0);
-            unsigned long long bandwidth = (srcNodes[i]->getBufferSize() * loopCount * 1000ull * 1000ull) / (unsigned long long) elapsedWithEventsInUs;
+            unsigned long long bandwidth = (adjustedCopySizes[i] * loopCount * 1000ull * 1000ull) / (unsigned long long) elapsedWithEventsInUs;
             bandwidthStats[i]((double) bandwidth);
             VERBOSE << "\tSample " << n << ' ' << std::fixed << std::setprecision(2) << (double) bandwidth * 1e-9 << " GB/s\n";
         }
@@ -212,29 +213,17 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
 MemcpyOperationSM::MemcpyOperationSM(unsigned long long loopCount, ContextPreference ctxPreference, BandwidthValue bandwidthValue) : 
         MemcpyOperation(loopCount, ctxPreference, bandwidthValue) {}
 
-CUresult MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
-    CUdevice cudaDevice;
-    int multiProcessorCount;
-    size_t size = copySize;
-
-    size /= sizeof(int4);
-    CU_ASSERT(cuCtxGetDevice(&cudaDevice));
-    CU_ASSERT(cuDeviceGetAttribute(&multiProcessorCount, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, cudaDevice));
-    unsigned long long totalThreadCount = (unsigned long long)(multiProcessorCount * numThreadPerBlock);
-    size = totalThreadCount * (size / totalThreadCount);
-
-    CU_ASSERT(copyKernel(dst, src, size, stream, loopCount));
-
-    return CUDA_SUCCESS;
+size_t MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
+    return copyKernel(dst, src, copySize, stream, loopCount);
 }
 
 MemcpyOperationCE::MemcpyOperationCE(unsigned long long loopCount, ContextPreference ctxPreference, BandwidthValue bandwidthValue) : 
         MemcpyOperation(loopCount, ctxPreference, bandwidthValue) {}
 
-CUresult MemcpyOperationCE::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
+size_t MemcpyOperationCE::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
     for (unsigned int l = 0; l < loopCount; l++) {
         CU_ASSERT(cuMemcpyAsync(dst, src, copySize, stream));
     }
 
-    return CUDA_SUCCESS;
+    return copySize;
 }

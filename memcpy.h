@@ -85,7 +85,9 @@ protected:
     BandwidthValue bandwidthValue;
 
     // Pure virtual function for implementation of the actual memcpy function
-    virtual CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) = 0;
+    // return actual bytes copied
+    // This can vary from copySize due to SM copies truncated the copy to achieve max bandwidth
+    virtual size_t memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) = 0;
 public:
     MemcpyOperation(unsigned long long loopCount, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
     virtual ~MemcpyOperation();
@@ -98,14 +100,14 @@ public:
 
 class MemcpyOperationSM : public MemcpyOperation {
 private:
-    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
+    size_t memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
 public:
     MemcpyOperationSM(unsigned long long loopCount, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::SUM_BW);
 };
 
 class MemcpyOperationCE : public MemcpyOperation {
 private:
-    CUresult memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
+    size_t memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
 public:
     MemcpyOperationCE(unsigned long long loopCount, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
 };

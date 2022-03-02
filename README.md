@@ -53,6 +53,11 @@ There are two types of copies implemented, Copy Engine (CE) or Steaming Multipro
 
 CE copies use memcpy APIs. SM copies use kernels.
 
+SM copies will truncate the copy size to fit uniformly on the target device to correctly report the bandwidth. The actual byte size for the copy is:
+```
+(512 * deviceSMCount) * floor(copySize / (512 * deviceSMCount))
+```
+
 ### Measurement Details
 ![](diagrams/measurement.png)
 
