@@ -159,6 +159,17 @@ int main(int argc, char **argv) {
     NVML_ASSERT(nvmlSystemGetDriverVersion(driverVersion, NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE));
     std::cout << "Driver Version: " << driverVersion << std::endl << std::endl;
 
+    for (int iDev = 0; iDev < deviceCount; iDev++) {
+        CUdevice dev;
+        char name[256];
+
+        CU_ASSERT(cuDeviceGet(&dev, iDev));
+        CU_ASSERT(cuDeviceGetName(name, 256, dev));
+
+        std::cout << "Device " << iDev << ": " << name << std::endl;
+    }
+    std::cout << std::endl;
+
     if (benchmarksToRun.size() == 0) {
         // run all benchmarks
         for (auto benchmark : benchmarks) {
