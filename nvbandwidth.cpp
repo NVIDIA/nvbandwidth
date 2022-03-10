@@ -99,7 +99,7 @@ int main(int argc, char **argv) {
     disableP2P = true;
 
     std::cout << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
-    std::cout << "Built from: " << GIT_VERSION << std::endl << std::endl;
+    std::cout << "Built from Git version: " << GIT_VERSION << std::endl << std::endl;
     
     std::vector<Benchmark> benchmarks = createBenchmarks();
     std::vector<std::string> benchmarksToRun;
