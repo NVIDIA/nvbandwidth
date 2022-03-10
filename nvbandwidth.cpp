@@ -17,6 +17,7 @@
 
 #include <boost/program_options.hpp>
 #include <cuda.h>
+#include <cuda_runtime_api.h>
 #include <nvml.h>
 #include <iostream>
 
@@ -148,12 +149,15 @@ int main(int argc, char **argv) {
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
 
     int cudaVersion;
+    cudaRuntimeGetVersion(&cudaVersion);
+    std::cout << "CUDA Runtime Version: " << cudaVersion << std::endl;
+
     CU_ASSERT(cuDriverGetVersion(&cudaVersion));
-    std::cout << "Using CUDA Driver Version: " << cudaVersion << std::endl;
+    std::cout << "CUDA Driver Version: " << cudaVersion << std::endl;
 
     char driverVersion[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE];
     NVML_ASSERT(nvmlSystemGetDriverVersion(driverVersion, NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE));
-    std::cout << "Using Driver Version: " << driverVersion << std::endl << std::endl;
+    std::cout << "Driver Version: " << driverVersion << std::endl << std::endl;
 
     if (benchmarksToRun.size() == 0) {
         // run all benchmarks
