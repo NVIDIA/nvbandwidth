@@ -119,6 +119,11 @@ int main(int argc, char **argv) {
         opt::store(opt::parse_command_line(argc, argv, desc), vm);
         opt::notify(vm);
     } catch (...) {
+        std::cout << "ERROR: Invalid Arguments " << std::endl;
+        for (int i = 0; i < argc; i++) {
+            std::cout << argv[i] << " ";
+        }
+        std::cout << std::endl << std::endl;
         std::cout << desc << "\n";
         return 1;
     }
