@@ -106,83 +106,63 @@ inline size_t getFirstEnabledCPU() {
 // Basic online running statistics calculator, modeled after a less templated
 // version of boost::accumulators.
 class PerformanceStatistic {
-    double m_smallest, m_largest;
-    double m_total, m_mean, m_var;
-    size_t m_cnt;
+    std::vector<double> values;
 
 public:
-    PerformanceStatistic(): m_smallest(DBL_MAX), m_largest(-DBL_MAX), m_total(0.0), m_mean(0.0), m_var(0.0), m_cnt(0) {}
+    PerformanceStatistic() {}
     
     void operator()(const double &sample) { recordSample(sample); }
     
     void recordSample(const double &sample) {
-        m_cnt++;
-        if (m_smallest > sample) {
-            m_smallest = sample;
-        }
-        if (m_largest < sample) {
-            m_largest = sample;
-        }
-        // Online variance calculation algorithm can be found here:
-        // https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Online_algorithm
-        // Donald E. Knuth (1998). The Art of Computer Programming, volume 2:
-        // Seminumerical Algorithms, 3rd edn., p. 232. Boston: Addison-Wesley.
-        m_total += sample;
-        double delta = sample - m_mean;
-        m_mean += delta / m_cnt;
-        double delta2 = sample - m_mean;
-        m_var += delta * delta2;
+        auto it = std::lower_bound(values.begin(), values.end(), sample);
+        values.insert(it, sample);
     }
 
-    // Aggregate the statistics from samples recorded in 'other' into this
-    // statistic (useful for combining multiple statistics from mulitple threads)
-    void aggregate(const PerformanceStatistic &other) {
-        if (m_smallest > other.m_smallest) {
-            m_smallest = other.m_smallest;
+    void reset(void) { values.clear(); }
+    
+    double sum(void) const { 
+        double total = 0.0;
+        for (double val : values) {
+            total += val;
         }
-        if (m_largest > other.m_largest) {
-            m_largest = other.m_largest;
-        }
-        m_total += other.m_total;
-        // This just calculates the ratios of the combined counts to keep the
-        // averages stable: avg1 * (cnt1 / (cnt1 + cnt2)) + avg2 * (cnt2 / (cnt1 +
-        // cnt2))
-        m_mean = m_mean * (((double)m_cnt) / (m_cnt + other.m_cnt)) +
-                other.m_mean * (((double)other.m_cnt) / (m_cnt + other.m_cnt));
-
-        // Since the variance is just a sum of squares and does not depend on
-        // the sample count, no need for extra math here
-        m_var += other.m_var;
-        m_cnt += other.m_cnt;
+        return total;
     }
-
-    void reset(void) { *this = PerformanceStatistic(); }
     
-    double sum(void) const { return m_total; }
+    size_t count(void) const { return values.size(); }
     
-    size_t count(void) const { return m_cnt; }
+    double average(void) const { 
+        return sum() / count();
+    }
     
-    double average(void) const { return m_mean; }
-    
-    double variance(void) const { return (m_cnt > 1 ? m_var / (m_cnt - 1) : 0); }
+    double variance(void) const {
+        double mean = average();
+        double sum_diff_squared = 0.0;
+        for (double val : values) {
+            double diff = val - mean;
+            sum_diff_squared += diff * diff;
+        }
+        return (values.size() > 1 ? sum_diff_squared / (values.size() - 1) : 0.0);
+    }
     
     double stddev(void) const {
         return (variance() > 0.0 ? std::sqrt(variance()) : 0.0);
     }
     
-    double largest(void) const { return m_largest; }
+    double largest(void) const { return values.size() > 0 ? values[values.size() - 1] : 0.0; }
     
-    double smallest(void) const { return m_smallest; }
+    double smallest(void) const { return values.size() > 0 ? values[0] : 0.0; }
+
+    double median(void) const {
+        if (values.size() == 0) {
+            return 0.0;
+        } else if (values.size() % 2 == 0) {
+            int idx = values.size() / 2;
+            return (values[idx] + values[idx - 1]) / 2.0;
+        } else {
+            return values[values.size() / 2];
+        }
+    }
 };
-
-#define STAT_MEAN(s) (s).average()
-#define STAT_ERROR(s) (s).stddev()
-#define STAT_MAX(s) (s).largest()
-#define STAT_MIN(s) (s).smallest()
-
-static std::ostream &operator<<(std::ostream &o, const PerformanceStatistic &s) {
-    return o << STAT_MEAN(s) << "(+/- " << STAT_ERROR(s) << ')';
-}
 
 template <class T> struct PeerValueMatrix {
     T *m_matrix;
@@ -215,18 +195,7 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
         for (int peer = 0; peer < matrix.m_columns; peer++)
             o << std::setw(10) << matrix.value(currentDevice, peer);
         o << std::endl;
-  }
-  return o;
-}
-
-template <class T>
-std::ostream &printIndexVector(std::ostream &o, std::vector<T> &v, int field_width = 10) {
-    for (size_t i = 0; i < v.size(); i++)
-        o << std::setw(field_width) << i;
-    o << std::endl;
-    for (size_t i = 0; i < v.size(); i++)
-        o << std::setw(field_width) << v[i];
-    o << std::endl;
+    }
     return o;
 }
 
