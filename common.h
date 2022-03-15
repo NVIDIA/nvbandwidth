@@ -109,8 +109,6 @@ class PerformanceStatistic {
     std::vector<double> values;
 
 public:
-    PerformanceStatistic() {}
-    
     void operator()(const double &sample) { recordSample(sample); }
     
     void recordSample(const double &sample) {

@@ -215,7 +215,7 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
     if (bandwidthValue == BandwidthValue::SUM_BW) {
         double sum = 0.0;
         for (auto stat : bandwidthStats) {
-            sum += stat.median() * 1e-9;;
+            sum += stat.median() * 1e-9;
         }
         return sum;
     } else {
