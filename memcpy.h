@@ -32,6 +32,7 @@ public:
 
     virtual int getNodeIdx() const = 0;
     virtual CUcontext getPrimaryCtx() const = 0;
+    virtual std::string getNodeString() const = 0;
 };
 
 // Represents the host buffer abstraction
@@ -43,6 +44,7 @@ public:
 
     int getNodeIdx() const override;
     CUcontext getPrimaryCtx() const override;
+    virtual std::string getNodeString() const override;
 };
 
 // Represents the device buffer and context abstraction
@@ -56,6 +58,7 @@ public:
 
     int getNodeIdx() const override;
     CUcontext getPrimaryCtx() const override;
+    virtual std::string getNodeString() const override;
 
     bool enablePeerAcess(const DeviceNode &peerNode);
 };

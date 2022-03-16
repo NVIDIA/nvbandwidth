@@ -59,6 +59,10 @@ int HostNode::getNodeIdx() const {
     return 0;
 }
 
+std::string HostNode::getNodeString() const {
+    return "Host";
+}
+
 DeviceNode::DeviceNode(size_t bufferSize, int deviceIdx): deviceIdx(deviceIdx), MemcpyNode(bufferSize) {
     CU_ASSERT(cuDevicePrimaryCtxRetain(&primaryCtx, deviceIdx));
     CU_ASSERT(cuCtxSetCurrent(primaryCtx));
@@ -77,6 +81,10 @@ CUcontext DeviceNode::getPrimaryCtx() const {
 
 int DeviceNode::getNodeIdx() const {
     return deviceIdx;
+}
+
+std::string DeviceNode::getNodeString() const {
+    return "Device " + std::to_string(deviceIdx);
 }
 
 bool DeviceNode::enablePeerAcess(const DeviceNode &peerNode) {
@@ -186,7 +194,12 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
             double elapsedWithEventsInUs = ((double) timeWithEvents * 1000.0);
             unsigned long long bandwidth = (adjustedCopySizes[i] * loopCount * 1000ull * 1000ull) / (unsigned long long) elapsedWithEventsInUs;
             bandwidthStats[i]((double) bandwidth);
-            VERBOSE << "\tSample " << n << ' ' << std::fixed << std::setprecision(2) << (double) bandwidth * 1e-9 << " GB/s\n";
+
+            if (bandwidthValue == BandwidthValue::SUM_BW || i == 0) {
+                // Verbose print only the values that are used for the final output
+                VERBOSE << "\tSample " << n << ": " << srcNodes[i]->getNodeString() << " -> " << dstNodes[i]->getNodeString() << ": " <<
+                    std::fixed << std::setprecision(2) << (double)bandwidth * 1e-9 << " GB/s\n";
+            }
         }
     }
 
@@ -202,11 +215,11 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
     if (bandwidthValue == BandwidthValue::SUM_BW) {
         double sum = 0.0;
         for (auto stat : bandwidthStats) {
-            sum += (double)(STAT_MEAN(stat) * 1e-9);
+            sum += stat.median() * 1e-9;
         }
         return sum;
     } else {
-        return (double)(STAT_MEAN(bandwidthStats[0]) * 1e-9);
+        return bandwidthStats[0].median() * 1e-9;
     }
 }
 
