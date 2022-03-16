@@ -17,6 +17,7 @@
 
 #include <boost/program_options.hpp>
 #include <cuda.h>
+#include <cuda_runtime_api.h>
 #include <nvml.h>
 #include <iostream>
 
@@ -99,13 +100,13 @@ int main(int argc, char **argv) {
     disableP2P = true;
 
     std::cout << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
-    std::cout << "Built from: " << GIT_VERSION << std::endl << std::endl;
+    std::cout << "Built from Git version: " << GIT_VERSION << std::endl << std::endl;
     
     std::vector<Benchmark> benchmarks = createBenchmarks();
     std::vector<std::string> benchmarksToRun;
 
     // Args parsing
-    opt::options_description desc("NVBandwidth CLI");
+    opt::options_description desc("nvbandwidth CLI");
     desc.add_options()
         ("help,h", "Produce help message")
         ("bufferSize", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size in MiB")
@@ -119,6 +120,11 @@ int main(int argc, char **argv) {
         opt::store(opt::parse_command_line(argc, argv, desc), vm);
         opt::notify(vm);
     } catch (...) {
+        std::cout << "ERROR: Invalid Arguments " << std::endl;
+        for (int i = 0; i < argc; i++) {
+            std::cout << argv[i] << " ";
+        }
+        std::cout << std::endl << std::endl;
         std::cout << desc << "\n";
         return 1;
     }
@@ -138,17 +144,34 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    std::cout << "This tool provides measurements of bandwidth, but does not guarantee accuracy across all systems." << std::endl 
+        << "Sytem specific tuning may be required to achieve maximum bandwidth." << std::endl << std::endl;
+
     cuInit(0);
     nvmlInit();
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
 
     int cudaVersion;
+    cudaRuntimeGetVersion(&cudaVersion);
+    std::cout << "CUDA Runtime Version: " << cudaVersion << std::endl;
+
     CU_ASSERT(cuDriverGetVersion(&cudaVersion));
-    std::cout << "Using CUDA Driver Version: " << cudaVersion << std::endl;
+    std::cout << "CUDA Driver Version: " << cudaVersion << std::endl;
 
     char driverVersion[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE];
     NVML_ASSERT(nvmlSystemGetDriverVersion(driverVersion, NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE));
-    std::cout << "Using Driver Version: " << driverVersion << std::endl << std::endl;
+    std::cout << "Driver Version: " << driverVersion << std::endl << std::endl;
+
+    for (int iDev = 0; iDev < deviceCount; iDev++) {
+        CUdevice dev;
+        char name[256];
+
+        CU_ASSERT(cuDeviceGet(&dev, iDev));
+        CU_ASSERT(cuDeviceGetName(name, 256, dev));
+
+        std::cout << "Device " << iDev << ": " << name << std::endl;
+    }
+    std::cout << std::endl;
 
     if (benchmarksToRun.size() == 0) {
         // run all benchmarks
