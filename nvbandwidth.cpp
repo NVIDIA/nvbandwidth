@@ -35,33 +35,33 @@ bool verbose;
 Verbosity VERBOSE;
 
 // Define benchmarks here
-std::vector<Benchmark> createBenchmarks() {
+std::vector<Benchmark*> createBenchmarks() {
     return {
-        Benchmark("host_to_device_memcpy_ce", launch_HtoD_memcpy_CE, "Host to device memcpy using the Copy Engine"),
-        Benchmark("device_to_host_memcpy_ce", launch_DtoH_memcpy_CE, "Device to host memcpy using the Copy Engine"),
-        Benchmark("host_to_device_bidirectional_memcpy_ce", launch_HtoD_memcpy_bidirectional_CE, "Bidirectional host to device memcpy using the Copy Engine"),
-        Benchmark("device_to_host_bidirectional_memcpy_ce", launch_DtoH_memcpy_bidirectional_CE, "Bidirectional device to host memcpy using the Copy Engine"),
-        Benchmark("device_to_device_memcpy_read_ce", launch_DtoD_memcpy_read_CE, "Device to device memcpy using the Copy Engine (read)", filter_has_accessible_peer_pairs),
-        Benchmark("device_to_device_memcpy_write_ce", launch_DtoD_memcpy_write_CE, "Device to device memcpy using the Copy Engine (write)", filter_has_accessible_peer_pairs),
-        Benchmark("device_to_device_bidirectional_memcpy_ce", launch_DtoD_memcpy_bidirectional_CE, "Bidirectional device to device memcpy using the Copy Engine", filter_has_accessible_peer_pairs),
-        Benchmark("all_to_host_memcpy_ce", launch_AlltoH_memcpy_CE, "All devices to host memcpy using the Copy Engine"),
-        Benchmark("host_to_all_memcpy_ce", launch_HtoAll_memcpy_CE, "Host to all devices memcpy using the Copy Engine"),
-        Benchmark("host_to_device_memcpy_sm", launch_HtoD_memcpy_SM, "Host to device memcpy using the Stream Multiprocessor"),
-        Benchmark("device_to_host_memcpy_sm", launch_DtoH_memcpy_SM, "Device to host memcpy using the Stream Multiprocessor"),
-        Benchmark("device_to_device_memcpy_read_sm", launch_DtoD_memcpy_read_SM, "Device to device memcpy using the Stream Multiprocessor (read)", filter_has_accessible_peer_pairs),
-        Benchmark("device_to_device_memcpy_write_sm", launch_DtoD_memcpy_write_SM, "Device to device memcpy using the Stream Multiprocessor (write)", filter_has_accessible_peer_pairs),
-        Benchmark("device_to_device_bidirectional_memcpy_read_sm", launch_DtoD_memcpy_bidirectional_read_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (read)", filter_has_accessible_peer_pairs),
-        Benchmark("device_to_device_bidirectional_memcpy_write_sm", launch_DtoD_memcpy_bidirectional_write_SM, "Bidirectional device to device memcpy using the Stream Multiprocessor (write)", filter_has_accessible_peer_pairs),
+        new HostToDeviceCE(),
+        new DeviceToHostCE(),
+        new HostToDeviceBidirCE(),
+        new DeviceToHostBidirCE(),
+        new DeviceToDeviceReadCE(),
+        new DeviceToDeviceWriteCE(),
+        new DeviceToDeviceBidirCE(),
+        new AllToHostCE(),
+        new HostToAllCE(),
+        new HostToDeviceSM(),
+        new DeviceToHostSM(),
+        new DeviceToDeviceReadSM(),
+        new DeviceToDeviceWriteSM(),
+        new DeviceToDeviceBidirReadSM(),
+        new DeviceToDeviceBidirWriteSM()
     };
 }
 
-Benchmark findBenchmark(std::vector<Benchmark> &benchmarks, std::string id) {
+Benchmark* findBenchmark(std::vector<Benchmark*> &benchmarks, std::string id) {
     // Check if benchmark ID is index
     char* p;
     long index = strtol(id.c_str(), &p, 10);
     if (*p) {
         // Conversion failed so key is ID
-        auto it = find_if(benchmarks.begin(), benchmarks.end(), [&id](Benchmark& bench) {return bench.benchKey() == id;});
+        auto it = find_if(benchmarks.begin(), benchmarks.end(), [&id](Benchmark* bench) {return bench->benchKey() == id;});
         if (it != benchmarks.end()) {
             return benchmarks.at(std::distance(benchmarks.begin(), it));
         } else {
@@ -74,21 +74,21 @@ Benchmark findBenchmark(std::vector<Benchmark> &benchmarks, std::string id) {
     }
 }
 
-void runBenchmark(std::vector<Benchmark> &benchmarks, const std::string &benchmarkID) {
+void runBenchmark(std::vector<Benchmark*> &benchmarks, const std::string &benchmarkID) {
     CUcontext benchCtx;
 
     try {
-        Benchmark bench = findBenchmark(benchmarks, benchmarkID);
-        if (!bench.filter()) {
-            std::cout << "Waiving benchmark " << bench.benchKey() << "." << std::endl << std::endl;
+        Benchmark* bench = findBenchmark(benchmarks, benchmarkID);
+        if (!bench->filter()) {
+            std::cout << "Waiving benchmark " << bench->benchKey() << "." << std::endl << std::endl;
             return;
         }
-        std::cout << "Running benchmark " << bench.benchKey() << ".\n";
+        std::cout << "Running benchmark " << bench->benchKey() << ".\n";
 
         CU_ASSERT(cuCtxCreate(&benchCtx, 0, 0));
         CU_ASSERT(cuCtxSetCurrent(benchCtx));
         // Run the launch_* benchmark
-        bench.run(bufferSize * _MiB, loopCount);
+        bench->run(bufferSize * _MiB, loopCount);
         CU_ASSERT(cuCtxDestroy(benchCtx));
     } catch (std::string &s) {
         std::cout << "ERROR: " << s << std::endl;
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
     std::cout << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
     std::cout << "Built from Git version: " << GIT_VERSION << std::endl << std::endl;
     
-    std::vector<Benchmark> benchmarks = createBenchmarks();
+    std::vector<Benchmark*> benchmarks = createBenchmarks();
     std::vector<std::string> benchmarksToRun;
 
     // Args parsing
@@ -139,7 +139,7 @@ int main(int argc, char **argv) {
         std::cout << "Index, Name:\n\tDescription\n";
         std::cout << "=======================\n";
         for (unsigned int i = 0; i < numBenchmarks; i++) {
-            std::cout << i << ", " << benchmarks.at(i).benchKey() << ":\n\t" << benchmarks.at(i).benchDesc() << "\n\n";
+            std::cout << i << ", " << benchmarks.at(i)->benchKey() << ":\n\t" << benchmarks.at(i)->benchDesc() << "\n\n";
         }
         return 0;
     }
@@ -176,13 +176,15 @@ int main(int argc, char **argv) {
     if (benchmarksToRun.size() == 0) {
         // run all benchmarks
         for (auto benchmark : benchmarks) {
-            runBenchmark(benchmarks, benchmark.benchKey());
+            runBenchmark(benchmarks, benchmark->benchKey());
         }
     } else {
         for (const auto& benchmarkIndex : benchmarksToRun) {
             runBenchmark(benchmarks, benchmarkIndex);
         }
     }
+
+    for (auto benchmark : benchmarks) { delete benchmark; }
 
     return 0;
 }

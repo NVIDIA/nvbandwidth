@@ -17,20 +17,14 @@
 
 #include "benchmark.h"
 
-Benchmark::Benchmark(std::string key, benchfn_t benchmark_func, std::string desc, filterfn_t filter_func) : 
-    key(std::move(key)), benchmark_func(benchmark_func), desc(std::move(desc)), isHost(isHost), filter_func(filter_func)
+Benchmark::Benchmark(std::string key, std::string desc) : 
+    key(std::move(key)), desc(std::move(desc))
 {}
 
 std::string Benchmark::benchKey() { return key; }
-bool Benchmark::filter() { return filter_func(); }
 std::string Benchmark::benchDesc() { return desc; }
 
-void Benchmark::run(unsigned long long size, unsigned long long loopCount) {
-    benchmark_func(size, loopCount);
-}
-
-// Benchmark filters
-bool filter_has_accessible_peer_pairs() {
+bool Benchmark::filterHasAccessiblePeerPairs() {
     int deviceCount = 0;
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
 
