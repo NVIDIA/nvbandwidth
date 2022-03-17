@@ -21,7 +21,7 @@
 #include "memcpy.h"
 
 void HostToDeviceCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -36,7 +36,7 @@ void HostToDeviceCE::run(unsigned long long size, unsigned long long loopCount) 
 }
 
 void DeviceToHostCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -51,7 +51,7 @@ void DeviceToHostCE::run(unsigned long long size, unsigned long long loopCount) 
 }
 
 void HostToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -70,7 +70,7 @@ void HostToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCo
 }
 
 void DeviceToHostBidirCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -90,7 +90,7 @@ void DeviceToHostBidirCE::run(unsigned long long size, unsigned long long loopCo
 
 // DtoD Read test - copy from dst to src (backwards) using src contxt
 void DeviceToDeviceReadCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
@@ -117,7 +117,7 @@ void DeviceToDeviceReadCE::run(unsigned long long size, unsigned long long loopC
 
 // DtoD Write test - copy from src to dst using src context
 void DeviceToDeviceWriteCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
@@ -142,7 +142,7 @@ void DeviceToDeviceWriteCE::run(unsigned long long size, unsigned long long loop
 }
 
 void DeviceToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
@@ -171,7 +171,7 @@ void DeviceToDeviceBidirCE::run(unsigned long long size, unsigned long long loop
 }
 
 void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -207,7 +207,7 @@ void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {
 }
 
 void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {

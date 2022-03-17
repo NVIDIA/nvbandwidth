@@ -21,11 +21,10 @@
 #include "common.h"
 
 class Benchmark {
-private:
+protected:
     std::string key;
     std::string desc;
 
-protected:
     static bool filterHasAccessiblePeerPairs();
 
 public:

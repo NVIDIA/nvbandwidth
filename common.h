@@ -32,6 +32,7 @@
 #include <thread>
 #include <vector>
 #include <unordered_set>
+#include <limits.h>
 
 // Default constants
 const unsigned long long defaultLoopCount = 16;
@@ -165,8 +166,9 @@ public:
 template <class T> struct PeerValueMatrix {
     T *m_matrix;
     int m_rows, m_columns;
-    PeerValueMatrix(int rows, int columns): m_matrix(new T[rows * columns]()), m_rows(rows), m_columns(columns) {}
-    PeerValueMatrix(int rows) : m_matrix(new T[rows * rows]()), m_rows(rows), m_columns(rows) {}
+    std::string key;
+    
+    PeerValueMatrix(int rows, int columns, std::string key = ""): m_matrix(new T[rows * columns]()), m_rows(rows), m_columns(columns), key(key) {}
 
     ~PeerValueMatrix() { delete[] m_matrix; }
     T &value(int src, int dst) {
@@ -183,6 +185,12 @@ template <class T> struct PeerValueMatrix {
 
 template <class T>
 std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
+    // This assumes T is numeric
+    T maxVal = std::numeric_limits<T>::min();
+    T minVal = std::numeric_limits<T>::max();
+    T sum = 0;
+    int count = 0;
+
     o << ' ';
     for (int currentDevice = 0; currentDevice < matrix.m_columns; currentDevice++) {
         o << std::setw(10) << currentDevice;
@@ -190,10 +198,22 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
     o << std::endl;
     for (int currentDevice = 0; currentDevice < matrix.m_rows; currentDevice++) {
         o << currentDevice;
-        for (int peer = 0; peer < matrix.m_columns; peer++)
-            o << std::setw(10) << matrix.value(currentDevice, peer);
+        for (int peer = 0; peer < matrix.m_columns; peer++) {
+            T val = matrix.value(currentDevice, peer);
+            o << std::setw(10) << val;
+            sum += val;
+            maxVal = std::max(maxVal, val);
+            minVal = std::min(minVal, val);
+            if (val > 0) count++;
+        }
         o << std::endl;
     }
+    o << std::endl;
+    o << "SUM " << matrix.key << " " << sum << std::endl;
+
+    VERBOSE << "MIN " << matrix.key << " " << minVal << '\n';
+    VERBOSE << "MAX " << matrix.key << " " << maxVal << '\n';
+    VERBOSE << "AVG " << matrix.key << " " << sum / count << '\n';
     return o;
 }
 
