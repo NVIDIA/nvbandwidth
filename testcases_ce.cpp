@@ -17,7 +17,7 @@
 
 #include <cuda.h>
 
-#include "benchmark.h"
+#include "testcase.h"
 #include "memcpy.h"
 
 void HostToDeviceCE::run(unsigned long long size, unsigned long long loopCount) {

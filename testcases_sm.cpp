@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include "benchmark.h"
+#include "testcase.h"
 #include "kernels.cuh"
 #include "memcpy.h"
 

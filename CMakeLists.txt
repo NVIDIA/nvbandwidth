@@ -16,9 +16,9 @@ set(Boost_USE_STATIC_LIBS ON)
 find_package(Boost COMPONENTS program_options REQUIRED)
 
 set(src
-    benchmark.cpp
-    benchmarks_ce.cpp
-    benchmarks_sm.cpp
+    testcase.cpp
+    testcases_ce.cpp
+    testcases_sm.cpp
     kernels.cu
     memcpy.cpp
     nvbandwidth.cpp

@@ -15,16 +15,16 @@
  * limitations under the License.
  */
 
-#include "benchmark.h"
+#include "testcase.h"
 
-Benchmark::Benchmark(std::string key, std::string desc) : 
+Testcase::Testcase(std::string key, std::string desc) : 
     key(std::move(key)), desc(std::move(desc))
 {}
 
-std::string Benchmark::benchKey() { return key; }
-std::string Benchmark::benchDesc() { return desc; }
+std::string Testcase::testKey() { return key; }
+std::string Testcase::testDesc() { return desc; }
 
-bool Benchmark::filterHasAccessiblePeerPairs() {
+bool Testcase::filterHasAccessiblePeerPairs() {
     int deviceCount = 0;
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
 

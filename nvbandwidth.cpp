@@ -21,7 +21,7 @@
 #include <nvml.h>
 #include <iostream>
 
-#include "benchmark.h"
+#include "testcase.h"
 #include "version.h"
 
 namespace opt = boost::program_options;
@@ -34,8 +34,8 @@ bool disableP2P;
 bool verbose;
 Verbosity VERBOSE;
 
-// Define benchmarks here
-std::vector<Benchmark*> createBenchmarks() {
+// Define testcases here
+std::vector<Testcase*> createTestcases() {
     return {
         new HostToDeviceCE(),
         new DeviceToHostCE(),
@@ -55,41 +55,41 @@ std::vector<Benchmark*> createBenchmarks() {
     };
 }
 
-Benchmark* findBenchmark(std::vector<Benchmark*> &benchmarks, std::string id) {
-    // Check if benchmark ID is index
+Testcase* findTestcase(std::vector<Testcase*> &testcases, std::string id) {
+    // Check if testcase ID is index
     char* p;
     long index = strtol(id.c_str(), &p, 10);
     if (*p) {
         // Conversion failed so key is ID
-        auto it = find_if(benchmarks.begin(), benchmarks.end(), [&id](Benchmark* bench) {return bench->benchKey() == id;});
-        if (it != benchmarks.end()) {
-            return benchmarks.at(std::distance(benchmarks.begin(), it));
+        auto it = find_if(testcases.begin(), testcases.end(), [&id](Testcase* test) {return test->testKey() == id;});
+        if (it != testcases.end()) {
+            return testcases.at(std::distance(testcases.begin(), it));
         } else {
-            throw "Benchmark " + id + " not found!";
+            throw "Testcase " + id + " not found!";
         }
     } else {
         // ID is index
-        if (index >= benchmarks.size()) throw "Benchmark index " + id + " out of bound!";
-        return benchmarks.at(index);
+        if (index >= testcases.size()) throw "Testcase index " + id + " out of bound!";
+        return testcases.at(index);
     }
 }
 
-void runBenchmark(std::vector<Benchmark*> &benchmarks, const std::string &benchmarkID) {
-    CUcontext benchCtx;
+void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseID) {
+    CUcontext testCtx;
 
     try {
-        Benchmark* bench = findBenchmark(benchmarks, benchmarkID);
-        if (!bench->filter()) {
-            std::cout << "Waiving benchmark " << bench->benchKey() << "." << std::endl << std::endl;
+        Testcase* test = findTestcase(testcases, testcaseID);
+        if (!test->filter()) {
+            std::cout << "Waiving " << test->testKey() << "." << std::endl << std::endl;
             return;
         }
-        std::cout << "Running benchmark " << bench->benchKey() << ".\n";
+        std::cout << "Running " << test->testKey() << ".\n";
 
-        CU_ASSERT(cuCtxCreate(&benchCtx, 0, 0));
-        CU_ASSERT(cuCtxSetCurrent(benchCtx));
-        // Run the launch_* benchmark
-        bench->run(bufferSize * _MiB, loopCount);
-        CU_ASSERT(cuCtxDestroy(benchCtx));
+        CU_ASSERT(cuCtxCreate(&testCtx, 0, 0));
+        CU_ASSERT(cuCtxSetCurrent(testCtx));
+        // Run the testcase
+        test->run(bufferSize * _MiB, loopCount);
+        CU_ASSERT(cuCtxDestroy(testCtx));
     } catch (std::string &s) {
         std::cout << "ERROR: " << s << std::endl;
     }
@@ -102,8 +102,8 @@ int main(int argc, char **argv) {
     std::cout << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
     std::cout << "Built from Git version: " << GIT_VERSION << std::endl << std::endl;
     
-    std::vector<Benchmark*> benchmarks = createBenchmarks();
-    std::vector<std::string> benchmarksToRun;
+    std::vector<Testcase*> testcases = createTestcases();
+    std::vector<std::string> testcasesToRun;
 
     // Args parsing
     opt::options_description desc("nvbandwidth CLI");
@@ -111,8 +111,8 @@ int main(int argc, char **argv) {
         ("help,h", "Produce help message")
         ("bufferSize", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size in MiB")
         ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed")
-        ("list,l", "List available benchmarks")
-        ("benchmark,b", opt::value<std::vector<std::string>>(&benchmarksToRun)->multitoken(), "Benchmark(s) to doMemcpy (by name or index)")
+        ("list,l", "List available testcases")
+        ("testcase,t", opt::value<std::vector<std::string>>(&testcasesToRun)->multitoken(), "Testcase(s) to run (by name or index)")
         ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output");
 
     opt::variables_map vm;
@@ -135,11 +135,11 @@ int main(int argc, char **argv) {
     }
 
     if (vm.count("list")) {
-        size_t numBenchmarks = benchmarks.size();
+        size_t numTestcases = testcases.size();
         std::cout << "Index, Name:\n\tDescription\n";
         std::cout << "=======================\n";
-        for (unsigned int i = 0; i < numBenchmarks; i++) {
-            std::cout << i << ", " << benchmarks.at(i)->benchKey() << ":\n\t" << benchmarks.at(i)->benchDesc() << "\n\n";
+        for (unsigned int i = 0; i < numTestcases; i++) {
+            std::cout << i << ", " << testcases.at(i)->testKey() << ":\n\t" << testcases.at(i)->testDesc() << "\n\n";
         }
         return 0;
     }
@@ -173,18 +173,18 @@ int main(int argc, char **argv) {
     }
     std::cout << std::endl;
 
-    if (benchmarksToRun.size() == 0) {
-        // run all benchmarks
-        for (auto benchmark : benchmarks) {
-            runBenchmark(benchmarks, benchmark->benchKey());
+    if (testcasesToRun.size() == 0) {
+        // run all testcases
+        for (auto testcase : testcases) {
+            runTestcase(testcases, testcase->testKey());
         }
     } else {
-        for (const auto& benchmarkIndex : benchmarksToRun) {
-            runBenchmark(benchmarks, benchmarkIndex);
+        for (const auto& testcaseIndex : testcasesToRun) {
+            runTestcase(testcases, testcaseIndex);
         }
     }
 
-    for (auto benchmark : benchmarks) { delete benchmark; }
+    for (auto testcase : testcases) { delete testcase; }
 
     return 0;
 }
