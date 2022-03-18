@@ -28,7 +28,7 @@ nvbandwidth CLI:
   --bufferSize arg (=67108864) Memcpy buffer size in bytes
   --loopCount arg (=16)        Iterations of memcpy to be performed
   -l [ --list ]                List available testcases
-  -b [ --testcase ] arg       Testcase(s) to doMemcpy (by name or index)
+  -t [ --testcase ] arg        Testcase(s) to doMemcpy (by name or index)
   -v [ --verbose ]             Verbose output
 ```
 
@@ -39,11 +39,11 @@ To run all testcases:
 
 To run a specific testcase:
 ```
-./nvbandwidth -b host_to_device_memcpy_ce
+./nvbandwidth -t host_to_device_memcpy_ce
 ```
 Example output:
 ```
-Running testcase host_to_device_memcpy_ce.
+Running host_to_device_memcpy_ce.
 memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)
           0         1
 0      6.20     12.36
