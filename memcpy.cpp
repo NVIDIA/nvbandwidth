@@ -151,7 +151,7 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
         CU_ASSERT(cuEventCreate(&endEvents[i], CU_EVENT_DEFAULT));
     }
 
-    // This loop is for sampling the benchmark (which itself has a loop count)
+    // This loop is for sampling the testcase (which itself has a loop count)
     for (unsigned int n = 0; n < averageLoopCount; n++) {
         *blockingVar = 0;
         // block stream, and enqueue copy

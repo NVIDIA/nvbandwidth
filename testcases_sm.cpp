@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-#include "benchmark.h"
+#include "testcase.h"
 #include "kernels.cuh"
+#include "memcpy.h"
 
-void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+void HostToDeviceSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationSM memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -33,8 +34,8 @@ void launch_HtoD_memcpy_SM(unsigned long long size, unsigned long long loopCount
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+void DeviceToHostSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationSM memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -49,8 +50,8 @@ void launch_DtoH_memcpy_SM(unsigned long long size, unsigned long long loopCount
 }
 
 // DtoD Read test - copy from dst to src (backwards) using src contxt
-void launch_DtoD_memcpy_read_SM(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+void DeviceToDeviceReadSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
     MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
@@ -76,8 +77,8 @@ void launch_DtoD_memcpy_read_SM(unsigned long long size, unsigned long long loop
 }
 
 // DtoD Write test - copy from src to dst using src context
-void launch_DtoD_memcpy_write_SM(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+void DeviceToDeviceWriteSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
     MemcpyOperationSM memcpyInstance(loopCount);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
@@ -102,8 +103,8 @@ void launch_DtoD_memcpy_write_SM(unsigned long long size, unsigned long long loo
 }
 
 // DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
-void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+void DeviceToDeviceBidirReadSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
     MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
@@ -133,8 +134,8 @@ void launch_DtoD_memcpy_bidirectional_read_SM(unsigned long long size, unsigned 
 
 
 // DtoD Bidir Write test - copy from src to dst using src context
-void launch_DtoD_memcpy_bidirectional_write_SM(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+void DeviceToDeviceBidirWriteSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
     MemcpyOperationSM memcpyInstance(loopCount);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {

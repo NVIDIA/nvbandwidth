@@ -17,10 +17,11 @@
 
 #include <cuda.h>
 
-#include "benchmark.h"
+#include "testcase.h"
+#include "memcpy.h"
 
-void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+void HostToDeviceCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -34,8 +35,8 @@ void launch_HtoD_memcpy_CE(unsigned long long size, unsigned long long loopCount
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+void DeviceToHostCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -49,8 +50,8 @@ void launch_DtoH_memcpy_CE(unsigned long long size, unsigned long long loopCount
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+void HostToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -68,8 +69,8 @@ void launch_HtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+void DeviceToHostBidirCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -88,8 +89,8 @@ void launch_DtoH_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
 }
 
 // DtoD Read test - copy from dst to src (backwards) using src contxt
-void launch_DtoD_memcpy_read_CE(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+void DeviceToDeviceReadCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
@@ -115,8 +116,8 @@ void launch_DtoD_memcpy_read_CE(unsigned long long size, unsigned long long loop
 }
 
 // DtoD Write test - copy from src to dst using src context
-void launch_DtoD_memcpy_write_CE(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+void DeviceToDeviceWriteCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
@@ -140,8 +141,8 @@ void launch_DtoD_memcpy_write_CE(unsigned long long size, unsigned long long loo
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount);
+void DeviceToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
@@ -169,8 +170,8 @@ void launch_DtoD_memcpy_bidirectional_CE(unsigned long long size, unsigned long 
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_AlltoH_memcpy_CE(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -205,8 +206,8 @@ void launch_AlltoH_memcpy_CE(unsigned long long size, unsigned long long loopCou
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void launch_HtoAll_memcpy_CE(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount);
+void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {

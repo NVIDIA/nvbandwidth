@@ -24,26 +24,26 @@ You may need to set the BOOST_ROOT environment variable on Windows to tell CMake
 ```
 ./nvbandwidth -h
 nvbandwidth CLI:
-  -h [ --help ]                Produce help message
-  --bufferSize arg (=67108864) Memcpy buffer size in bytes
-  --loopCount arg (=16)        Iterations of memcpy to be performed
-  -l [ --list ]                List available benchmarks
-  -b [ --benchmark ] arg       Benchmark(s) to doMemcpy (by name or index)
-  -v [ --verbose ]             Verbose output
+  -h [ --help ]          Produce help message
+  --bufferSize arg (=64) Memcpy buffer size in MiB
+  --loopCount arg (=16)  Iterations of memcpy to be performed
+  -l [ --list ]          List available testcases
+  -t [ --testcase ] arg  Testcase(s) to run (by name or index)
+  -v [ --verbose ]       Verbose output
 ```
 
-To run all benchmarks:
+To run all testcases:
 ```
 ./nvbandwidth
 ```
 
-To run a specific benchmark:
+To run a specific testcase:
 ```
-./nvbandwidth -b host_to_device_memcpy_ce
+./nvbandwidth -t host_to_device_memcpy_ce
 ```
 Example output:
 ```
-Running benchmark host_to_device_memcpy_ce.
+Running host_to_device_memcpy_ce.
 memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)
           0         1
 0      6.20     12.36
@@ -72,7 +72,7 @@ This process is repeated 3 times, and the median bandwidth for each trial is rep
 
 ### Unidirectional Bandwidth Tests
 ```
-Running benchmark host_to_device_memcpy_ce.
+Running host_to_device_memcpy_ce.
 memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)
           0         1
 0      6.20     12.36
@@ -82,7 +82,7 @@ Unidirectional tests measure the bandwidth between each pair in the output matri
 
 ### Bidirectional Host <-> Device Bandwidth Tests
 ```
-Running benchmark host_to_device_bidirectional_memcpy_ce.
+Running host_to_device_bidirectional_memcpy_ce.
 memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)
           0         1
 0      5.64     11.16
