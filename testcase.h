@@ -19,6 +19,7 @@
 #define BENCHMARK_H
 
 #include "common.h"
+#include "memcpy.h"
 
 class Testcase {
 protected:
@@ -28,8 +29,8 @@ protected:
     static bool filterHasAccessiblePeerPairs();
 
     // helper functions
-    PeerValueMatrix<double> allToOneHelper(unsigned long long size, unsigned long long loopCount, bool isSM, bool isRead = false);
-    PeerValueMatrix<double> oneToAllHelper(unsigned long long size, unsigned long long loopCount, bool isSM, bool isRead = false);
+    void allToOneHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
+    void oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
 
 public:
     Testcase(std::string key, std::string desc);

@@ -243,14 +243,18 @@ void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
 }
 
 void AllToOneCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues = allToOneHelper(size, loopCount, false);
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::SUM_BW);
+    allToOneHelper(size, memcpyInstance, bandwidthValues, false);
 
     std::cout << "memcpy CE All Gpus -> GPU(column) total bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
 void OneToAllCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues = oneToAllHelper(size, loopCount, false);
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::SUM_BW);
+    allToOneHelper(size, memcpyInstance, bandwidthValues, false);
 
     std::cout << "memcpy CE GPU(column) -> All GPUs total bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;

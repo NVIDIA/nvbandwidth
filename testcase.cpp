@@ -16,7 +16,6 @@
  */
 
 #include "testcase.h"
-#include "memcpy.h"
 
 Testcase::Testcase(std::string key, std::string desc) : 
     key(std::move(key)), desc(std::move(desc))
@@ -47,19 +46,7 @@ bool Testcase::filterHasAccessiblePeerPairs() {
     return false;
 }
 
-PeerValueMatrix<double> Testcase::allToOneHelper(unsigned long long size, unsigned long long loopCount, bool isSM, bool isRead) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperation* memcpyInstance;
-    if (isSM) {
-        memcpyInstance = new MemcpyOperationSM(loopCount, 
-                            isRead ? MemcpyOperation::PREFER_DST_CONTEXT : MemcpyOperation::PREFER_SRC_CONTEXT,
-                            MemcpyOperation::SUM_BW);
-    } else {
-        memcpyInstance = new MemcpyOperationCE(loopCount, 
-                            isRead ? MemcpyOperation::PREFER_DST_CONTEXT : MemcpyOperation::PREFER_SRC_CONTEXT,
-                            MemcpyOperation::SUM_BW);
-    }
-
+void Testcase::allToOneHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead) {
     std::vector<const DeviceNode*> allSrcNodes;
 
     //allocate all src nodes up front, re-use to avoid reallocation
@@ -89,9 +76,9 @@ PeerValueMatrix<double> Testcase::allToOneHelper(unsigned long long size, unsign
 
         if (isRead) {
             // swap dst and src for read tests
-            bandwidthValues.value(0, dstDeviceId) = memcpyInstance->doMemcpy(dstNodes, srcNodes);
+            bandwidthValues.value(0, dstDeviceId) = memcpyInstance.doMemcpy(dstNodes, srcNodes);
         } else {
-            bandwidthValues.value(0, dstDeviceId) = memcpyInstance->doMemcpy(srcNodes, dstNodes);
+            bandwidthValues.value(0, dstDeviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
         }
 
         for (auto node : dstNodes) {
@@ -102,25 +89,9 @@ PeerValueMatrix<double> Testcase::allToOneHelper(unsigned long long size, unsign
     for (auto node : allSrcNodes) {
         delete node;
     }
-
-    delete memcpyInstance;
-
-    return bandwidthValues;
 }
 
-PeerValueMatrix<double> Testcase::oneToAllHelper(unsigned long long size, unsigned long long loopCount, bool isSM, bool isRead) {
-    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperation* memcpyInstance;
-    if (isSM) {
-        memcpyInstance = new MemcpyOperationSM(loopCount, 
-                            isRead ? MemcpyOperation::PREFER_DST_CONTEXT : MemcpyOperation::PREFER_SRC_CONTEXT,
-                            MemcpyOperation::SUM_BW);
-    } else {
-        memcpyInstance = new MemcpyOperationCE(loopCount, 
-                            isRead ? MemcpyOperation::PREFER_DST_CONTEXT : MemcpyOperation::PREFER_SRC_CONTEXT,
-                            MemcpyOperation::SUM_BW);
-    }
-
+void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead) {
     std::vector<const DeviceNode*> allDstNodes;
 
     //allocate all src nodes up front, re-use to avoid reallocation
@@ -150,9 +121,9 @@ PeerValueMatrix<double> Testcase::oneToAllHelper(unsigned long long size, unsign
 
         if (isRead) {
             // swap dst and src for read tests
-            bandwidthValues.value(0, srcDeviceId) = memcpyInstance->doMemcpy(dstNodes, srcNodes);
+            bandwidthValues.value(0, srcDeviceId) = memcpyInstance.doMemcpy(dstNodes, srcNodes);
         } else {
-            bandwidthValues.value(0, srcDeviceId) = memcpyInstance->doMemcpy(srcNodes, dstNodes);
+            bandwidthValues.value(0, srcDeviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
         }
 
         for (auto node : srcNodes) {
@@ -163,8 +134,4 @@ PeerValueMatrix<double> Testcase::oneToAllHelper(unsigned long long size, unsign
     for (auto node : allDstNodes) {
         delete node;
     }
-
-    delete memcpyInstance;
-
-    return bandwidthValues;
 }
