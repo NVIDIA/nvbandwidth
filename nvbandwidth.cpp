@@ -150,8 +150,8 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    std::cout << "This tool provides measurements of bandwidth, but does not guarantee accuracy across all systems." << std::endl 
-        << "Sytem specific tuning may be required to achieve maximum bandwidth." << std::endl << std::endl;
+    std::cout << "NOTE: This tool does not guarantee peak performance across all systems." << std::endl 
+              << "System specific tuning may be required to achieve peak bandwidth." << std::endl << std::endl;
 
     cuInit(0);
     nvmlInit();
