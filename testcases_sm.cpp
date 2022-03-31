@@ -132,7 +132,6 @@ void DeviceToDeviceBidirReadSM::run(unsigned long long size, unsigned long long 
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-
 // DtoD Bidir Write test - copy from src to dst using src context
 void DeviceToDeviceBidirWriteSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
@@ -159,5 +158,45 @@ void DeviceToDeviceBidirWriteSM::run(unsigned long long size, unsigned long long
     }
 
     std::cout << "memcpy SM GPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
+// Write test - copy from src to dst using src context
+void AllToOneWriteSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::SUM_BW);
+    allToOneHelper(size, memcpyInstance, bandwidthValues, false);
+
+    std::cout << "memcpy SM All Gpus -> GPU(column) total bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
+// Read test - copy from dst to src (backwards) using src contxt
+void AllToOneReadSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::SUM_BW);
+    allToOneHelper(size, memcpyInstance, bandwidthValues, false);
+
+    std::cout << "memcpy SM All GPUs <- GPU(column) total bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
+// Write test - copy from src to dst using src context
+void OneToAllWriteSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::SUM_BW);
+    oneToAllHelper(size, memcpyInstance, bandwidthValues, false);
+
+    std::cout << "memcpy SM GPU(column) -> All GPUs total bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
+// Read test - copy from dst to src (backwards) using src contxt
+void OneToAllReadSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::SUM_BW);
+    oneToAllHelper(size, memcpyInstance, bandwidthValues, false);
+
+    std::cout << "memcpy SM GPU(column) <- All GPUs total bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }

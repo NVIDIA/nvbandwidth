@@ -19,6 +19,7 @@
 #define BENCHMARK_H
 
 #include "common.h"
+#include "memcpy.h"
 
 class Testcase {
 protected:
@@ -26,6 +27,10 @@ protected:
     std::string desc;
 
     static bool filterHasAccessiblePeerPairs();
+
+    // helper functions
+    void allToOneHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
+    void oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
 
 public:
     Testcase(std::string key, std::string desc);
@@ -40,6 +45,7 @@ public:
     // Runs the testcase
     virtual void run(unsigned long long size, unsigned long long loopCount) = 0;
 };
+
 
 // CE Testcase classes
 class HostToDeviceCE: public Testcase {
@@ -108,6 +114,20 @@ public:
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
+class AllToOneCE: public Testcase {
+public:
+    AllToOneCE() : Testcase("all_to_one_ce", "All devices to one device memcpy using the Copy Engine") {}
+    void run(unsigned long long size, unsigned long long loopCount);
+    bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
+};
+
+class OneToAllCE: public Testcase {
+public:
+    OneToAllCE() : Testcase("one_to_all_ce", "One device to all devices memcpy using the Copy Engine") {}
+    void run(unsigned long long size, unsigned long long loopCount);
+    bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
+};
+
 // SM Testcase classes
 class HostToDeviceSM: public Testcase {
 public:
@@ -151,6 +171,34 @@ class DeviceToDeviceBidirWriteSM: public Testcase {
 public:
     DeviceToDeviceBidirWriteSM() : Testcase("device_to_device_bidirectional_memcpy_write_sm", "Bidirectional device to device memcpy using the Stream Multiprocessor (write)") {}
     virtual ~DeviceToDeviceBidirWriteSM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+    bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
+};
+
+class AllToOneWriteSM: public Testcase {
+public:
+    AllToOneWriteSM() : Testcase("all_to_one_write_sm", "All devices to one device memcpy using the Streaming Multiprocessor (write)") {}
+    void run(unsigned long long size, unsigned long long loopCount);
+    bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
+};
+
+class AllToOneReadSM: public Testcase {
+public:
+    AllToOneReadSM() : Testcase("all_to_one_read_sm", "All devices to one device memcpy using the Streaming Multiprocessor (read)") {}
+    void run(unsigned long long size, unsigned long long loopCount);
+    bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
+};
+
+class OneToAllWriteSM: public Testcase {
+public:
+    OneToAllWriteSM() : Testcase("one_to_all_write_sm", "One device to all devices memcpy using the Streaming Multiprocessor (write)") {}
+    void run(unsigned long long size, unsigned long long loopCount);
+    bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
+};
+
+class OneToAllReadSM: public Testcase {
+public:
+    OneToAllReadSM() : Testcase("one_to_all_read_sm", "One device to all devices memcpy using the Streaming Multiprocessor (read)") {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
