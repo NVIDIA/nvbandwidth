@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
         std::cout << "Index, Name:\n\tDescription\n";
         std::cout << "=======================\n";
         for (unsigned int i = 0; i < numTestcases; i++) {
-            std::cout << i << ", " << testcases.at(i)->testKey() << ":\n\t" << testcases.at(i)->testDesc() << "\n\n";
+            std::cout << i << ", " << testcases.at(i)->testKey() << ":\n" << testcases.at(i)->testDesc() << "\n\n";
         }
         return 0;
     }

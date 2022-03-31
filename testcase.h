@@ -49,278 +49,223 @@ public:
 
 // CE Testcase classes
 
-/************
- * Host to device CE memcpy using cuMemcpyAsync
- ************/
+// Host to device CE memcpy using cuMemcpyAsync
 class HostToDeviceCE: public Testcase {
 public:
-    HostToDeviceCE() : Testcase("host_to_device_memcpy_ce", "Host to device memcpy using the Copy Engine") {}
+    HostToDeviceCE() : Testcase("host_to_device_memcpy_ce",
+            "\tHost to device CE memcpy using cuMemcpyAsync") {}
     virtual ~HostToDeviceCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
-/************
- * Device to host CE memcpy using cuMemcpyAsync
- ************/
+// Device to host CE memcpy using cuMemcpyAsync
 class DeviceToHostCE: public Testcase {
 public:
-    DeviceToHostCE() : Testcase("device_to_host_memcpy_ce", "Device to host memcpy using the Copy Engine") {}
+    DeviceToHostCE() : Testcase("device_to_host_memcpy_ce", 
+            "\tDevice to host CE memcpy using cuMemcpyAsync") {}
     virtual ~DeviceToHostCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
-/************
- * Host to device bidirectional CE memcpy using cuMemcpyAsync
- * 
- * A host to device copy is measured while a device to host copy is run simultaneously.
- * Only the host to device copy bandwidth is reported.
- ************/
+// Host to device bidirectional CE memcpy using cuMemcpyAsync
 class HostToDeviceBidirCE: public Testcase {
 public:
-    HostToDeviceBidirCE() : Testcase("host_to_device_bidirectional_memcpy_ce", "Bidirectional host to device memcpy using the Copy Engine") {}
+    HostToDeviceBidirCE() : Testcase("host_to_device_bidirectional_memcpy_ce",
+            "\tA host to device copy is measured while a device to host copy is run simultaneously.\n"
+            "\tOnly the host to device copy bandwidth is reported.") {}
     virtual ~HostToDeviceBidirCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
-/************
- * Device to host bidirectional CE memcpy using cuMemcpyAsync
- * 
- * A device to host copy is measured while a host to device copy is run simultaneously.
- * Only the device to host copy bandwidth is reported.
- ************/
+// Device to host bidirectional CE memcpy using cuMemcpyAsync
 class DeviceToHostBidirCE: public Testcase {
 public:
-    DeviceToHostBidirCE() : Testcase("device_to_host_bidirectional_memcpy_ce", "Bidirectional device to host memcpy using the Copy Engine") {}
+    DeviceToHostBidirCE() : Testcase("device_to_host_bidirectional_memcpy_ce",
+            "\tA device to host copy is measured while a host to device copy is run simultaneously.\n"
+            "\tOnly the device to host copy bandwidth is reported.") {}
     virtual ~DeviceToHostBidirCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
-/************
- * Device to Device CE Read memcpy using cuMemcpyAsync
- * 
- * Measures bandwidth of cuMemcpyAsync between each pair of accessible peers.
- * Read tests launch a copy from the peer device to the target using the target's context.
- ************/
+// Device to Device CE Read memcpy using cuMemcpyAsync
 class DeviceToDeviceReadCE: public Testcase {
 public:
-    DeviceToDeviceReadCE() : Testcase("device_to_device_memcpy_read_ce", "Device to device memcpy using the Copy Engine (read)") {}
+    DeviceToDeviceReadCE() : Testcase("device_to_device_memcpy_read_ce",
+            "\tMeasures bandwidth of cuMemcpyAsync between each pair of accessible peers.\n"
+            "\tRead tests launch a copy from the peer device to the target using the target's context.") {}
     virtual ~DeviceToDeviceReadCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-/************
- * Device to Device CE Write memcpy using cuMemcpyAsync
- * 
- * Measures bandwidth of cuMemcpyAsync between each pair of accessible peers.
- * Write tests launch a copy from the source device to the peer using the source's context.
- ************/
+// Device to Device CE Write memcpy using cuMemcpyAsync
 class DeviceToDeviceWriteCE: public Testcase {
 public:
-    DeviceToDeviceWriteCE() : Testcase("device_to_device_memcpy_write_ce", "Device to device memcpy using the Copy Engine (write)") {}
+    DeviceToDeviceWriteCE() : Testcase("device_to_device_memcpy_write_ce",
+            "\tMeasures bandwidth of cuMemcpyAsync between each pair of accessible peers.\n"
+            "\tWrite tests launch a copy from the source device to the peer using the source's context.") {}
     virtual ~DeviceToDeviceWriteCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-/************
- * Device to Device Bidirectional CE memcpy using cuMemcpyAsync
- * 
- * Measures bandwidth of cuMemcpyAsync between each pair of accessible peers.
- * A copy in the opposite direction of the measured copy is run simultaneously but not measured.
- ************/
+// Device to Device Bidirectional CE memcpy using cuMemcpyAsync
 class DeviceToDeviceBidirCE: public Testcase {
 public:
-    DeviceToDeviceBidirCE() : Testcase("device_to_device_bidirectional_memcpy_ce", "Bidirectional device to device memcpy using the Copy Engine") {}
+    DeviceToDeviceBidirCE() : Testcase("device_to_device_bidirectional_memcpy_ce", 
+            "\tMeasures bandwidth of cuMemcpyAsync between each pair of accessible peers.\n"
+            "\tA copy in the opposite direction of the measured copy is run simultaneously but not measured.") {}
     virtual ~DeviceToDeviceBidirCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-/************
- * All to Host CE memcpy using cuMemcpyAsync
- * 
- * Measures bandwidth of cuMemcpyAsync between a single device and the host while simultaneously
- * running copies from all other devices to the host. 
- ************/
+// All to Host CE memcpy using cuMemcpyAsync
 class AllToHostCE: public Testcase {
 public:
-    AllToHostCE() : Testcase("all_to_host_memcpy_ce", "All devices to host memcpy using the Copy Engine") {}
+    AllToHostCE() : Testcase("all_to_host_memcpy_ce", 
+            "\tMeasures bandwidth of cuMemcpyAsync between a single device and the host while simultaneously\n"
+            "\trunning copies from all other devices to the host.") {}
     virtual ~AllToHostCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
-/************
- * Host to All CE memcpy using cuMemcpyAsync
- * 
- * Measures bandwidth of cuMemcpyAsync between the host to a single device while simultaneously
- * running copies from the host to all other devices. 
- ************/
+// Host to All CE memcpy using cuMemcpyAsync
 class HostToAllCE: public Testcase {
 public:
-    HostToAllCE() : Testcase("host_to_all_memcpy_ce", "Host to all devices memcpy using the Copy Engine") {}
+    HostToAllCE() : Testcase("host_to_all_memcpy_ce", 
+            "\tMeasures bandwidth of cuMemcpyAsync between the host to a single device while simultaneously\n"
+            "\trunning copies from the host to all other devices.") {}
     virtual ~HostToAllCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
-/************
- * All to One CE memcpy using cuMemcpyAsync
- * 
- * Measures the total bandwidth of copies from all accessible peers to a single device, for each
- * device. Bandwidth is reported as the sum of all inbound bandwidths for each device.
- ************/
+// All to One CE memcpy using cuMemcpyAsync
 class AllToOneCE: public Testcase {
 public:
-    AllToOneCE() : Testcase("all_to_one_ce", "All devices to one device memcpy using the Copy Engine") {}
+    AllToOneCE() : Testcase("all_to_one_ce", 
+            "\tMeasures the total bandwidth of copies from all accessible peers to a single device, for each\n"
+            "\tdevice. Bandwidth is reported as the sum of all inbound bandwidths for each device.") {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-/************
- * One to All CE memcpy using cuMemcpyAsync
- * 
- * Measures the total bandwidth of copies from a single device to all accessible peers, for each
- * device. Bandwidth is reported as the sum of all outbound bandwidths for each device.
- ************/
+// One to All CE memcpy using cuMemcpyAsync
 class OneToAllCE: public Testcase {
 public:
-    OneToAllCE() : Testcase("one_to_all_ce", "One device to all devices memcpy using the Copy Engine") {}
+    OneToAllCE() : Testcase("one_to_all_ce",
+            "\tMeasures the total bandwidth of copies from a single device to all accessible peers, for each\n"
+            "\tdevice. Bandwidth is reported as the sum of all outbound bandwidths for each device.") {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
 // SM Testcase classes
 
-/************
- * Host to device SM memcpy using a copy kernel
- ************/
+// Host to device SM memcpy using a copy kernel
 class HostToDeviceSM: public Testcase {
 public:
-    HostToDeviceSM() : Testcase("host_to_device_memcpy_sm", "Host to device memcpy using the Stream Multiprocessor") {}
+    HostToDeviceSM() : Testcase("host_to_device_memcpy_sm", 
+            "\tHost to device SM memcpy using a copy kernel") {}
     virtual ~HostToDeviceSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
-/************
- * Device to host SM memcpy using a copy kernel
- ************/
+// Device to host SM memcpy using a copy kernel
 class DeviceToHostSM: public Testcase {
 public:
-    DeviceToHostSM() : Testcase("device_to_host_memcpy_sm", "Device to host memcpy using the Stream Multiprocessor") {}
+    DeviceToHostSM() : Testcase("device_to_host_memcpy_sm", 
+            "\tDevice to host SM memcpy using a copy kernel") {}
     virtual ~DeviceToHostSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
-/************
- * Device to Device SM Read memcpy using a copy kernel
- * 
- * Measures bandwidth of a copy kernel between each pair of accessible peers.
- * Read tests launch a copy from the peer device to the target using the target's context.
- ************/
+// Device to Device SM Read memcpy using a copy kernel
 class DeviceToDeviceReadSM: public Testcase {
 public:
-    DeviceToDeviceReadSM() : Testcase("device_to_device_memcpy_read_sm", "Device to device memcpy using the Stream Multiprocessor (read)") {}
+    DeviceToDeviceReadSM() : Testcase("device_to_device_memcpy_read_sm",
+            "\tMeasures bandwidth of a copy kernel between each pair of accessible peers.\n"
+            "\tRead tests launch a copy from the peer device to the target using the target's context.") {}
     virtual ~DeviceToDeviceReadSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-/************
- * Device to Device SM Write memcpy using a copy kernel
- * 
- * Measures bandwidth of a copy kernel between each pair of accessible peers.
- * Write tests launch a copy from the source device to the peer using the source's context.
- ************/
+// Device to Device SM Write memcpy using a copy kernel
 class DeviceToDeviceWriteSM: public Testcase {
 public:
-    DeviceToDeviceWriteSM() : Testcase("device_to_device_memcpy_write_sm", "Device to device memcpy using the Stream Multiprocessor (write)") {}
+    DeviceToDeviceWriteSM() : Testcase("device_to_device_memcpy_write_sm",
+            "\tMeasures bandwidth of a copy kernel between each pair of accessible peers.\n"
+            "\tWrite tests launch a copy from the source device to the peer using the source's context.") {}
     virtual ~DeviceToDeviceWriteSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-/************
- * Device to Device bidirectional SM Read memcpy using a copy kernel
- * 
- * Measures bandwidth of a copy kernel between each pair of accessible peers. Copies are run
- * in both directions between each pair, and the sum is reported.
- * Read tests launch a copy from the peer device to the target using the target's context.
- ************/
+// Device to Device bidirectional SM Read memcpy using a copy kernel
 class DeviceToDeviceBidirReadSM: public Testcase {
 public:
-    DeviceToDeviceBidirReadSM() : Testcase("device_to_device_bidirectional_memcpy_read_sm", "Bidirectional device to device memcpy using the Stream Multiprocessor (read)") {}
+    DeviceToDeviceBidirReadSM() : Testcase("device_to_device_bidirectional_memcpy_read_sm",
+            "\tMeasures bandwidth of a copy kernel between each pair of accessible peers. Copies are run\n"
+            "\tin both directions between each pair, and the sum is reported.\n"
+            "\tRead tests launch a copy from the peer device to the target using the target's context.") {}
     virtual ~DeviceToDeviceBidirReadSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-/************
- * Device to Device bidirectional SM Write memcpy using a copy kernel
- * 
- * Measures bandwidth of a copy kernel between each pair of accessible peers. Copies are run
- * in both directions between each pair, and the sum is reported.
- * Write tests launch a copy from the source device to the peer using the source's context.
- ************/
+// Device to Device bidirectional SM Write memcpy using a copy kernel
 class DeviceToDeviceBidirWriteSM: public Testcase {
 public:
-    DeviceToDeviceBidirWriteSM() : Testcase("device_to_device_bidirectional_memcpy_write_sm", "Bidirectional device to device memcpy using the Stream Multiprocessor (write)") {}
+    DeviceToDeviceBidirWriteSM() : Testcase("device_to_device_bidirectional_memcpy_write_sm",
+            "\tMeasures bandwidth of a copy kernel between each pair of accessible peers. Copies are run\n"
+            "\tin both directions between each pair, and the sum is reported.\n"
+            "\tWrite tests launch a copy from the source device to the peer using the source's context.") {}
     virtual ~DeviceToDeviceBidirWriteSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-/************
- * All to One SM Write memcpy using a copy kernel
- * 
- * Measures the total bandwidth of copies from all accessible peers to a single device, for each
- * device. Bandwidth is reported as the sum of all inbound bandwidths for each device.
- * Write tests launch a copy from the source device to the peer using the source's context.
- ************/
+// All to One SM Write memcpy using a copy kernel
 class AllToOneWriteSM: public Testcase {
 public:
-    AllToOneWriteSM() : Testcase("all_to_one_write_sm", "All devices to one device memcpy using the Streaming Multiprocessor (write)") {}
+    AllToOneWriteSM() : Testcase("all_to_one_write_sm",
+            "\tMeasures the total bandwidth of copies from all accessible peers to a single device, for each\n"
+            "\tdevice. Bandwidth is reported as the sum of all inbound bandwidths for each device.\n"
+            "\tWrite tests launch a copy from the source device to the peer using the source's context.") {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-/************
- * All to One SM Read memcpy using a copy kernel
- * 
- * Measures the total bandwidth of copies from all accessible peers to a single device, for each
- * device. Bandwidth is reported as the sum of all inbound bandwidths for each device.
- * Read tests launch a copy from the peer device to the target using the target's context.
- ************/
+// All to One SM Read memcpy using a copy kernel
 class AllToOneReadSM: public Testcase {
 public:
-    AllToOneReadSM() : Testcase("all_to_one_read_sm", "All devices to one device memcpy using the Streaming Multiprocessor (read)") {}
+    AllToOneReadSM() : Testcase("all_to_one_read_sm", 
+            "\tMeasures the total bandwidth of copies from all accessible peers to a single device, for each\n"
+            "\tdevice. Bandwidth is reported as the sum of all inbound bandwidths for each device.\n"
+            "\tRead tests launch a copy from the peer device to the target using the target's context.") {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-/************
- * One to All SM Write memcpy using a copy kernel
- * 
- * Measures the total bandwidth of copies from a single device to all accessible peers, for each
- * device. Bandwidth is reported as the sum of all outbound bandwidths for each device.
- * Write tests launch a copy from the source device to the peer using the source's context.
- ************/
+// One to All SM Write memcpy using a copy kernel
 class OneToAllWriteSM: public Testcase {
 public:
-    OneToAllWriteSM() : Testcase("one_to_all_write_sm", "One device to all devices memcpy using the Streaming Multiprocessor (write)") {}
+    OneToAllWriteSM() : Testcase("one_to_all_write_sm", 
+            "\tMeasures the total bandwidth of copies from a single device to all accessible peers, for each\n"
+            "\tdevice. Bandwidth is reported as the sum of all outbound bandwidths for each device.\n"
+            "\tWrite tests launch a copy from the source device to the peer using the source's context.") {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-/************
- * One to All SM Read memcpy using a copy kernel
- * 
- * Measures the total bandwidth of copies from a single device to all accessible peers, for each
- * device. Bandwidth is reported as the sum of all outbound bandwidths for each device.
- * Read tests launch a copy from the peer device to the target using the target's context.
- ************/
+// One to All SM Read memcpy using a copy kernel
 class OneToAllReadSM: public Testcase {
 public:
-    OneToAllReadSM() : Testcase("one_to_all_read_sm", "One device to all devices memcpy using the Streaming Multiprocessor (read)") {}
+    OneToAllReadSM() : Testcase("one_to_all_read_sm", 
+            "\tMeasures the total bandwidth of copies from a single device to all accessible peers, for each\n"
+            "\tdevice. Bandwidth is reported as the sum of all outbound bandwidths for each device.\n"
+            "\tRead tests launch a copy from the peer device to the target using the target's context.") {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
