@@ -150,8 +150,8 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    std::cout << "NOTE: This tool does not guarantee peak performance across all systems." << std::endl 
-              << "System specific tuning may be required to achieve peak bandwidth." << std::endl << std::endl;
+    std::cout << "NOTE: This tool reports current measured bandwidth on your system." << std::endl 
+              << "Additional system-specific tuning may be required to achieve maximal peak bandwidth." << std::endl << std::endl;
 
     cuInit(0);
     nvmlInit();

@@ -2,7 +2,7 @@
 A tool for bandwidth measurements on NVIDIA GPUs.
 
 Measures bandwidth for various memcpy patterns across different links using copy engine or kernel copy methods.
-nvbandwidth does not guarantee peak performance across all systems. System specific tuning may be required to achieve peak bandwidth.
+nvbandwidth reports current measured bandwidth on your system. Additional system-specific tuning may be required to achieve maximal peak bandwidth.
 
 ## Dependencies
 To build and run nvbandwidth please install the Boost program_options library (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html).
@@ -58,8 +58,10 @@ CE copies use memcpy APIs. SM copies use kernels.
 
 SM copies will truncate the copy size to fit uniformly on the target device to correctly report the bandwidth. The actual byte size for the copy is:
 ```
-(512 * deviceSMCount) * floor(copySize / (512 * deviceSMCount))
+(threadsPerBlock * deviceSMCount) * floor(copySize / (threadsPerBlock * deviceSMCount))
 ```
+
+threadsPerBlock is set to 512.
 
 ### Measurement Details
 ![](diagrams/measurement.png)
