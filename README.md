@@ -39,14 +39,21 @@ To run all testcases:
 
 To run a specific testcase:
 ```
-./nvbandwidth -t host_to_device_memcpy_ce
+./nvbandwidth -t device_to_device_memcpy_read_ce
 ```
 Example output:
 ```
-Running host_to_device_memcpy_ce.
-memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)
-          0         1
-0      6.20     12.36
+Running device_to_device_memcpy_read_ce.
+memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)
+          0         1         2         3         4         5         6         7
+0      0.00    264.36    263.73    264.17    263.95    263.05    263.71    263.50
+1    264.60      0.00    264.82    264.17    264.34    263.95    263.52    263.52
+2    263.48    264.38      0.00    264.14    264.17    263.50    263.30    263.52
+3    264.17    264.14    263.50      0.00    263.95    263.93    264.17    264.38
+4    263.99    264.67    263.99    264.86      0.00    264.86    265.38    264.67
+5    263.99    263.78    264.21    264.38    265.14      0.00    264.88    264.84
+6    263.99    263.78    263.33    264.45    264.88    264.21      0.00    264.40
+7    263.56    264.45    264.21    264.21    265.32    264.67    265.10      0.00
 ```
 
 Set number of iterations and the buffer size for copies with --loopCount and --bufferSize
@@ -76,8 +83,8 @@ This process is repeated 3 times, and the median bandwidth for each trial is rep
 ```
 Running host_to_device_memcpy_ce.
 memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)
-          0         1
-0      6.20     12.36
+          0         1         2         3         4         5         6         7
+0     26.03     25.94     25.97     26.00     26.19     25.95     26.00     25.97
 ```
 
 Unidirectional tests measure the bandwidth between each pair in the output matrix individually. Traffic is not sent simultaneously.
@@ -86,8 +93,8 @@ Unidirectional tests measure the bandwidth between each pair in the output matri
 ```
 Running host_to_device_bidirectional_memcpy_ce.
 memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)
-          0         1
-0      5.64     11.16
+          0         1         2         3         4         5         6         7
+0     18.56     18.37     19.37     19.59     18.71     18.79     18.46     18.61
 ```
 
 The setup for bidirectional host to device bandwidth transfer is shown below:
