@@ -145,13 +145,13 @@ int main(int argc, char **argv) {
         std::cout << "Index, Name:\n\tDescription\n";
         std::cout << "=======================\n";
         for (unsigned int i = 0; i < numTestcases; i++) {
-            std::cout << i << ", " << testcases.at(i)->testKey() << ":\n\t" << testcases.at(i)->testDesc() << "\n\n";
+            std::cout << i << ", " << testcases.at(i)->testKey() << ":\n" << testcases.at(i)->testDesc() << "\n\n";
         }
         return 0;
     }
 
-    std::cout << "This tool provides measurements of bandwidth, but does not guarantee accuracy across all systems." << std::endl 
-        << "Sytem specific tuning may be required to achieve maximum bandwidth." << std::endl << std::endl;
+    std::cout << "NOTE: This tool reports current measured bandwidth on your system." << std::endl 
+              << "Additional system-specific tuning may be required to achieve maximal peak bandwidth." << std::endl << std::endl;
 
     cuInit(0);
     nvmlInit();

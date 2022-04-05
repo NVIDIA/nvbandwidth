@@ -2,7 +2,7 @@
 A tool for bandwidth measurements on NVIDIA GPUs.
 
 Measures bandwidth for various memcpy patterns across different links using copy engine or kernel copy methods.
-nvbandwidth does not guarantee accuracy across all systems. Sytem specific tuning may be required to achieve maximum bandwidth.
+nvbandwidth reports current measured bandwidth on your system. Additional system-specific tuning may be required to achieve maximal peak bandwidth.
 
 ## Dependencies
 To build and run nvbandwidth please install the Boost program_options library (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html).
@@ -39,14 +39,21 @@ To run all testcases:
 
 To run a specific testcase:
 ```
-./nvbandwidth -t host_to_device_memcpy_ce
+./nvbandwidth -t device_to_device_memcpy_read_ce
 ```
 Example output:
 ```
-Running host_to_device_memcpy_ce.
-memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)
-          0         1
-0      6.20     12.36
+Running device_to_device_memcpy_write_ce.
+memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)
+          0         1         2         3         4         5         6         7
+0      0.00    276.07    276.36    276.14    276.29    276.48    276.55    276.33
+1    276.19      0.00    276.29    276.29    276.57    276.48    276.38    276.24
+2    276.33    276.29      0.00    276.38    276.50    276.50    276.29    276.31
+3    276.19    276.62    276.24      0.00    276.29    276.60    276.29    276.55
+4    276.03    276.55    276.45    276.76      0.00    276.45    276.36    276.62
+5    276.17    276.57    276.19    276.50    276.31      0.00    276.31    276.15
+6    274.89    276.41    276.38    276.67    276.41    276.26      0.00    276.33
+7    276.12    276.45    276.12    276.36    276.00    276.57    276.45      0.00
 ```
 
 Set number of iterations and the buffer size for copies with --loopCount and --bufferSize
@@ -58,8 +65,10 @@ CE copies use memcpy APIs. SM copies use kernels.
 
 SM copies will truncate the copy size to fit uniformly on the target device to correctly report the bandwidth. The actual byte size for the copy is:
 ```
-(512 * deviceSMCount) * floor(copySize / (512 * deviceSMCount))
+(threadsPerBlock * deviceSMCount) * floor(copySize / (threadsPerBlock * deviceSMCount))
 ```
+
+threadsPerBlock is set to 512.
 
 ### Measurement Details
 ![](diagrams/measurement.png)
@@ -74,8 +83,8 @@ This process is repeated 3 times, and the median bandwidth for each trial is rep
 ```
 Running host_to_device_memcpy_ce.
 memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)
-          0         1
-0      6.20     12.36
+          0         1         2         3         4         5         6         7
+0     26.03     25.94     25.97     26.00     26.19     25.95     26.00     25.97
 ```
 
 Unidirectional tests measure the bandwidth between each pair in the output matrix individually. Traffic is not sent simultaneously.
@@ -84,8 +93,8 @@ Unidirectional tests measure the bandwidth between each pair in the output matri
 ```
 Running host_to_device_bidirectional_memcpy_ce.
 memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)
-          0         1
-0      5.64     11.16
+          0         1         2         3         4         5         6         7
+0     18.56     18.37     19.37     19.59     18.71     18.79     18.46     18.61
 ```
 
 The setup for bidirectional host to device bandwidth transfer is shown below:
