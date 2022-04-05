@@ -103,7 +103,7 @@ class DeviceToDeviceWriteCE: public Testcase {
 public:
     DeviceToDeviceWriteCE() : Testcase("device_to_device_memcpy_write_ce",
             "\tMeasures bandwidth of cuMemcpyAsync between each pair of accessible peers.\n"
-            "\tWrite tests launch a copy from the source device to the peer using the source's context.") {}
+            "\tWrite tests launch a copy from the target device to the peer using the target's context.") {}
     virtual ~DeviceToDeviceWriteCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
@@ -196,7 +196,7 @@ class DeviceToDeviceWriteSM: public Testcase {
 public:
     DeviceToDeviceWriteSM() : Testcase("device_to_device_memcpy_write_sm",
             "\tMeasures bandwidth of a copy kernel between each pair of accessible peers.\n"
-            "\tWrite tests launch a copy from the source device to the peer using the source's context.") {}
+            "\tWrite tests launch a copy from the target device to the peer using the target's context.") {}
     virtual ~DeviceToDeviceWriteSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
@@ -220,7 +220,7 @@ public:
     DeviceToDeviceBidirWriteSM() : Testcase("device_to_device_bidirectional_memcpy_write_sm",
             "\tMeasures bandwidth of a copy kernel between each pair of accessible peers. Copies are run\n"
             "\tin both directions between each pair, and the sum is reported.\n"
-            "\tWrite tests launch a copy from the source device to the peer using the source's context.") {}
+            "\tWrite tests launch a copy from the target device to the peer using the target's context.") {}
     virtual ~DeviceToDeviceBidirWriteSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
@@ -232,7 +232,7 @@ public:
     AllToOneWriteSM() : Testcase("all_to_one_write_sm",
             "\tMeasures the total bandwidth of copies from all accessible peers to a single device, for each\n"
             "\tdevice. Bandwidth is reported as the sum of all inbound bandwidths for each device.\n"
-            "\tWrite tests launch a copy from the source device to the peer using the source's context.") {}
+            "\tWrite tests launch a copy from the target device to the peer using the target's context.") {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
@@ -254,7 +254,7 @@ public:
     OneToAllWriteSM() : Testcase("one_to_all_write_sm", 
             "\tMeasures the total bandwidth of copies from a single device to all accessible peers, for each\n"
             "\tdevice. Bandwidth is reported as the sum of all outbound bandwidths for each device.\n"
-            "\tWrite tests launch a copy from the source device to the peer using the source's context.") {}
+            "\tWrite tests launch a copy from the target device to the peer using the target's context.") {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
