@@ -125,7 +125,7 @@ class DeviceToDeviceBidirWriteCE: public Testcase {
 public:
     DeviceToDeviceBidirWriteCE() : Testcase("device_to_device_bidirectional_memcpy_write_ce", 
             "\tMeasures bandwidth of cuMemcpyAsync between each pair of accessible peers.\n"
-            "\tA copy in the opposite direction of the measured copy is run simultaneously but not measured."
+            "\tA copy in the opposite direction of the measured copy is run simultaneously but not measured.\n"
             "\tWrite tests launch a copy from the target device to the peer using the target's context.") {}
     virtual ~DeviceToDeviceBidirWriteCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
@@ -157,7 +157,7 @@ class AllToOneWriteCE: public Testcase {
 public:
     AllToOneWriteCE() : Testcase("all_to_one_write_ce", 
             "\tMeasures the total bandwidth of copies from all accessible peers to a single device, for each\n"
-            "\tdevice. Bandwidth is reported as the sum of all inbound bandwidths for each device."
+            "\tdevice. Bandwidth is reported as the sum of all inbound bandwidths for each device.\n"
             "\tWrite tests launch a copy from the target device to the peer using the target's context.") {}
     virtual ~AllToOneWriteCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
@@ -169,7 +169,7 @@ class AllToOneReadCE: public Testcase {
 public:
     AllToOneReadCE() : Testcase("all_to_one_read_ce", 
             "\tMeasures the total bandwidth of copies from all accessible peers to a single device, for each\n"
-            "\tdevice. Bandwidth is reported as the sum of all inbound bandwidths for each device."
+            "\tdevice. Bandwidth is reported as the sum of all inbound bandwidths for each device.\n"
             "\tRead tests launch a copy from the peer device to the target using the target's context.") {}
     virtual ~AllToOneReadCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
@@ -181,7 +181,7 @@ class OneToAllWriteCE: public Testcase {
 public:
     OneToAllWriteCE() : Testcase("one_to_all_write_ce",
             "\tMeasures the total bandwidth of copies from a single device to all accessible peers, for each\n"
-            "\tdevice. Bandwidth is reported as the sum of all outbound bandwidths for each device."
+            "\tdevice. Bandwidth is reported as the sum of all outbound bandwidths for each device.\n"
             "\tWrite tests launch a copy from the target device to the peer using the target's context.") {}
     virtual ~OneToAllWriteCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
@@ -193,7 +193,7 @@ class OneToAllReadCE: public Testcase {
 public:
     OneToAllReadCE() : Testcase("one_to_all_read_ce",
             "\tMeasures the total bandwidth of copies from a single device to all accessible peers, for each\n"
-            "\tdevice. Bandwidth is reported as the sum of all outbound bandwidths for each device."
+            "\tdevice. Bandwidth is reported as the sum of all outbound bandwidths for each device.\n"
             "\tRead tests launch a copy from the peer device to the target using the target's context.") {}
     virtual ~OneToAllReadCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
