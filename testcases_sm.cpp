@@ -175,7 +175,7 @@ void AllToOneWriteSM::run(unsigned long long size, unsigned long long loopCount)
 void AllToOneReadSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::SUM_BW);
-    allToOneHelper(size, memcpyInstance, bandwidthValues, false);
+    allToOneHelper(size, memcpyInstance, bandwidthValues, true);
 
     std::cout << "memcpy SM All GPUs <- GPU(column) total bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
@@ -195,7 +195,7 @@ void OneToAllWriteSM::run(unsigned long long size, unsigned long long loopCount)
 void OneToAllReadSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::SUM_BW);
-    oneToAllHelper(size, memcpyInstance, bandwidthValues, false);
+    oneToAllHelper(size, memcpyInstance, bandwidthValues, true);
 
     std::cout << "memcpy SM GPU(column) <- All GPUs total bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
