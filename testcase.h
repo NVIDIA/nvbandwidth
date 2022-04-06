@@ -31,6 +31,7 @@ protected:
     // helper functions
     void allToOneHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
     void oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
+    void allHostHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost);
 
 public:
     Testcase(std::string key, std::string desc);
@@ -264,6 +265,26 @@ public:
     virtual ~DeviceToDeviceBidirWriteSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
+};
+
+// All to Host SM memcpy using a copy kernel
+class AllToHostSM: public Testcase {
+public:
+    AllToHostSM() : Testcase("all_to_host_memcpy_sm", 
+            "\tMeasures bandwidth of a copy kernel between a single device and the host while simultaneously\n"
+            "\trunning copies from all other devices to the host.") {}
+    virtual ~AllToHostSM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
+// Host to All SM memcpy using a copy kernel
+class HostToAllSM: public Testcase {
+public:
+    HostToAllSM() : Testcase("host_to_all_memcpy_sm", 
+            "\tMeasures bandwidth of a copy kernel between the host to a single device while simultaneously\n"
+            "\trunning copies from the host to all other devices.") {}
+    virtual ~HostToAllSM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
 };
 
 // All to One SM Write memcpy using a copy kernel

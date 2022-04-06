@@ -206,33 +206,7 @@ void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
-    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        std::vector<const MemcpyNode*> deviceNodes;
-        std::vector<const MemcpyNode*> hostNodes;
-
-        deviceNodes.push_back(new DeviceNode(size, deviceId));
-        hostNodes.push_back(new HostNode(size, deviceId));
-
-        for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
-            if (interferenceDeviceId == deviceId) {
-                continue;
-            }
-
-            // Double the size of the interference copy to ensure it interferes correctly
-            deviceNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
-            hostNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
-        }
-
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNodes, hostNodes);
-
-        for (auto node : deviceNodes) {
-            delete node;
-        }
-
-        for (auto node : hostNodes) {
-            delete node;
-        }
-    }
+    allHostHelper(size, memcpyInstance, bandwidthValues, false);
 
     std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
@@ -242,33 +216,7 @@ void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
-    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        std::vector<const MemcpyNode*> deviceNodes;
-        std::vector<const MemcpyNode*> hostNodes;
-
-        deviceNodes.push_back(new DeviceNode(size, deviceId));
-        hostNodes.push_back(new HostNode(size, deviceId));
-
-        for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
-            if (interferenceDeviceId == deviceId) {
-                continue;
-            }
-
-            // Double the size of the interference copy to ensure it interferes correctly
-            deviceNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
-            hostNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
-        }
-
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNodes, deviceNodes);
-
-        for (auto node : deviceNodes) {
-            delete node;
-        }
-
-        for (auto node : hostNodes) {
-            delete node;
-        }
-    }
+    allHostHelper(size, memcpyInstance, bandwidthValues, true);
 
     std::cout << "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
