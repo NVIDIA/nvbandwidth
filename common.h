@@ -43,7 +43,7 @@ const unsigned int numThreadPerBlock = 512;
 
 extern int deviceCount;
 extern unsigned int averageLoopCount;
-extern bool disableP2P;
+extern bool disableAffinity;
 // Verbosity
 extern bool verbose;
 class Verbosity {
@@ -246,6 +246,10 @@ inline void setOptimalCpuAffinity(int cudaDeviceID) {
     // NVML doesn't support setting affinity on Windows
     return;
 #endif
+    if (disableAffinity) {
+        return;
+    }
+
     nvmlDevice_t device;
     CUuuid dev_uuid;
 

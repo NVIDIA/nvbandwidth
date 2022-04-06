@@ -30,8 +30,8 @@ int deviceCount;
 unsigned int averageLoopCount;
 unsigned long long bufferSize;
 unsigned long long loopCount;
-bool disableP2P;
 bool verbose;
+bool disableAffinity;
 Verbosity VERBOSE;
 
 // Define testcases here
@@ -103,7 +103,6 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
 
 int main(int argc, char **argv) {
     averageLoopCount = defaultAverageLoopCount;
-    disableP2P = true;
 
     std::cout << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
     std::cout << "Built from Git version: " << GIT_VERSION << std::endl << std::endl;
@@ -119,7 +118,8 @@ int main(int argc, char **argv) {
         ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed")
         ("list,l", "List available testcases")
         ("testcase,t", opt::value<std::vector<std::string>>(&testcasesToRun)->multitoken(), "Testcase(s) to run (by name or index)")
-        ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output");
+        ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output")
+        ("disableAffinity,d", opt::bool_switch(&disableAffinity)->default_value(false), "Disable automatic CPU affinity control");
 
     opt::variables_map vm;
     try {
