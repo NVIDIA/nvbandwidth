@@ -153,7 +153,7 @@ public:
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
-// All to One CE Read memcpy using cuMemcpyAsync
+// All to One CE Write memcpy using cuMemcpyAsync
 class AllToOneWriteCE: public Testcase {
 public:
     AllToOneWriteCE() : Testcase("all_to_one_write_ce", 
@@ -165,7 +165,7 @@ public:
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
-// All to One CE Write memcpy using cuMemcpyAsync
+// All to One CE Read memcpy using cuMemcpyAsync
 class AllToOneReadCE: public Testcase {
 public:
     AllToOneReadCE() : Testcase("all_to_one_read_ce", 
