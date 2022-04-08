@@ -229,7 +229,6 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
             unsigned long long bandwidth = (totalSize * loopCount * 1000ull * 1000ull) / (unsigned long long) elapsedTotalInUs;
             totalBandwidth((double) bandwidth);
 
-            VERBOSE << "size " << totalSize << " time " << elapsedTotalInUs << "\n";
             VERBOSE << "\tSample " << n << ": Total Bandwidth : " <<
                 std::fixed << std::setprecision(2) << (double)bandwidth * 1e-9 << " GB/s\n";
         }
