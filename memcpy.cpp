@@ -184,7 +184,7 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
             assert(srcNodes[i]->getBufferSize() == dstNodes[i]->getBufferSize());
             adjustedCopySizes[i] = memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), loopCount);
             CU_ASSERT(cuEventRecord(endEvents[i], streams[i]));
-            if (bandwidthValue == BandwidthValue::TOTAL_BW) {
+            if (bandwidthValue == BandwidthValue::TOTAL_BW && i != 0) {
                 // make stream0 wait on the all the others so we can measure total completion time
                 CU_ASSERT(cuStreamWaitEvent(streams[0], endEvents[i], 0));
             }
@@ -229,6 +229,7 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
             unsigned long long bandwidth = (totalSize * loopCount * 1000ull * 1000ull) / (unsigned long long) elapsedTotalInUs;
             totalBandwidth((double) bandwidth);
 
+            VERBOSE << "size " << totalSize << " time " << elapsedTotalInUs << "\n";
             VERBOSE << "\tSample " << n << ": Total Bandwidth : " <<
                 std::fixed << std::setprecision(2) << (double)bandwidth * 1e-9 << " GB/s\n";
         }
