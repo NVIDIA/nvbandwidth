@@ -115,7 +115,8 @@ class DeviceToDeviceBidirReadCE: public Testcase {
 public:
     DeviceToDeviceBidirReadCE() : Testcase("device_to_device_bidirectional_memcpy_read_ce", 
             "\tMeasures bandwidth of cuMemcpyAsync between each pair of accessible peers.\n"
-            "\tA copy in the opposite direction of the measured copy is run simultaneously but not measured.") {}
+            "\tA copy in the opposite direction of the measured copy is run simultaneously but not measured.\n"
+            "\tRead tests launch a copy from the peer device to the target using the target's context.") {}
     virtual ~DeviceToDeviceBidirReadCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
