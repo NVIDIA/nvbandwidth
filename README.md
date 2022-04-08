@@ -24,12 +24,13 @@ You may need to set the BOOST_ROOT environment variable on Windows to tell CMake
 ```
 ./nvbandwidth -h
 nvbandwidth CLI:
-  -h [ --help ]          Produce help message
-  --bufferSize arg (=64) Memcpy buffer size in MiB
-  --loopCount arg (=16)  Iterations of memcpy to be performed
-  -l [ --list ]          List available testcases
-  -t [ --testcase ] arg  Testcase(s) to run (by name or index)
-  -v [ --verbose ]       Verbose output
+  -h [ --help ]             Produce help message
+  --bufferSize arg (=64)    Memcpy buffer size in MiB
+  --loopCount arg (=16)     Iterations of memcpy to be performed
+  -l [ --list ]             List available testcases
+  -t [ --testcase ] arg     Testcase(s) to run (by name or index)
+  -v [ --verbose ]          Verbose output
+  -d [ --disableAffinity ]  Disable automatic CPU affinity control
 ```
 
 To run all testcases:
