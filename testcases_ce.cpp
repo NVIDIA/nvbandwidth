@@ -141,7 +141,39 @@ void DeviceToDeviceWriteCE::run(unsigned long long size, unsigned long long loop
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void DeviceToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCount) {
+// DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
+void DeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
+    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT);
+
+    for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
+        for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+            if (peerDeviceId == srcDeviceId) {
+                continue;
+            }
+
+            // Double the size of the interference copy to ensure it interferes correctly
+            DeviceNode src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
+            DeviceNode peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
+
+            if (!src1.enablePeerAcess(peer1)) {
+                continue;
+            }
+
+            // swap src and peer nodes, but use srcNodes (the copy's destination) context
+            std::vector<const MemcpyNode*> srcNodes = {&peer1, &src2};
+            std::vector<const MemcpyNode*> peerNodes = {&src1, &peer2};
+
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
+        }
+    }
+
+    std::cout << "memcpy CE GPU(row) <-> GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
+// DtoD Bidir Write test - copy from src to dst using src context
+void DeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
@@ -174,33 +206,7 @@ void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
-    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        std::vector<const MemcpyNode*> deviceNodes;
-        std::vector<const MemcpyNode*> hostNodes;
-
-        deviceNodes.push_back(new DeviceNode(size, deviceId));
-        hostNodes.push_back(new HostNode(size, deviceId));
-
-        for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
-            if (interferenceDeviceId == deviceId) {
-                continue;
-            }
-
-            // Double the size of the interference copy to ensure it interferes correctly
-            deviceNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
-            hostNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
-        }
-
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNodes, hostNodes);
-
-        for (auto node : deviceNodes) {
-            delete node;
-        }
-
-        for (auto node : hostNodes) {
-            delete node;
-        }
-    }
+    allHostHelper(size, memcpyInstance, bandwidthValues, false);
 
     std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
@@ -210,39 +216,14 @@ void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
 
-    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        std::vector<const MemcpyNode*> deviceNodes;
-        std::vector<const MemcpyNode*> hostNodes;
-
-        deviceNodes.push_back(new DeviceNode(size, deviceId));
-        hostNodes.push_back(new HostNode(size, deviceId));
-
-        for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
-            if (interferenceDeviceId == deviceId) {
-                continue;
-            }
-
-            // Double the size of the interference copy to ensure it interferes correctly
-            deviceNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
-            hostNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
-        }
-
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNodes, deviceNodes);
-
-        for (auto node : deviceNodes) {
-            delete node;
-        }
-
-        for (auto node : hostNodes) {
-            delete node;
-        }
-    }
+    allHostHelper(size, memcpyInstance, bandwidthValues, true);
 
     std::cout << "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void AllToOneCE::run(unsigned long long size, unsigned long long loopCount) {
+// Write test - copy from src to dst using src context
+void AllToOneWriteCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::SUM_BW);
     allToOneHelper(size, memcpyInstance, bandwidthValues, false);
@@ -251,11 +232,32 @@ void AllToOneCE::run(unsigned long long size, unsigned long long loopCount) {
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
-void OneToAllCE::run(unsigned long long size, unsigned long long loopCount) {
+// Read test - copy from dst to src (backwards) using src contxt
+void AllToOneReadCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::SUM_BW);
+    allToOneHelper(size, memcpyInstance, bandwidthValues, true);
+
+    std::cout << "memcpy CE All Gpus <- GPU(column) total bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
+// Write test - copy from src to dst using src context
+void OneToAllWriteCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::SUM_BW);
-    allToOneHelper(size, memcpyInstance, bandwidthValues, false);
+    oneToAllHelper(size, memcpyInstance, bandwidthValues, false);
 
     std::cout << "memcpy CE GPU(column) -> All GPUs total bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
+// Read test - copy from dst to src (backwards) using src contxt
+void OneToAllReadCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::SUM_BW);
+    oneToAllHelper(size, memcpyInstance, bandwidthValues, true);
+
+    std::cout << "memcpy CE GPU(column) <- All GPUs total bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
