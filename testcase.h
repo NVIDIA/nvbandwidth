@@ -194,7 +194,7 @@ class OneToAllReadCE: public Testcase {
 public:
     OneToAllReadCE() : Testcase("one_to_all_read_ce",
             "\tMeasures the total bandwidth of copies from a single device to all accessible peers, for each\n"
-            "\tdevice. Bandwidth is reported as the total inbound bandwidths for each device.\n"
+            "\tdevice. Bandwidth is reported as the total inbound bandwidth for each device.\n"
             "\tRead tests launch a copy from the peer device to the target using the target's context.") {}
     virtual ~OneToAllReadCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
