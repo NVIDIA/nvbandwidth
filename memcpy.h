@@ -76,7 +76,8 @@ public:
     // Specifies which bandwidths to use for the final result of simultaneous copies
     enum BandwidthValue { 
             USE_FIRST_BW,      // Use the bandwidth of the first copy in the simultaneous copy list
-            SUM_BW             // Use the sum of all bandwidths from the simultaneous copy list
+            SUM_BW,            // Use the sum of all bandwidths from the simultaneous copy list
+            TOTAL_BW           // Use the total bandwidth of all copies, based on total time and total bytes copied
     };
 
 private:

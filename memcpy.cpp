@@ -132,6 +132,8 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
     std::vector<CUevent> endEvents(srcNodes.size());
     std::vector<PerformanceStatistic> bandwidthStats(srcNodes.size());
     std::vector<size_t> adjustedCopySizes(srcNodes.size());
+    PerformanceStatistic totalBandwidth;
+    CUevent totalEnd;
 
     CU_ASSERT(cuMemHostAlloc((void **)&blockingVar, sizeof(*blockingVar), CU_MEMHOSTALLOC_PORTABLE));
 
@@ -150,6 +152,9 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
         CU_ASSERT(cuEventCreate(&startEvents[i], CU_EVENT_DEFAULT));
         CU_ASSERT(cuEventCreate(&endEvents[i], CU_EVENT_DEFAULT));
     }
+
+    CU_ASSERT(cuCtxSetCurrent(contexts[0]));
+    CU_ASSERT(cuEventCreate(&totalEnd, CU_EVENT_DEFAULT));
 
     // This loop is for sampling the testcase (which itself has a loop count)
     for (unsigned int n = 0; n < averageLoopCount; n++) {
@@ -179,7 +184,15 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
             assert(srcNodes[i]->getBufferSize() == dstNodes[i]->getBufferSize());
             adjustedCopySizes[i] = memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), loopCount);
             CU_ASSERT(cuEventRecord(endEvents[i], streams[i]));
+            if (bandwidthValue == BandwidthValue::TOTAL_BW) {
+                // make stream0 wait on the all the others so we can measure total completion time
+                CU_ASSERT(cuStreamWaitEvent(streams[0], endEvents[i], 0));
+            }
         }
+
+        // record the total end - only valid if BandwidthValue::TOTAL_BW is used due to StreamWaitEvent above
+        CU_ASSERT(cuCtxSetCurrent(contexts[0]));
+        CU_ASSERT(cuEventRecord(totalEnd, streams[0]));
 
         // unblock the streams
         *blockingVar = 1;
@@ -195,16 +208,36 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
             unsigned long long bandwidth = (adjustedCopySizes[i] * loopCount * 1000ull * 1000ull) / (unsigned long long) elapsedWithEventsInUs;
             bandwidthStats[i]((double) bandwidth);
 
-            if (bandwidthValue == BandwidthValue::SUM_BW || i == 0) {
+            if (bandwidthValue == BandwidthValue::SUM_BW || BandwidthValue::TOTAL_BW || i == 0) {
                 // Verbose print only the values that are used for the final output
                 VERBOSE << "\tSample " << n << ": " << srcNodes[i]->getNodeString() << " -> " << dstNodes[i]->getNodeString() << ": " <<
                     std::fixed << std::setprecision(2) << (double)bandwidth * 1e-9 << " GB/s\n";
             }
         }
+
+        if (bandwidthValue == BandwidthValue::TOTAL_BW) {
+            float totalTime = 0.0f;
+            CU_ASSERT(cuEventElapsedTime(&totalTime, startEvents[0], totalEnd));
+            double elapsedTotalInUs = ((double) totalTime * 1000.0);
+
+            // get total bytes copied
+            size_t totalSize = 0;
+            for (size_t size : adjustedCopySizes) {
+                totalSize += size;
+            }
+
+            unsigned long long bandwidth = (totalSize * loopCount * 1000ull * 1000ull) / (unsigned long long) elapsedTotalInUs;
+            totalBandwidth((double) bandwidth);
+
+            VERBOSE << "\tSample " << n << ": Total Bandwidth : " <<
+                std::fixed << std::setprecision(2) << (double)bandwidth * 1e-9 << " GB/s\n";
+        }
     }
 
     // cleanup
     CU_ASSERT(cuMemFreeHost((void*)blockingVar));
+
+    CU_ASSERT(cuEventDestroy(totalEnd));
 
     for (int i = 0; i < srcNodes.size(); i++) {
         CU_ASSERT(cuStreamDestroy(streams[i]));
@@ -218,6 +251,8 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
             sum += stat.median() * 1e-9;
         }
         return sum;
+    } else if (bandwidthValue == BandwidthValue::TOTAL_BW) {
+        return totalBandwidth.median() * 1e-9;
     } else {
         return bandwidthStats[0].median() * 1e-9;
     }
