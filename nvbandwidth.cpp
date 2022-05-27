@@ -47,6 +47,8 @@ std::vector<Testcase*> createTestcases() {
         new DeviceToDeviceBidirWriteCE(),
         new AllToHostCE(),
         new HostToAllCE(),
+        new HostToAllBidirCE(),
+        new AllToHostBidirCE(),
         new AllToOneWriteCE(),
         new AllToOneReadCE(),
         new OneToAllWriteCE(),

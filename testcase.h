@@ -32,7 +32,7 @@ protected:
     void allToOneHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
     void oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
     void allHostHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost);
-
+    void allHostBidirHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost);
 public:
     Testcase(std::string key, std::string desc);
     virtual ~Testcase() {}
@@ -151,6 +151,28 @@ public:
             "\tMeasures bandwidth of cuMemcpyAsync between the host to a single device while simultaneously\n"
             "\trunning copies from the host to all other devices.") {}
     virtual ~HostToAllCE() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
+// All to Host Bidirectional CE memcpy using cuMemcpyAsync
+class AllToHostBidirCE: public Testcase {
+public:
+    AllToHostBidirCE() : Testcase("all_to_host_bidirectional_memcpy_ce",
+                             "\tMeasures bandwidth of cuMemcpyAsync between a single device and the host while simultaneously\n"
+                             "\tA copy in the opposite direction of the measured copy is run simultaneously but not measured.\n"
+                             "\trunning copies from all other devices to the host.") {}
+    virtual ~AllToHostBidirCE() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
+// Host to All Bidirectional CE memcpy using cuMemcpyAsync
+class HostToAllBidirCE: public Testcase {
+public:
+    HostToAllBidirCE() : Testcase("host_to_all_bidirectional_memcpy_ce",
+                             "\tMeasures bandwidth of cuMemcpyAsync between the host to a single device while simultaneously\n"
+                             "\tA copy in the opposite direction of the measured copy is run simultaneously but not measured.\n"
+                             "\trunning copies from the host to all other devices.") {}
+    virtual ~HostToAllBidirCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
 

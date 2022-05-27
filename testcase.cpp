@@ -169,3 +169,42 @@ void Testcase::allHostHelper(unsigned long long size, MemcpyOperation &memcpyIns
         }
     }
 }
+
+void Testcase::allHostBidirHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost) {
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        std::vector<const MemcpyNode*> aNodes;
+        std::vector<const MemcpyNode*> bNodes;
+
+        aNodes.push_back(new DeviceNode(size, deviceId));
+        bNodes.push_back(new HostNode(size, deviceId));
+
+        for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
+            // Double the size of the interference copy to ensure it interferes correctly
+            aNodes.push_back(new HostNode(2 * size, deviceId));
+            bNodes.push_back(new DeviceNode(2 * size, deviceId));
+
+            if (interferenceDeviceId == deviceId) {
+                continue;
+            }
+
+            // Double the size of the interference copy to ensure it interferes correctly
+            aNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
+            bNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
+        }
+
+        if (sourceIsHost) {
+            bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(bNodes, aNodes);
+        } else {
+            bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(aNodes, bNodes);
+        }
+
+        for (auto node : aNodes) {
+            delete node;
+        }
+
+        for (auto node : bNodes) {
+            delete node;
+        }
+    }
+}
+
