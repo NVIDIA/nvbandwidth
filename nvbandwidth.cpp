@@ -162,6 +162,11 @@ int main(int argc, char **argv) {
     nvmlInit();
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
 
+    for (int i = 0; i < deviceCount; ++i) {
+        cudaSetDevice(i);
+        cudaFree(0);
+    }
+
     int cudaVersion;
     cudaRuntimeGetVersion(&cudaVersion);
     std::cout << "CUDA Runtime Version: " << cudaVersion << std::endl;
