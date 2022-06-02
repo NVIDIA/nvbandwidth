@@ -162,11 +162,6 @@ int main(int argc, char **argv) {
     nvmlInit();
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
 
-    for (int i = 0; i < deviceCount; ++i) {
-        cudaSetDevice(i);
-        cudaFree(0);
-    }
-
     int cudaVersion;
     cudaRuntimeGetVersion(&cudaVersion);
     std::cout << "CUDA Runtime Version: " << cudaVersion << std::endl;
@@ -186,6 +181,10 @@ int main(int argc, char **argv) {
         CU_ASSERT(cuDeviceGetName(name, 256, dev));
 
         std::cout << "Device " << iDev << ": " << name << std::endl;
+
+        // Force runtime initialization for all devices, which includes loading kernels.
+        cudaSetDevice(iDev);
+        cudaFree(0);
     }
     std::cout << std::endl;
 
