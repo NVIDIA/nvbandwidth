@@ -181,12 +181,13 @@ int main(int argc, char **argv) {
         CU_ASSERT(cuDeviceGetName(name, 256, dev));
 
         std::cout << "Device " << iDev << ": " << name << std::endl;
-
-        // Force runtime initialization for all devices, which includes loading kernels.
-        cudaSetDevice(iDev);
-        cudaFree(0);
     }
     std::cout << std::endl;
+
+    // This triggers the loading of all kernels on all devices, even with lazy loading enabled.
+    // Some tests can create complex dependencies between devices and function loading requires a
+    // device synchronization, so loading in the middle of a test can deadlock.
+    preloadKernels(deviceCount);
 
     if (testcasesToRun.size() == 0) {
         // run all testcases

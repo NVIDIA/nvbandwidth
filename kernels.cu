@@ -88,7 +88,7 @@ size_t copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUs
     return sizeInElement * sizeof(uint4);
 }
 
-__global__ void spinKernel(volatile int *latch, const unsigned long long timeoutClocks)
+__global__ void spinKernelDevice(volatile int *latch, const unsigned long long timeoutClocks)
 {
     register unsigned long long endTime = clock64() + timeoutClocks;
     while (!*latch) {
@@ -111,7 +111,17 @@ CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long tim
 
     unsigned long long timeoutClocks = (clocksPerMs * timeoutNs) / 1000;
 
-    spinKernel<<<1, 1, 0, stream>>>(latch, timeoutClocks);
+    spinKernelDevice<<<1, 1, 0, stream>>>(latch, timeoutClocks);
 
     return CUDA_SUCCESS;
+}
+
+void preloadKernels(int deviceCount)
+{
+    cudaFuncAttributes unused;
+    for (int iDev = 0; iDev < deviceCount; iDev++) {
+        cudaSetDevice(iDev);
+        cudaFuncGetAttributes(&unused, &stridingMemcpyKernel);
+        cudaFuncGetAttributes(&unused, &spinKernelDevice);
+    }
 }
