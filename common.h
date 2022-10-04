@@ -33,6 +33,7 @@
 #include <vector>
 #include <unordered_set>
 #include <limits.h>
+#include <optional>
 
 // Default constants
 const unsigned long long defaultLoopCount = 16;
@@ -164,19 +165,19 @@ public:
 };
 
 template <class T> struct PeerValueMatrix {
-    T *m_matrix;
+    std::optional <T> *m_matrix;
     int m_rows, m_columns;
     std::string key;
     
-    PeerValueMatrix(int rows, int columns, std::string key = ""): m_matrix(new T[rows * columns]()), m_rows(rows), m_columns(columns), key(key) {}
+    PeerValueMatrix(int rows, int columns, std::string key = ""): m_matrix(new std::optional <T>[rows * columns]()), m_rows(rows), m_columns(columns), key(key) {}
 
     ~PeerValueMatrix() { delete[] m_matrix; }
-    T &value(int src, int dst) {
+    std::optional <T> &value(int src, int dst) {
         assert(src >= 0 && src < m_rows);
         assert(dst >= 0 && dst < m_columns);
         return m_matrix[src * m_columns + dst];
     }
-    const T &value(int src, int dst) const {
+    const std::optional <T> &value(int src, int dst) const {
         assert(src >= 0 && src < m_rows);
         assert(dst >= 0 && dst < m_columns);
         return m_matrix[src * m_columns + dst];
@@ -199,12 +200,17 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
     for (int currentDevice = 0; currentDevice < matrix.m_rows; currentDevice++) {
         o << currentDevice;
         for (int peer = 0; peer < matrix.m_columns; peer++) {
-            T val = matrix.value(currentDevice, peer);
-            o << std::setw(10) << val;
-            sum += val;
-            maxVal = std::max(maxVal, val);
-            minVal = std::min(minVal, val);
-            if (val > 0) count++;
+            std::optional <T> val = matrix.value(currentDevice, peer);
+            if (val) {
+                o << std::setw(10) << val.value();
+            }
+            else {
+                o << std::setw(10) << "N/A";
+            }
+            sum += val.value_or(0.0);
+            maxVal = std::max(maxVal, val.value_or(0.0));
+            minVal = std::min(minVal, val.value_or(0.0));
+            if (val.value_or(0.0) > 0) count++;
         }
         o << std::endl;
     }
