@@ -4,6 +4,10 @@ A tool for bandwidth measurements on NVIDIA GPUs.
 Measures bandwidth for various memcpy patterns across different links using copy engine or kernel copy methods.
 nvbandwidth reports current measured bandwidth on your system. Additional system-specific tuning may be required to achieve maximal peak bandwidth.
 
+## Requirements
+Recently, we started using c++17 features in nvbandwidth code. Because of this, we have updated the CXX and CUDA standard to 17. Ensure that the compiler on the system supports C++17.
+The minimum cmake version required is 3.20
+
 ## Dependencies
 To build and run nvbandwidth please install the Boost program_options library (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html).
 
