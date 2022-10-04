@@ -73,12 +73,14 @@ void Testcase::allToOneHelper(unsigned long long size, MemcpyOperation &memcpyIn
             srcNodes.push_back(allSrcNodes[srcDeviceId]);
             dstNodes.push_back(dstNode);
         }
-
-        if (isRead) {
-            // swap dst and src for read tests
-            bandwidthValues.value(0, dstDeviceId) = memcpyInstance.doMemcpy(dstNodes, srcNodes);
-        } else {
-            bandwidthValues.value(0, dstDeviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+        // If no peer GPUs, skip measurements.
+        if (!srcNodes.empty()){
+            if (isRead) {
+                // swap dst and src for read tests
+                bandwidthValues.value(0, dstDeviceId) = memcpyInstance.doMemcpy(dstNodes, srcNodes);
+            } else {
+                bandwidthValues.value(0, dstDeviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+            }
         }
 
         for (auto node : dstNodes) {
@@ -118,12 +120,14 @@ void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyIn
             srcNodes.push_back(srcNode);
             dstNodes.push_back(allDstNodes[dstDeviceId]);
         }
-
-        if (isRead) {
-            // swap dst and src for read tests
-            bandwidthValues.value(0, srcDeviceId) = memcpyInstance.doMemcpy(dstNodes, srcNodes);
-        } else {
-            bandwidthValues.value(0, srcDeviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+        // If no peer GPUs, skip measurements.
+        if(!srcNodes.empty()){
+            if (isRead) {
+                // swap dst and src for read tests
+                bandwidthValues.value(0, srcDeviceId) = memcpyInstance.doMemcpy(dstNodes, srcNodes);
+            } else {
+                bandwidthValues.value(0, srcDeviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+            }
         }
 
         for (auto node : srcNodes) {
