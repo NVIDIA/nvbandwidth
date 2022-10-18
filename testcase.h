@@ -32,6 +32,7 @@ protected:
     void allToOneHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
     void oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
     void allHostHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost);
+    void allHostBidirHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost);
 
 public:
     Testcase(std::string key, std::string desc);
@@ -144,6 +145,17 @@ public:
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
+// All to Host bidirectional CE memcpy using cuMemcpyAsync
+class AllToHostBidirCE: public Testcase {
+public:
+    AllToHostBidirCE() : Testcase("all_to_host_bidirectional_memcpy_ce",
+            "\tA device to host copy is measured while a host to device copy is run simultaneously.\n"
+            "\tOnly the device to host copy bandwidth is reported.\n"
+            "\tAll other devices generate simultaneous host to device and device to host interferring traffic.") {}
+    virtual ~AllToHostBidirCE() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
 // Host to All CE memcpy using cuMemcpyAsync
 class HostToAllCE: public Testcase {
 public:
@@ -153,6 +165,18 @@ public:
     virtual ~HostToAllCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
+
+// Host to All bidirectional CE memcpy using cuMemcpyAsync
+class HostToAllBidirCE: public Testcase {
+public:
+    HostToAllBidirCE() : Testcase("host_to_all_bidirectional_memcpy_ce",
+            "\tA host to device copy is measured while a device to host copy is run simultaneously.\n"
+            "\tOnly the host to device copy bandwidth is reported.\n"
+            "\tAll other devices generate simultaneous host to device and device to host interferring traffic.") {}
+    virtual ~HostToAllBidirCE() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
 
 // All to One CE Write memcpy using cuMemcpyAsync
 class AllToOneWriteCE: public Testcase {
@@ -278,6 +302,17 @@ public:
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
+// All to Host bidirectional SM memcpy using a copy kernel
+class AllToHostBidirSM: public Testcase {
+public:
+    AllToHostBidirSM() : Testcase("all_to_host_bidirectional_memcpy_sm",
+            "\tA device to host bandwidth of a copy kernel is measured while a host to device copy is run simultaneously.\n"
+            "\tOnly the device to host copy bandwidth is reported.\n"
+            "\tAll other devices generate simultaneous host to device and device to host interferring traffic using copy kernels.") {}
+    virtual ~AllToHostBidirSM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
 // Host to All SM memcpy using a copy kernel
 class HostToAllSM: public Testcase {
 public:
@@ -285,6 +320,17 @@ public:
             "\tMeasures bandwidth of a copy kernel between the host to a single device while simultaneously\n"
             "\trunning copies from the host to all other devices.") {}
     virtual ~HostToAllSM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
+// Host to All bidirectional SM memcpy using a copy kernel
+class HostToAllBidirSM: public Testcase {
+public:
+    HostToAllBidirSM() : Testcase("host_to_all_bidirectional_memcpy_sm",
+            "\tA host to device bandwidth of a copy kernel is measured while a device to host copy is run simultaneously.\n"
+            "\tOnly the host to device copy bandwidth is reported.\n"
+            "\tAll other devices generate simultaneous host to device and device to host interferring traffic using copy kernels.") {}
+    virtual ~HostToAllBidirSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
