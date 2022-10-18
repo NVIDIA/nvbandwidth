@@ -212,6 +212,16 @@ void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
+void AllToHostBidirCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationCE memcpyInstance(loopCount);
+
+    allHostBidirHelper(size, memcpyInstance, bandwidthValues, false);
+
+    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
 void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationCE memcpyInstance(loopCount);
@@ -219,6 +229,16 @@ void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
     allHostHelper(size, memcpyInstance, bandwidthValues, true);
 
     std::cout << "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
+void HostToAllBidirCE::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationCE memcpyInstance(loopCount);
+
+    allHostBidirHelper(size, memcpyInstance, bandwidthValues, true);
+
+    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 

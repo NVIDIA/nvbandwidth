@@ -173,3 +173,50 @@ void Testcase::allHostHelper(unsigned long long size, MemcpyOperation &memcpyIns
         }
     }
 }
+
+void Testcase::allHostBidirHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost) {
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        std::vector<const MemcpyNode*> srcNodes;
+        std::vector<const MemcpyNode*> dstNodes;
+
+        if (sourceIsHost) {
+            srcNodes.push_back(new HostNode(size, deviceId));
+            dstNodes.push_back(new DeviceNode(size, deviceId));
+
+            // Double the size of the interference copy to ensure it interferes correctly
+            srcNodes.push_back(new DeviceNode(size * 2, deviceId));
+            dstNodes.push_back(new HostNode(size * 2, deviceId));
+        }
+        else {
+            srcNodes.push_back(new DeviceNode(size, deviceId));
+            dstNodes.push_back(new HostNode(size, deviceId));
+
+            // Double the size of the interference copy to ensure it interferes correctly
+            srcNodes.push_back(new HostNode(size * 2, deviceId));
+            dstNodes.push_back(new DeviceNode(size * 2, deviceId));
+        }
+
+        for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
+            if (interferenceDeviceId == deviceId) {
+                continue;
+            }
+
+            // Double the size of the interference copy to ensure it interferes correctly
+            srcNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
+            dstNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
+
+            srcNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
+            dstNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
+        }
+
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+
+        for (auto node : srcNodes) {
+            delete node;
+        }
+
+        for (auto node : dstNodes) {
+            delete node;
+        }
+    }
+}
