@@ -162,6 +162,10 @@ int main(int argc, char **argv) {
     cuInit(0);
     nvmlInit();
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
+    if (bufferSize < defaultBufferSize) {
+        std::cout << "NOTE: You have chosen a buffer size that is smaller than the default buffer size. " << std::endl
+        << "It is suggested the use of default buffer size (64MB) to achieve maximal peak bandwidth." << std::endl << std::endl;
+    }
 
     int cudaVersion;
     cudaRuntimeGetVersion(&cudaVersion);
