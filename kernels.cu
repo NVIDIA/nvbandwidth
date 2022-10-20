@@ -17,6 +17,17 @@
 
 #include "kernels.cuh"
 
+__global__ void simpleCopyKernel(unsigned long long loopCount, volatile uint4 *dst, volatile uint4 *src) {
+    // We use the volatile keyword to force the looped writes to not be cached
+    // If the memory location is cached, then the writes are all hits in L1 
+    // for small buffer sizes.
+
+    for (unsigned int i = 0; i < loopCount; i++) {
+        const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+        dst[idx].x = src[idx].x;
+    }
+}
+
 __global__ void stridingMemcpyKernel(unsigned int totalThreadCount, unsigned long long loopCount, uint4* dst, uint4* src, size_t chunkSizeInElement) {
     unsigned long long from = blockDim.x * blockIdx.x + threadIdx.x;
     unsigned long long bigChunkSizeInElement = chunkSizeInElement / 12;
@@ -73,6 +84,22 @@ size_t copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUs
     int numSm;
     CU_ASSERT(cuDeviceGetAttribute(&numSm, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, dev));
     unsigned int totalThreadCount = numSm * numThreadPerBlock;
+
+    // If the user provided buffer size is samller than default buffer size,
+    // we use the simple copy kernel for our bandwidth test.
+    // This is done so that no trucation of the buffer size occurs.
+    // Please note that to achieve peak bandwidth, it is suggested to use the
+    // default buffer size, which in turn triggers the use of the optimized 
+    // kernel.
+    if (size < (defaultBufferSize * _MiB) ) {
+        // copy size is rounded down to 16 bytes
+        int numUint4 = size / sizeof(uint4);
+        // we allow max 1024 threads per block, and then scale out the copy across multiple blocks
+        dim3 block(std::min(numUint4, 1024));
+        dim3 grid(numUint4/block.x);
+        simpleCopyKernel <<<grid, block, 0 , stream>>> (loopCount, (uint4 *)dstBuffer, (uint4 *)srcBuffer);
+        return numUint4 * sizeof(uint4);
+    }
 
     // adjust size to elements (size is multiple of MB, so no truncation here)
     size_t sizeInElement = size / sizeof(uint4);
