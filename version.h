@@ -18,7 +18,7 @@
 #ifndef VERSION_H
 #define VERSION_H
 
-#define NVBANDWIDTH_VERSION "v0.1"
+#define NVBANDWIDTH_VERSION "v0.2"
 #ifndef GIT_VERSION
 #define GIT_VERSION "unknown"
 #endif
