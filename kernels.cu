@@ -19,7 +19,7 @@
 
 __global__ void simpleCopyKernel(unsigned long long loopCount, volatile uint4 *dst, volatile uint4 *src) {
     // We use the volatile keyword to force the looped writes to not be cached
-    // If the memory location is cached, then the writes are all hits in L1 
+    // If the memory location is cached, then the writes are all hits in L1
     // for small buffer sizes.
 
     for (unsigned int i = 0; i < loopCount; i++) {
@@ -89,7 +89,7 @@ size_t copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUs
     // we use the simple copy kernel for our bandwidth test.
     // This is done so that no trucation of the buffer size occurs.
     // Please note that to achieve peak bandwidth, it is suggested to use the
-    // default buffer size, which in turn triggers the use of the optimized 
+    // default buffer size, which in turn triggers the use of the optimized
     // kernel.
     if (size < (defaultBufferSize * _MiB) ) {
         // copy size is rounded down to 16 bytes

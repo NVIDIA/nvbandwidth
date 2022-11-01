@@ -168,7 +168,7 @@ template <class T> struct PeerValueMatrix {
     std::optional <T> *m_matrix;
     int m_rows, m_columns;
     std::string key;
-    
+
     PeerValueMatrix(int rows, int columns, std::string key = ""): m_matrix(new std::optional <T>[rows * columns]()), m_rows(rows), m_columns(columns), key(key) {}
 
     ~PeerValueMatrix() { delete[] m_matrix; }
