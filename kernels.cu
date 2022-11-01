@@ -150,5 +150,6 @@ void preloadKernels(int deviceCount)
         cudaSetDevice(iDev);
         cudaFuncGetAttributes(&unused, &stridingMemcpyKernel);
         cudaFuncGetAttributes(&unused, &spinKernelDevice);
+        cudaFuncGetAttributes(&unused, &simpleCopyKernel);
     }
 }
