@@ -21,6 +21,7 @@
 #include <nvml.h>
 #include <iostream>
 
+#include "kernels.cuh"
 #include "testcase.h"
 #include "version.h"
 
@@ -46,7 +47,9 @@ std::vector<Testcase*> createTestcases() {
         new DeviceToDeviceBidirReadCE(),
         new DeviceToDeviceBidirWriteCE(),
         new AllToHostCE(),
+        new AllToHostBidirCE(),
         new HostToAllCE(),
+        new HostToAllBidirCE(),
         new AllToOneWriteCE(),
         new AllToOneReadCE(),
         new OneToAllWriteCE(),
@@ -58,7 +61,9 @@ std::vector<Testcase*> createTestcases() {
         new DeviceToDeviceBidirReadSM(),
         new DeviceToDeviceBidirWriteSM(),
         new AllToHostSM(),
+        new AllToHostBidirSM(),
         new HostToAllSM(),
+        new HostToAllBidirSM(),
         new AllToOneWriteSM(),
         new AllToOneReadSM(),
         new OneToAllWriteSM(),
@@ -161,6 +166,10 @@ int main(int argc, char **argv) {
     cuInit(0);
     nvmlInit();
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
+    if (bufferSize < defaultBufferSize) {
+        std::cout << "NOTE: You have chosen a buffer size that is smaller than the default buffer size. " << std::endl
+        << "It is suggested to use the default buffer size (64MB) to achieve maximal peak bandwidth." << std::endl << std::endl;
+    }
 
     int cudaVersion;
     cudaRuntimeGetVersion(&cudaVersion);
@@ -183,6 +192,11 @@ int main(int argc, char **argv) {
         std::cout << "Device " << iDev << ": " << name << std::endl;
     }
     std::cout << std::endl;
+
+    // This triggers the loading of all kernels on all devices, even with lazy loading enabled.
+    // Some tests can create complex dependencies between devices and function loading requires a
+    // device synchronization, so loading in the middle of a test can deadlock.
+    preloadKernels(deviceCount);
 
     if (testcasesToRun.size() == 0) {
         // run all testcases
