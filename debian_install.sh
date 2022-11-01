@@ -1,6 +1,6 @@
 #!/bin/sh
-# Utility script that attempts to install 
-# necessary software components needed to 
+# Utility script that attempts to install
+# necessary software components needed to
 # build nvbandwidth
 
 apt install git
