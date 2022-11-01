@@ -3,7 +3,6 @@
 # necessary software components needed to
 # build nvbandwidth
 
-apt install git
 apt install build-essential
 apt install libboost-program-options-dev
 apt install cmake
