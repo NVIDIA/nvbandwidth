@@ -4,12 +4,25 @@ A tool for bandwidth measurements on NVIDIA GPUs.
 Measures bandwidth for various memcpy patterns across different links using copy engine or kernel copy methods.
 nvbandwidth reports current measured bandwidth on your system. Additional system-specific tuning may be required to achieve maximal peak bandwidth.
 
+## Requirements
+nvbandwidth requires the installation of a CUDA toolkit and some additional Linux software components to be built and run. This section provides the relevant details
+Install a cuda toolkit (version 11.X or above)
+Install a compiler package which supports c++17. GCC 7.x or above is a possible option.
+Install cmake (version 3.20 or above)
+Install Boost program options library (More details in the next section)
+
+
 ## Dependencies
 To build and run nvbandwidth please install the Boost program_options library (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html).
 
 Ubuntu/Debian users can run the following to install:
 ```
 apt install libboost-program-options-dev
+```
+On Ubuntu/Debian, we have provided a utility script (debian_install.sh) which installs some generic software components needed for the build.
+The script also builds the nvbandwidth project.
+```
+sudo ./debian_install.sh
 ```
 
 ## Build

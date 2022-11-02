@@ -171,11 +171,31 @@ void AllToHostSM::run(unsigned long long size, unsigned long long loopCount) {
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
+void AllToHostBidirSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::USE_FIRST_BW);
+
+    allHostBidirHelper(size, memcpyInstance, bandwidthValues, false);
+
+    std::cout << "memcpy SM CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
 void HostToAllSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::USE_FIRST_BW);
 
     allHostHelper(size, memcpyInstance, bandwidthValues, true);
+
+    std::cout << "memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+}
+
+void HostToAllBidirSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::USE_FIRST_BW);
+
+    allHostBidirHelper(size, memcpyInstance, bandwidthValues, true);
 
     std::cout << "memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
