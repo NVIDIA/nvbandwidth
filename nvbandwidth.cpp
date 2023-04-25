@@ -33,6 +33,7 @@ unsigned long long bufferSize;
 unsigned long long loopCount;
 bool verbose;
 bool disableAffinity;
+bool skipVerification;
 Verbosity VERBOSE;
 
 // Define testcases here
@@ -129,6 +130,7 @@ int main(int argc, char **argv) {
         ("list,l", "List available testcases")
         ("testcase,t", opt::value<std::vector<std::string>>(&testcasesToRun)->multitoken(), "Testcase(s) to run (by name or index)")
         ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output")
+        ("skipVerification,s", opt::bool_switch(&skipVerification)->default_value(false), "Skips data verification after copy")
         ("disableAffinity,d", opt::bool_switch(&disableAffinity)->default_value(false), "Disable automatic CPU affinity control");
 
     opt::variables_map vm;

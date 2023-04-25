@@ -29,10 +29,13 @@ public:
     virtual ~MemcpyNode() {}
     CUdeviceptr getBuffer() const;
     size_t getBufferSize() const;
-
+    
     virtual int getNodeIdx() const = 0;
     virtual CUcontext getPrimaryCtx() const = 0;
     virtual std::string getNodeString() const = 0;
+    static void memsetPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed);
+    static void memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed);
+    static void xorshift2MBPattern(unsigned int* buffer, unsigned int seed);
 };
 
 // Represents the host buffer abstraction
@@ -100,11 +103,16 @@ public:
     // context of srcNodes is preferred (if not host) unless otherwise specified
     double doMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes);
     double doMemcpy(const MemcpyNode &srcNode, const MemcpyNode &dstNode);
+private:
+    // Pure virtual function to get final calculated copy sizes
+    virtual size_t getAdjustedCopySize (size_t size, CUstream stream) = 0;
 };
 
 class MemcpyOperationSM : public MemcpyOperation {
 private:
     size_t memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
+    // Calculate the truncated sizes used by copy kernels
+    size_t getAdjustedCopySize(size_t size, CUstream stream);
 public:
     MemcpyOperationSM(unsigned long long loopCount, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::SUM_BW);
 };
@@ -112,6 +120,8 @@ public:
 class MemcpyOperationCE : public MemcpyOperation {
 private:
     size_t memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
+    // CE copies do not adjust size, so a simple return of size
+    size_t getAdjustedCopySize(size_t size, CUstream stream);
 public:
     MemcpyOperationCE(unsigned long long loopCount, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
 };
