@@ -34,6 +34,7 @@
 #include <unordered_set>
 #include <limits.h>
 #include <optional>
+#include <cstring>
 
 // Default constants
 const unsigned long long defaultLoopCount = 16;
@@ -45,6 +46,7 @@ const unsigned int numThreadPerBlock = 512;
 extern int deviceCount;
 extern unsigned int averageLoopCount;
 extern bool disableAffinity;
+extern bool skipVerification;
 // Verbosity
 extern bool verbose;
 class Verbosity {
