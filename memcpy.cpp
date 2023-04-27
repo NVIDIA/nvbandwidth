@@ -217,6 +217,7 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
     std::vector<size_t> adjustedCopySizes(srcNodes.size());
     PerformanceStatistic totalBandwidth;
     CUevent totalEnd;
+    std::vector<size_t> finalCopySize(srcNodes.size());
 
     CU_ASSERT(cuMemHostAlloc((void **)&blockingVar, sizeof(*blockingVar), CU_MEMHOSTALLOC_PORTABLE));
 
@@ -234,12 +235,11 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
         CU_ASSERT(cuStreamCreate(&streams[i], CU_STREAM_NON_BLOCKING));
         CU_ASSERT(cuEventCreate(&startEvents[i], CU_EVENT_DEFAULT));
         CU_ASSERT(cuEventCreate(&endEvents[i], CU_EVENT_DEFAULT));
-    }
-    // Get the final copy size that will be used.
-    // CE and SM copy sizes will differ due to possible truncation
-    // during SM copies.
-    size_t finalCopySize = getAdjustedCopySize(srcNodes[0]->getBufferSize(), streams[0]);
-
+        // Get the final copy size that will be used.
+        // CE and SM copy sizes will differ due to possible truncation
+        // during SM copies.
+        finalCopySize[i] = getAdjustedCopySize(srcNodes[0]->getBufferSize(), streams[i]);
+    }   
     CU_ASSERT(cuCtxSetCurrent(contexts[0]));
     CU_ASSERT(cuEventCreate(&totalEnd, CU_EVENT_DEFAULT));
 
@@ -248,8 +248,8 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
         *blockingVar = 0;
         // Set the memory patterns correctly before spin kernel launch etc.
         for (int i = 0; i < srcNodes.size(); i++) {
-            dstNodes[i]->memsetPattern(dstNodes[i]->getBuffer(), finalCopySize, 0xCAFEBABE);
-            srcNodes[i]->memsetPattern(srcNodes[i]->getBuffer(), finalCopySize, 0xBAADF00D);
+            dstNodes[i]->memsetPattern(dstNodes[i]->getBuffer(), finalCopySize[i], 0xCAFEBABE);
+            srcNodes[i]->memsetPattern(srcNodes[i]->getBuffer(), finalCopySize[i], 0xBAADF00D);
         }        
         // block stream, and enqueue copy
         for (int i = 0; i < srcNodes.size(); i++) {
@@ -295,7 +295,7 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
 
         if (!skipVerification) {
             for (int i = 0; i < srcNodes.size(); i++) {            
-                dstNodes[i]->memcmpPattern(dstNodes[i]->getBuffer(), finalCopySize, 0xBAADF00D);
+                dstNodes[i]->memcmpPattern(dstNodes[i]->getBuffer(), finalCopySize[i], 0xBAADF00D);
             }
         }
 
