@@ -12,7 +12,16 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
 endif()
 
-set(Boost_USE_STATIC_LIBS ON)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    file(READ "/etc/os-release" OS_RELEASE_CONTENT)
+    # Skip static libs on Fedora - https://github.com/NVIDIA/nvbandwidth/issues/4
+    if(NOT OS_RELEASE_CONTENT MATCHES "ID=.*fedora")
+        set(Boost_USE_STATIC_LIBS ON)
+    endif()
+else()
+    set(Boost_USE_STATIC_LIBS ON)
+endif()
 find_package(Boost COMPONENTS program_options REQUIRED)
 
 set(src

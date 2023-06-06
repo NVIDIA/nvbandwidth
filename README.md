@@ -25,6 +25,11 @@ The script also builds the nvbandwidth project.
 sudo ./debian_install.sh
 ```
 
+Fedora users can run the following to install:
+```
+sudo dnf -y install boost-devel
+```
+
 ## Build
 To build the `nvbandwidth` executable:
 ```
