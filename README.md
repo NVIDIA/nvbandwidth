@@ -54,6 +54,10 @@ nvbandwidth CLI:
   -t [ --testcase ] arg     Testcase(s) to run (by name or index)
   -v [ --verbose ]          Verbose output
   -d [ --disableAffinity ]  Disable automatic CPU affinity control
+  --testSamples arg (=3) Iterations of the benchmark to be performed and   
+                              averaged                                          
+  --useMean            Use mean average instead of median when reporting 
+                              the results                                       
 ```
 
 To run all testcases:
@@ -102,6 +106,8 @@ A blocking kernel and CUDA events are used to measure time to perform copies via
 First, we enqueue a spin kernel that spins on a flag in host memory. The spin kernel spins on the device until all events for measurement have been fully enqueued into the measurement streams. This ensures that the overhead of enqueuing operations is excluded from the measurement of actual transfer over the interconnect. Next, we enqueue a start event, one or more iterations of memcpy, depending on loopCount, and finally a stop event. Finally, we release the flag to start the measurement.
 
 This process is repeated 3 times, and the median bandwidth for each trial is reported.
+
+Number of repetitions can be overriden using the --testSamples option, and in order to use arithmetic mean instead of median you can specify --useMean option.
 
 ### Unidirectional Bandwidth Tests
 ```
