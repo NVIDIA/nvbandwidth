@@ -346,13 +346,13 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
     if (bandwidthValue == BandwidthValue::SUM_BW) {
         double sum = 0.0;
         for (auto stat : bandwidthStats) {
-            sum += stat.median() * 1e-9;
+            sum += stat.returnAppropriateMetric() * 1e-9;
         }
         return sum;
     } else if (bandwidthValue == BandwidthValue::TOTAL_BW) {
-        return totalBandwidth.median() * 1e-9;
+        return totalBandwidth.returnAppropriateMetric() * 1e-9;
     } else {
-        return bandwidthStats[0].median() * 1e-9;
+        return bandwidthStats[0].returnAppropriateMetric() * 1e-9;
     }
 }
 size_t MemcpyOperationCE::getAdjustedCopySize(size_t size, CUstream stream) {

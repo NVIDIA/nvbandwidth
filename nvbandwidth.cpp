@@ -34,6 +34,7 @@ unsigned long long loopCount;
 bool verbose;
 bool disableAffinity;
 bool skipVerification;
+bool useMean;
 Verbosity VERBOSE;
 
 // Define testcases here
@@ -113,8 +114,6 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
 }
 
 int main(int argc, char **argv) {
-    averageLoopCount = defaultAverageLoopCount;
-
     std::cout << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
     std::cout << "Built from Git version: " << GIT_VERSION << std::endl << std::endl;
     
@@ -122,20 +121,26 @@ int main(int argc, char **argv) {
     std::vector<std::string> testcasesToRun;
 
     // Args parsing
-    opt::options_description desc("nvbandwidth CLI");
-    desc.add_options()
+    opt::options_description visible_opts("nvbandwidth CLI");
+    visible_opts.add_options()
         ("help,h", "Produce help message")
         ("bufferSize", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size in MiB")
-        ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed")
         ("list,l", "List available testcases")
         ("testcase,t", opt::value<std::vector<std::string>>(&testcasesToRun)->multitoken(), "Testcase(s) to run (by name or index)")
         ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output")
         ("skipVerification,s", opt::bool_switch(&skipVerification)->default_value(false), "Skips data verification after copy")
-        ("disableAffinity,d", opt::bool_switch(&disableAffinity)->default_value(false), "Disable automatic CPU affinity control");
+        ("disableAffinity,d", opt::bool_switch(&disableAffinity)->default_value(false), "Disable automatic CPU affinity control")
+        ("testSamples", opt::value<unsigned int>(&averageLoopCount)->default_value(defaultAverageLoopCount), "Iterations of the benchmark to be performed and averaged")
+        ("useMean", opt::bool_switch(&useMean)->default_value(false), "Use mean average instead of median when reporting the results");
+
+    opt::options_description all_opts("");
+    all_opts.add(visible_opts);
+    all_opts.add_options()
+        ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed within a test sample");
 
     opt::variables_map vm;
     try {
-        opt::store(opt::parse_command_line(argc, argv, desc), vm);
+        opt::store(opt::parse_command_line(argc, argv, all_opts), vm);
         opt::notify(vm);
     } catch (...) {
         std::cout << "ERROR: Invalid Arguments " << std::endl;
@@ -143,12 +148,12 @@ int main(int argc, char **argv) {
             std::cout << argv[i] << " ";
         }
         std::cout << std::endl << std::endl;
-        std::cout << desc << "\n";
+        std::cout << visible_opts << "\n";
         return 1;
     }
 
     if (vm.count("help")) {
-        std::cout << desc << "\n";
+        std::cout << visible_opts << "\n";
         return 1;
     }
 
