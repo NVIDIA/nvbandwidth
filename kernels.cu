@@ -125,7 +125,7 @@ __global__ void spinKernelDevice(volatile int *latch, const unsigned long long t
     }
 }
 
-CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long timeoutNs)
+CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long timeoutMs)
 {
     int clocksPerMs = 0;
     CUcontext ctx;
@@ -136,7 +136,7 @@ CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long tim
 
     CU_ASSERT(cuDeviceGetAttribute(&clocksPerMs, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, dev));
 
-    unsigned long long timeoutClocks = (clocksPerMs * timeoutNs) / 1000;
+    unsigned long long timeoutClocks = clocksPerMs * timeoutMs;
 
     spinKernelDevice<<<1, 1, 0, stream>>>(latch, timeoutClocks);
 
