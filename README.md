@@ -59,7 +59,6 @@ nvbandwidth CLI:
   --useMean                  Use mean average instead of median when reporting
                              the results
 ```
-
 To run all testcases:
 ```
 ./nvbandwidth
@@ -84,7 +83,7 @@ memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)
 7    276.12    276.45    276.12    276.36    276.00    276.57    276.45      0.00
 ```
 
-Set number of iterations and the buffer size for copies with --loopCount and --bufferSize
+Set number of iterations and the buffer size for copies with --testSamples and --bufferSize
 
 ## Test Details
 There are two types of copies implemented, Copy Engine (CE) or Steaming Multiprocessor (SM)
@@ -103,7 +102,7 @@ threadsPerBlock is set to 512.
 
 A blocking kernel and CUDA events are used to measure time to perform copies via SM or CE, and bandwidth is calculated from a series of copies.
 
-First, we enqueue a spin kernel that spins on a flag in host memory. The spin kernel spins on the device until all events for measurement have been fully enqueued into the measurement streams. This ensures that the overhead of enqueuing operations is excluded from the measurement of actual transfer over the interconnect. Next, we enqueue a start event, one or more iterations of memcpy, depending on loopCount, and finally a stop event. Finally, we release the flag to start the measurement.
+First, we enqueue a spin kernel that spins on a flag in host memory. The spin kernel spins on the device until all events for measurement have been fully enqueued into the measurement streams. This ensures that the overhead of enqueuing operations is excluded from the measurement of actual transfer over the interconnect. Next, we enqueue a start event, certain count of memcpy iterations, and finally a stop event. Finally, we release the flag to start the measurement.
 
 This process is repeated 3 times, and the median bandwidth for each trial is reported.
 

@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
 
     if (vm.count("help")) {
         std::cout << visible_opts << "\n";
-        return 1;
+        return 0;
     }
 
     if (vm.count("list")) {
