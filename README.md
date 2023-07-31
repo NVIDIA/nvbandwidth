@@ -58,7 +58,6 @@ nvbandwidth CLI:
                              averaged
   --useMean                  Use mean average instead of median when reporting
                              the results
-                                                                                                                  
 ```
 
 To run all testcases:
