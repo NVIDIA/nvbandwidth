@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
         ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output")
         ("skipVerification,s", opt::bool_switch(&skipVerification)->default_value(false), "Skips data verification after copy")
         ("disableAffinity,d", opt::bool_switch(&disableAffinity)->default_value(false), "Disable automatic CPU affinity control")
-        ("testSamples,t", opt::value<unsigned int>(&averageLoopCount)->default_value(defaultAverageLoopCount), "Iterations of the benchmark")
+        ("testSamples,i", opt::value<unsigned int>(&averageLoopCount)->default_value(defaultAverageLoopCount), "Iterations of the benchmark")
         ("useMean,m", opt::bool_switch(&useMean)->default_value(false), "Use mean instead of median for results");
 
     opt::options_description all_opts("");

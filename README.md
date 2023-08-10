@@ -55,7 +55,7 @@ nvbandwidth CLI:
   -v [ --verbose ]              Verbose output
   -s [ --skipVerification ]     Skips data verification after copy
   -d [ --disableAffinity ]      Disable automatic CPU affinity control
-  -t [ --testSamples ] arg (=3) Iterations of the benchmark
+  -i [ --testSamples ] arg (=3) Iterations of the benchmark
   -m [ --useMean ]              Use mean instead of median for results
 ```
 To run all testcases:
