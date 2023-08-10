@@ -124,14 +124,14 @@ int main(int argc, char **argv) {
     opt::options_description visible_opts("nvbandwidth CLI");
     visible_opts.add_options()
         ("help,h", "Produce help message")
-        ("bufferSize", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size in MiB")
+        ("bufferSize,b", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size in MiB")
         ("list,l", "List available testcases")
         ("testcase,t", opt::value<std::vector<std::string>>(&testcasesToRun)->multitoken(), "Testcase(s) to run (by name or index)")
         ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output")
         ("skipVerification,s", opt::bool_switch(&skipVerification)->default_value(false), "Skips data verification after copy")
         ("disableAffinity,d", opt::bool_switch(&disableAffinity)->default_value(false), "Disable automatic CPU affinity control")
-        ("testSamples", opt::value<unsigned int>(&averageLoopCount)->default_value(defaultAverageLoopCount), "Iterations of the benchmark to be performed and averaged")
-        ("useMean", opt::bool_switch(&useMean)->default_value(false), "Use mean average instead of median when reporting the results");
+        ("testSamples,i", opt::value<unsigned int>(&averageLoopCount)->default_value(defaultAverageLoopCount), "Iterations of the benchmark")
+        ("useMean,m", opt::bool_switch(&useMean)->default_value(false), "Use mean instead of median for results");
 
     opt::options_description all_opts("");
     all_opts.add(visible_opts);

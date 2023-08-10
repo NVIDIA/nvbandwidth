@@ -46,18 +46,17 @@ You may need to set the BOOST_ROOT environment variable on Windows to tell CMake
 ## Usage:
 ```
 ./nvbandwidth -h
+
 nvbandwidth CLI:
-  -h [ --help ]              Produce help message
-  --bufferSize arg (=64)     Memcpy buffer size in MiB
-  -l [ --list ]              List available testcases
-  -t [ --testcase ] arg      Testcase(s) to run (by name or index)
-  -v [ --verbose ]           Verbose output
-  -s [ --skipVerification ]  Skips data verification after copy
-  -d [ --disableAffinity ]   Disable automatic CPU affinity control
-  --testSamples arg (=3)     Iterations of the benchmark to be performed and
-                             averaged
-  --useMean                  Use mean average instead of median when reporting
-                             the results
+  -h [ --help ]                 Produce help message
+  -b [ --bufferSize ] arg (=64) Memcpy buffer size in MiB
+  -l [ --list ]                 List available testcases
+  -t [ --testcase ] arg         Testcase(s) to run (by name or index)
+  -v [ --verbose ]              Verbose output
+  -s [ --skipVerification ]     Skips data verification after copy
+  -d [ --disableAffinity ]      Disable automatic CPU affinity control
+  -i [ --testSamples ] arg (=3) Iterations of the benchmark
+  -m [ --useMean ]              Use mean instead of median for results
 ```
 To run all testcases:
 ```
