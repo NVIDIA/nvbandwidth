@@ -34,6 +34,7 @@
 #include <unordered_set>
 #include <limits.h>
 #include <optional>
+#include <cstring>
 
 // Default constants
 const unsigned long long defaultLoopCount = 16;
@@ -45,6 +46,8 @@ const unsigned int numThreadPerBlock = 512;
 extern int deviceCount;
 extern unsigned int averageLoopCount;
 extern bool disableAffinity;
+extern bool skipVerification;
+extern bool useMean;
 // Verbosity
 extern bool verbose;
 class Verbosity {
@@ -130,15 +133,15 @@ public:
     
     size_t count(void) const { return values.size(); }
     
-    double average(void) const { 
+    double mean(void) const { 
         return sum() / count();
     }
     
     double variance(void) const {
-        double mean = average();
+        double calculated_mean = mean();
         double sum_diff_squared = 0.0;
         for (double val : values) {
-            double diff = val - mean;
+            double diff = val - calculated_mean;
             sum_diff_squared += diff * diff;
         }
         return (values.size() > 1 ? sum_diff_squared / (values.size() - 1) : 0.0);
@@ -160,6 +163,14 @@ public:
             return (values[idx] + values[idx - 1]) / 2.0;
         } else {
             return values[values.size() / 2];
+        }
+    }
+
+    double returnAppropriateMetric(void) const {
+        if (useMean) {
+            return mean();
+        } else {
+            return median();
         }
     }
 };

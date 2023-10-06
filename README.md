@@ -7,9 +7,14 @@ nvbandwidth reports current measured bandwidth on your system. Additional system
 ## Requirements
 nvbandwidth requires the installation of a CUDA toolkit and some additional Linux software components to be built and run. This section provides the relevant details
 Install a cuda toolkit (version 11.X or above)
+
 Install a compiler package which supports c++17. GCC 7.x or above is a possible option.
+
 Install cmake (version 3.20 or above)
+
 Install Boost program options library (More details in the next section)
+
+Ensure that path to nvcc binary (install via toolkit) is available in the $PATH variable on linux systems
 
 
 ## Dependencies
@@ -25,6 +30,11 @@ The script also builds the nvbandwidth project.
 sudo ./debian_install.sh
 ```
 
+Fedora users can run the following to install:
+```
+sudo dnf -y install boost-devel
+```
+
 ## Build
 To build the `nvbandwidth` executable:
 ```
@@ -36,16 +46,18 @@ You may need to set the BOOST_ROOT environment variable on Windows to tell CMake
 ## Usage:
 ```
 ./nvbandwidth -h
-nvbandwidth CLI:
-  -h [ --help ]             Produce help message
-  --bufferSize arg (=64)    Memcpy buffer size in MiB
-  --loopCount arg (=16)     Iterations of memcpy to be performed
-  -l [ --list ]             List available testcases
-  -t [ --testcase ] arg     Testcase(s) to run (by name or index)
-  -v [ --verbose ]          Verbose output
-  -d [ --disableAffinity ]  Disable automatic CPU affinity control
-```
 
+nvbandwidth CLI:
+  -h [ --help ]                 Produce help message
+  -b [ --bufferSize ] arg (=64) Memcpy buffer size in MiB
+  -l [ --list ]                 List available testcases
+  -t [ --testcase ] arg         Testcase(s) to run (by name or index)
+  -v [ --verbose ]              Verbose output
+  -s [ --skipVerification ]     Skips data verification after copy
+  -d [ --disableAffinity ]      Disable automatic CPU affinity control
+  -i [ --testSamples ] arg (=3) Iterations of the benchmark
+  -m [ --useMean ]              Use mean instead of median for results
+```
 To run all testcases:
 ```
 ./nvbandwidth
@@ -70,7 +82,7 @@ memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)
 7    276.12    276.45    276.12    276.36    276.00    276.57    276.45      0.00
 ```
 
-Set number of iterations and the buffer size for copies with --loopCount and --bufferSize
+Set number of iterations and the buffer size for copies with --testSamples and --bufferSize
 
 ## Test Details
 There are two types of copies implemented, Copy Engine (CE) or Steaming Multiprocessor (SM)
@@ -89,9 +101,11 @@ threadsPerBlock is set to 512.
 
 A blocking kernel and CUDA events are used to measure time to perform copies via SM or CE, and bandwidth is calculated from a series of copies.
 
-First, we enqueue a spin kernel that spins on a flag in host memory. The spin kernel spins on the device until all events for measurement have been fully enqueued into the measurement streams. This ensures that the overhead of enqueuing operations is excluded from the measurement of actual transfer over the interconnect. Next, we enqueue a start event, one or more iterations of memcpy, depending on loopCount, and finally a stop event. Finally, we release the flag to start the measurement.
+First, we enqueue a spin kernel that spins on a flag in host memory. The spin kernel spins on the device until all events for measurement have been fully enqueued into the measurement streams. This ensures that the overhead of enqueuing operations is excluded from the measurement of actual transfer over the interconnect. Next, we enqueue a start event, certain count of memcpy iterations, and finally a stop event. Finally, we release the flag to start the measurement.
 
 This process is repeated 3 times, and the median bandwidth for each trial is reported.
+
+Number of repetitions can be overriden using the --testSamples option, and in order to use arithmetic mean instead of median you can specify --useMean option.
 
 ### Unidirectional Bandwidth Tests
 ```
