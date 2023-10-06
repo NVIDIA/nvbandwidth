@@ -17,17 +17,15 @@
 
 #include "kernels.cuh"
 
-__global__ void simpleCopyKernel(unsigned long long loopCount, volatile uint4 *dst, volatile uint4 *src) {
-    // We use the volatile keyword to force the looped writes to not be cached
-    // If the memory location is cached, then the writes are all hits in L1
-    // for small buffer sizes.
-
+__global__ void simpleCopyKernel(unsigned long long loopCount, uint4 *dst, uint4 *src) {
     for (unsigned int i = 0; i < loopCount; i++) {
         const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-        dst[idx].x = src[idx].x;
+        size_t offset = idx * sizeof(uint4);
+        uint4* dst_uint4 = reinterpret_cast<uint4*>((char*)dst + offset);
+        uint4* src_uint4 = reinterpret_cast<uint4*>((char*)src + offset);
+	__stcg(dst_uint4, __ldcg(src_uint4));
     }
 }
-
 __global__ void stridingMemcpyKernel(unsigned int totalThreadCount, unsigned long long loopCount, uint4* dst, uint4* src, size_t chunkSizeInElement) {
     unsigned long long from = blockDim.x * blockIdx.x + threadIdx.x;
     unsigned long long bigChunkSizeInElement = chunkSizeInElement / 12;
@@ -125,7 +123,7 @@ __global__ void spinKernelDevice(volatile int *latch, const unsigned long long t
     }
 }
 
-CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long timeoutNs)
+CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long timeoutMs)
 {
     int clocksPerMs = 0;
     CUcontext ctx;
@@ -136,7 +134,7 @@ CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long tim
 
     CU_ASSERT(cuDeviceGetAttribute(&clocksPerMs, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, dev));
 
-    unsigned long long timeoutClocks = (clocksPerMs * timeoutNs) / 1000;
+    unsigned long long timeoutClocks = clocksPerMs * timeoutMs;
 
     spinKernelDevice<<<1, 1, 0, stream>>>(latch, timeoutClocks);
 
