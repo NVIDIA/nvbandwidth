@@ -176,13 +176,12 @@ public:
 };
 
 template <class T> struct PeerValueMatrix {
-    std::optional <T> *m_matrix;
+    std::vector<std::optional <T>> m_matrix;
     int m_rows, m_columns;
     std::string key;
 
-    PeerValueMatrix(int rows, int columns, std::string key = ""): m_matrix(new std::optional <T>[rows * columns]()), m_rows(rows), m_columns(columns), key(key) {}
+    PeerValueMatrix(int rows, int columns, std::string key = ""): m_matrix(rows * columns), m_rows(rows), m_columns(columns), key(key) {}
 
-    ~PeerValueMatrix() { delete[] m_matrix; }
     std::optional <T> &value(int src, int dst) {
         assert(src >= 0 && src < m_rows);
         assert(dst >= 0 && dst < m_columns);
