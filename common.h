@@ -234,27 +234,27 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
 }
 
 // CUDA Error handling
-inline void CU_ASSERT(CUresult cuResult, const char *msg = nullptr) {
-    if (cuResult != CUDA_SUCCESS) {
-        const char *errDescStr, *errNameStr;
-        cuGetErrorString(cuResult, &errDescStr);
-        cuGetErrorName(cuResult, &errNameStr);
-        std::cout << "[" << errNameStr << "] " << errDescStr;
-        if (msg != nullptr) std::cout << ":\n\t" << msg;
-        std::cout << std::endl;
-        std::exit(1);
-  }
-}
+#define CU_ASSERT(x) do { \
+    CUresult cuResult = (x); \
+    if ((cuResult) != CUDA_SUCCESS) { \
+        const char *errDescStr, *errNameStr; \
+        cuGetErrorString(cuResult, &errDescStr); \
+        cuGetErrorName(cuResult, &errNameStr); \
+        std::cout << "[" << errNameStr << "] " << errDescStr << " in expression " << #x << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ ; \
+        std::cout << std::endl; \
+        std::exit(1); \
+    }  \
+} while(0)
 
 // NVML Error handling
-inline void NVML_ASSERT(nvmlReturn_t nvmlResult, const char *msg = nullptr) {
-    if (nvmlResult != NVML_SUCCESS) {
-        std::cout << "NVML_ERROR: [" << nvmlErrorString(nvmlResult) << "]";
-        if (msg != nullptr) std::cout << ":\n\t" << msg;
-        std::cout << std::endl;
-        std::exit(1);
-    }
-}
+#define NVML_ASSERT(x) do { \
+    nvmlReturn_t nvmlResult = (x); \
+    if ((nvmlResult) != NVML_SUCCESS) { \
+        std::cout << "NVML_ERROR: [" << nvmlErrorString(nvmlResult) << "] in expression " << #x << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ ; \
+        std::cout << std::endl; \
+        std::exit(1); \
+    }  \
+} while(0)
 
 // NUMA optimal affinity
 inline void setOptimalCpuAffinity(int cudaDeviceID) {
