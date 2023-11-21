@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
+#include "common.h"
+#include "nvbandwidth_json.h"
 #include "testcase.h"
+#include "inline_common.h"
 
 Testcase::Testcase(std::string key, std::string desc) : 
     key(std::move(key)), desc(std::move(desc))
@@ -218,5 +221,14 @@ void Testcase::allHostBidirHelper(unsigned long long size, MemcpyOperation &memc
         for (auto node : dstNodes) {
             delete node;
         }
+    }
+}
+    
+void Testcase::writeOutput(const std::string &description, PeerValueMatrix<double> &bandwidthValues) {
+    if (!jsonOutput) {
+        std::cout << description << std::endl;
+        std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    } else {
+        jsonMgr.addTestcaseResults(bandwidthValues, description);
     }
 }

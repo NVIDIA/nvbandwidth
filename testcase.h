@@ -41,6 +41,8 @@ public:
     std::string testKey();
     std::string testDesc();
 
+    void writeOutput(const std::string &description, PeerValueMatrix<double> &bandwidthValues);
+
     // Returns true if the testcase can be run on the current system
     virtual bool filter() { return true; }
 

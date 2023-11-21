@@ -17,6 +17,7 @@
 
 #include <cuda.h>
 
+#include "common.h"
 #include "testcase.h"
 #include "memcpy.h"
 
@@ -31,8 +32,7 @@ void HostToDeviceCE::run(unsigned long long size, unsigned long long loopCount) 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNode, deviceNode);
     }
 
-    std::cout << "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void DeviceToHostCE::run(unsigned long long size, unsigned long long loopCount) {
@@ -46,8 +46,7 @@ void DeviceToHostCE::run(unsigned long long size, unsigned long long loopCount) 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNode, hostNode);
     }
 
-    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void HostToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCount) {
@@ -65,8 +64,7 @@ void HostToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCo
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
     }
 
-    std::cout << "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void DeviceToHostBidirCE::run(unsigned long long size, unsigned long long loopCount) {
@@ -84,8 +82,7 @@ void DeviceToHostBidirCE::run(unsigned long long size, unsigned long long loopCo
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
     }
 
-    std::cout << "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // DtoD Read test - copy from dst to src (backwards) using src contxt
@@ -111,8 +108,7 @@ void DeviceToDeviceReadCE::run(unsigned long long size, unsigned long long loopC
         }
     }
 
-    std::cout << "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // DtoD Write test - copy from src to dst using src context
@@ -137,8 +133,7 @@ void DeviceToDeviceWriteCE::run(unsigned long long size, unsigned long long loop
         }
     }
 
-    std::cout << "memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
@@ -168,8 +163,7 @@ void DeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned long long 
         }
     }
 
-    std::cout << "memcpy CE GPU(row) <-> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // DtoD Bidir Write test - copy from src to dst using src context
@@ -198,8 +192,7 @@ void DeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned long long
         }
     }
 
-    std::cout << "memcpy CE GPU(row) <-> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {
@@ -208,8 +201,7 @@ void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {
 
     allHostHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void AllToHostBidirCE::run(unsigned long long size, unsigned long long loopCount) {
@@ -218,8 +210,7 @@ void AllToHostBidirCE::run(unsigned long long size, unsigned long long loopCount
 
     allHostBidirHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
@@ -228,8 +219,7 @@ void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
 
     allHostHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void HostToAllBidirCE::run(unsigned long long size, unsigned long long loopCount) {
@@ -238,8 +228,7 @@ void HostToAllBidirCE::run(unsigned long long size, unsigned long long loopCount
 
     allHostBidirHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // Write test - copy from src to dst using src context
@@ -248,8 +237,7 @@ void AllToOneWriteCE::run(unsigned long long size, unsigned long long loopCount)
     MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
     allToOneHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy CE All Gpus -> GPU(column) total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // Read test - copy from dst to src (backwards) using src contxt
@@ -258,8 +246,7 @@ void AllToOneReadCE::run(unsigned long long size, unsigned long long loopCount) 
     MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::TOTAL_BW);
     allToOneHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy CE All Gpus <- GPU(column) total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // Write test - copy from src to dst using src context
@@ -268,8 +255,7 @@ void OneToAllWriteCE::run(unsigned long long size, unsigned long long loopCount)
     MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
     oneToAllHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy CE GPU(column) -> All GPUs total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // Read test - copy from dst to src (backwards) using src contxt
@@ -278,6 +264,5 @@ void OneToAllReadCE::run(unsigned long long size, unsigned long long loopCount) 
     MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::TOTAL_BW);
     oneToAllHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy CE GPU(column) <- All GPUs total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
