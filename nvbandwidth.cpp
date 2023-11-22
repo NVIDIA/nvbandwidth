@@ -92,6 +92,17 @@ Testcase* findTestcase(std::vector<Testcase*> &testcases, std::string id) {
     }
 }
 
+std::vector<std::string> expandTestcases(std::vector<Testcase*> &testcases, std::vector<std::string> prefixes) {
+    std::vector<std::string> testcasesToRun;
+    for (auto testcase: testcases){ 
+         auto it = find_if(prefixes.begin(), prefixes.end(), [&testcase](std::string prefix) {return testcase->testKey().compare(0, prefix.size(), prefix) == 0;});
+            if (it != prefixes.end()) {
+                testcasesToRun.push_back(testcase->testKey());
+            }
+    }
+    return testcasesToRun;  
+}
+
 void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseID) {
     CUcontext testCtx;
 
@@ -119,6 +130,7 @@ int main(int argc, char **argv) {
     
     std::vector<Testcase*> testcases = createTestcases();
     std::vector<std::string> testcasesToRun;
+    std::vector<std::string> testcasePrefixes;
 
     // Args parsing
     opt::options_description visible_opts("nvbandwidth CLI");
@@ -127,6 +139,7 @@ int main(int argc, char **argv) {
         ("bufferSize,b", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size in MiB")
         ("list,l", "List available testcases")
         ("testcase,t", opt::value<std::vector<std::string>>(&testcasesToRun)->multitoken(), "Testcase(s) to run (by name or index)")
+        ("testcasePrefixes,p", opt::value<std::vector<std::string>>(&testcasePrefixes)->multitoken(), "Testcase(s) to run (by prefix))")
         ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output")
         ("skipVerification,s", opt::bool_switch(&skipVerification)->default_value(false), "Skips data verification after copy")
         ("disableAffinity,d", opt::bool_switch(&disableAffinity)->default_value(false), "Disable automatic CPU affinity control")
@@ -167,6 +180,11 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    if (testcasePrefixes.size() != 0 && testcasesToRun.size() != 0) {
+        std::cout << "You cannot specify both testcase and testcasePrefix options at the same time" << std::endl;
+        return 1;
+    }
+
     std::cout << "NOTE: This tool reports current measured bandwidth on your system." << std::endl 
               << "Additional system-specific tuning may be required to achieve maximal peak bandwidth." << std::endl << std::endl;
 
@@ -199,6 +217,14 @@ int main(int argc, char **argv) {
         std::cout << "Device " << iDev << ": " << name << std::endl;
     }
     std::cout << std::endl;
+
+    if (testcasePrefixes.size() > 0) {
+        testcasesToRun = expandTestcases(testcases, testcasePrefixes);
+        if (testcasesToRun.size() == 0) {
+            std::cout << "Specified list of testcase prefixes did not match any testcases" << std::endl;
+            return 1;
+        }
+    }
 
     // This triggers the loading of all kernels on all devices, even with lazy loading enabled.
     // Some tests can create complex dependencies between devices and function loading requires a
