@@ -1,0 +1,26 @@
+stages:          # List of stages for jobs, and their order of execution
+  - build
+  - test
+
+default:
+  image: nvidia/cuda:12.3.0-devel-ubuntu22.04
+
+build-job:       # This job runs in the build stage, which runs first.
+  stage: build
+  tags: [ nvbandwidth, gpu ]
+  artifacts:
+    paths:
+        - nvbandwidth
+  before_script:
+    - apt update
+  script:
+    - ./debian_install.sh
+    - cmake .
+    - make
+
+
+test-job:   # This job runs in the test stage.
+  stage: test    # It only starts when the job in the build stage completes successfully.
+  tags: [ nvbandwidth, gpu ]
+  script:
+    - ./nvbandwidth
