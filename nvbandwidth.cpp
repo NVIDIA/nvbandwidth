@@ -170,8 +170,8 @@ int main(int argc, char **argv) {
     std::cout << "NOTE: This tool reports current measured bandwidth on your system." << std::endl 
               << "Additional system-specific tuning may be required to achieve maximal peak bandwidth." << std::endl << std::endl;
 
-    cuInit(0);
-    nvmlInit();
+    CU_ASSERT(cuInit(0));
+    NVML_ASSERT(nvmlInit());
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
     if (bufferSize < defaultBufferSize) {
         std::cout << "NOTE: You have chosen a buffer size that is smaller than the default buffer size. " << std::endl
