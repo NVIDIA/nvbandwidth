@@ -72,7 +72,7 @@ void DeviceToDeviceReadSM::run(unsigned long long size, unsigned long long loopC
         }
     }
 
-    std::cout << "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
+    std::cout << "memcpy SM GPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
     std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
