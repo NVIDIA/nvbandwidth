@@ -30,8 +30,7 @@ void HostToDeviceSM::run(unsigned long long size, unsigned long long loopCount) 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNode, deviceNode);
     }
 
-    std::cout << "memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void DeviceToHostSM::run(unsigned long long size, unsigned long long loopCount) {
@@ -45,8 +44,7 @@ void DeviceToHostSM::run(unsigned long long size, unsigned long long loopCount) 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNode, hostNode);
     }
 
-    std::cout << "memcpy SM CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // DtoD Read test - copy from dst to src (backwards) using src contxt
@@ -72,8 +70,7 @@ void DeviceToDeviceReadSM::run(unsigned long long size, unsigned long long loopC
         }
     }
 
-    std::cout << "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // DtoD Write test - copy from src to dst using src context
@@ -98,8 +95,7 @@ void DeviceToDeviceWriteSM::run(unsigned long long size, unsigned long long loop
         }
     }
 
-    std::cout << "memcpy SM GPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
@@ -128,8 +124,7 @@ void DeviceToDeviceBidirReadSM::run(unsigned long long size, unsigned long long 
         }
     }
 
-    std::cout << "memcpy SM GPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // DtoD Bidir Write test - copy from src to dst using src context
@@ -157,8 +152,7 @@ void DeviceToDeviceBidirWriteSM::run(unsigned long long size, unsigned long long
         }
     }
 
-    std::cout << "memcpy SM GPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void AllToHostSM::run(unsigned long long size, unsigned long long loopCount) {
@@ -167,8 +161,7 @@ void AllToHostSM::run(unsigned long long size, unsigned long long loopCount) {
 
     allHostHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy SM CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void AllToHostBidirSM::run(unsigned long long size, unsigned long long loopCount) {
@@ -177,8 +170,7 @@ void AllToHostBidirSM::run(unsigned long long size, unsigned long long loopCount
 
     allHostBidirHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy SM CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void HostToAllSM::run(unsigned long long size, unsigned long long loopCount) {
@@ -187,8 +179,7 @@ void HostToAllSM::run(unsigned long long size, unsigned long long loopCount) {
 
     allHostHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 void HostToAllBidirSM::run(unsigned long long size, unsigned long long loopCount) {
@@ -197,8 +188,7 @@ void HostToAllBidirSM::run(unsigned long long size, unsigned long long loopCount
 
     allHostBidirHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // Write test - copy from src to dst using src context
@@ -207,8 +197,7 @@ void AllToOneWriteSM::run(unsigned long long size, unsigned long long loopCount)
     MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
     allToOneHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy SM All Gpus -> GPU(column) total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // Read test - copy from dst to src (backwards) using src contxt
@@ -217,8 +206,7 @@ void AllToOneReadSM::run(unsigned long long size, unsigned long long loopCount) 
     MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::TOTAL_BW);
     allToOneHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy SM All GPUs <- GPU(column) total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // Write test - copy from src to dst using src context
@@ -227,8 +215,7 @@ void OneToAllWriteSM::run(unsigned long long size, unsigned long long loopCount)
     MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
     oneToAllHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy SM GPU(column) -> All GPUs total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }
 
 // Read test - copy from dst to src (backwards) using src contxt
@@ -237,6 +224,5 @@ void OneToAllReadSM::run(unsigned long long size, unsigned long long loopCount) 
     MemcpyOperationSM memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::TOTAL_BW);
     oneToAllHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy SM GPU(column) <- All GPUs total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    writeOutput("memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)", bandwidthValues);
 }

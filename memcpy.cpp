@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
+#include "common.h"
+#include "inline_common.h"
 #include "memcpy.h"
+#include "nvbandwidth_json.h"
 #include "kernels.cuh"
 #include "vector_types.h"
 
@@ -73,8 +76,17 @@ void MemcpyNode::memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsi
         if (memcmp(pattern, devicePattern, 1024 * 1024 * 2) != 0) {
             for (x = 0; x < (1024 * 1024 * 2) / sizeof(unsigned int); x++) {
                 if (devicePattern[x] != pattern[x]) {
-                    std::cout << " Invalid value when checking the pattern at <" << (void*)((char*)_buffer + n * (1024 * 1024 * 2) + x * sizeof(unsigned int)) << ">" << std::endl
-                                                        << " Current offset [ " << (unsigned long long)((char*)_buffer - (char*)buffer) + (unsigned long long)(x * sizeof(unsigned int)) << "/" << (size) << "]" << std::endl;
+                    std::stringstream errmsg1;
+                    std::stringstream errmsg2;
+                    errmsg1 << " Invalid value when checking the pattern at <" << (void*)((char*)_buffer + n * (1024 * 1024 * 2) + x * sizeof(unsigned int)) << ">";
+                    errmsg2 << " Current offset [ " << (unsigned long long)((char*)_buffer - (char*)buffer) + (unsigned long long)(x * sizeof(unsigned int)) << "/" << (size) << "]";
+                    if (!jsonOutput) {
+                        std::cout << errmsg1.str() << std::endl << errmsg2.str() << std::endl;
+                    } else {
+                        errmsg1 << errmsg2.str();
+                        jsonMgr.recordErrorCurrentTest(errmsg1.str());
+                        jsonMgr.printJson();
+                    }
                     std::abort();
                 }
             
@@ -88,8 +100,17 @@ void MemcpyNode::memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsi
         if (memcmp(pattern, devicePattern, (size_t)remaining) != 0) {
             for (x = 0; x < remaining / sizeof(unsigned int); x++) {
                 if (devicePattern[x] != pattern[x]) {
-                    std::cout << " Invalid value when checking the pattern at <" << (void*)((char*)buffer + n * (1024 * 1024 * 2) + x * sizeof(unsigned int)) << ">" << std::endl
-                                                        << " Current offset [ " << (unsigned long long)((char*)_buffer - (char*)buffer) + (unsigned long long)(x * sizeof(unsigned int)) << "/" << (size) << "]" << std::endl;
+                    std::stringstream errmsg1;
+                    std::stringstream errmsg2;
+                    errmsg1 << " Invalid value when checking the pattern at <" << (void*)((char*)buffer + n * (1024 * 1024 * 2) + x * sizeof(unsigned int)) << ">";
+                    errmsg2 << " Current offset [ " << (unsigned long long)((char*)_buffer - (char*)buffer) + (unsigned long long)(x * sizeof(unsigned int)) << "/" << (size) << "]";
+                    if (!jsonOutput) {
+                        std::cout << errmsg1.str() << std::endl << errmsg2.str() << std::endl;
+                    } else {
+                        errmsg1 << errmsg2.str();
+                        jsonMgr.recordErrorCurrentTest(errmsg1.str());
+                        jsonMgr.printJson();
+                    }
                     std::abort();
                 }
             }

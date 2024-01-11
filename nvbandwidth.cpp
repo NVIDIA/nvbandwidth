@@ -22,8 +22,10 @@
 #include <iostream>
 
 #include "kernels.cuh"
+#include "nvbandwidth_json.h"
 #include "testcase.h"
 #include "version.h"
+#include "inline_common.h"
 
 namespace opt = boost::program_options;
 
@@ -35,6 +37,8 @@ bool verbose;
 bool disableAffinity;
 bool skipVerification;
 bool useMean;
+bool jsonOutput;
+NvBandwidthJson jsonMgr;
 Verbosity VERBOSE;
 
 // Define testcases here
@@ -98,10 +102,19 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
     try {
         Testcase* test = findTestcase(testcases, testcaseID);
         if (!test->filter()) {
-            std::cout << "Waiving " << test->testKey() << "." << std::endl << std::endl;
+            if (!jsonOutput) {
+                std::cout << "Waiving " << test->testKey() << "." << std::endl << std::endl;
+            } else {
+                jsonMgr.addTestcase(testcaseID, NVB_WAIVED);
+            }
             return;
         }
-        std::cout << "Running " << test->testKey() << ".\n";
+
+        if (!jsonOutput) {
+            std::cout << "Running " << test->testKey() << ".\n";
+        } else {
+            jsonMgr.addTestcase(test->testKey(), NVB_PASSED); // status will get overwritten
+        }
 
         CU_ASSERT(cuCtxCreate(&testCtx, 0, 0));
         CU_ASSERT(cuCtxSetCurrent(testCtx));
@@ -109,13 +122,20 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
         test->run(bufferSize * _MiB, loopCount);
         CU_ASSERT(cuCtxDestroy(testCtx));
     } catch (std::string &s) {
-        std::cout << "ERROR: " << s << std::endl;
+        if (!jsonOutput) {
+            std::cout << "ERROR: " << s << std::endl;
+        } else {
+            jsonMgr.addTestcaseIfNeeded(testcaseID, NVB_ERROR_STATUS);
+        }
     }
 }
 
-int main(int argc, char **argv) {
+void printVersionInfo() {
     std::cout << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
     std::cout << "Built from Git version: " << GIT_VERSION << std::endl << std::endl;
+}
+
+int main(int argc, char **argv) {
     
     std::vector<Testcase*> testcases = createTestcases();
     std::vector<std::string> testcasesToRun;
@@ -131,7 +151,8 @@ int main(int argc, char **argv) {
         ("skipVerification,s", opt::bool_switch(&skipVerification)->default_value(false), "Skips data verification after copy")
         ("disableAffinity,d", opt::bool_switch(&disableAffinity)->default_value(false), "Disable automatic CPU affinity control")
         ("testSamples,i", opt::value<unsigned int>(&averageLoopCount)->default_value(defaultAverageLoopCount), "Iterations of the benchmark")
-        ("useMean,m", opt::bool_switch(&useMean)->default_value(false), "Use mean instead of median for results");
+        ("useMean,m", opt::bool_switch(&useMean)->default_value(false), "Use mean instead of median for results")
+        ("json,j", opt::bool_switch(&jsonOutput)->default_value(false), "Print output in json format instead of plain text.");
 
     opt::options_description all_opts("");
     all_opts.add(visible_opts);
@@ -142,14 +163,32 @@ int main(int argc, char **argv) {
     try {
         opt::store(opt::parse_command_line(argc, argv, all_opts), vm);
         opt::notify(vm);
+    
     } catch (...) {
-        std::cout << "ERROR: Invalid Arguments " << std::endl;
-        for (int i = 0; i < argc; i++) {
-            std::cout << argv[i] << " ";
+        if (!jsonOutput) {
+            printVersionInfo();
         }
-        std::cout << std::endl << std::endl;
-        std::cout << visible_opts << "\n";
+
+        std::stringstream errmsg;
+        errmsg << "ERROR: Invalid Arguments " << std::endl;
+        for (int i = 0; i < argc; i++) {
+            errmsg << argv[i] << " ";
+        }
+        if (!jsonOutput) {
+            std::cout << errmsg.str() << std::endl << std::endl;
+            std::cout << visible_opts << "\n";
+        } else {
+            errmsg << ": " << visible_opts;
+            jsonMgr.recordError(errmsg.str());
+            jsonMgr.printJson();
+        }
         return 1;
+    }
+    
+    if (!jsonOutput) {
+        printVersionInfo();
+    } else {
+        jsonMgr.init();
     }
 
     if (vm.count("help")) {
@@ -167,27 +206,41 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    std::cout << "NOTE: This tool reports current measured bandwidth on your system." << std::endl 
-              << "Additional system-specific tuning may be required to achieve maximal peak bandwidth." << std::endl << std::endl;
+    if (!jsonOutput) {
+        std::cout << "NOTE: This tool reports current measured bandwidth on your system." << std::endl 
+                  << "Additional system-specific tuning may be required to achieve maximal peak bandwidth." << std::endl << std::endl;
+    }
 
     cuInit(0);
     nvmlInit();
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
     if (bufferSize < defaultBufferSize) {
-        std::cout << "NOTE: You have chosen a buffer size that is smaller than the default buffer size. " << std::endl
-        << "It is suggested to use the default buffer size (64MB) to achieve maximal peak bandwidth." << std::endl << std::endl;
+        static const std::string warningPart1 = "NOTE: You have chosen a buffer size that is smaller than the default buffer size. ";
+        static const std::string warningPart2 = "It is suggested to use the default buffer size (64MB) to achieve maximal peak bandwidth.";
+        if (!jsonOutput) {
+            std::cout << warningPart1 << std::endl << warningPart2 << std::endl << std::endl;
+        } else {
+            std::stringstream warning;
+            warning << warningPart1 << warningPart2;
+            jsonMgr.recordWarning(warning.str());
+        }
     }
 
     int cudaVersion;
     cudaRuntimeGetVersion(&cudaVersion);
-    std::cout << "CUDA Runtime Version: " << cudaVersion << std::endl;
 
     CU_ASSERT(cuDriverGetVersion(&cudaVersion));
-    std::cout << "CUDA Driver Version: " << cudaVersion << std::endl;
 
     char driverVersion[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE];
     NVML_ASSERT(nvmlSystemGetDriverVersion(driverVersion, NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE));
-    std::cout << "Driver Version: " << driverVersion << std::endl << std::endl;
+
+    if (!jsonOutput) {
+        std::cout << "CUDA Runtime Version: " << cudaVersion << std::endl;
+        std::cout << "CUDA Driver Version: " << cudaVersion << std::endl;
+        std::cout << "Driver Version: " << driverVersion << std::endl << std::endl;
+    } else {
+        jsonMgr.addCudaAndDriverInfo(cudaVersion, driverVersion);
+    }
 
     for (int iDev = 0; iDev < deviceCount; iDev++) {
         CUdevice dev;
@@ -196,9 +249,13 @@ int main(int argc, char **argv) {
         CU_ASSERT(cuDeviceGet(&dev, iDev));
         CU_ASSERT(cuDeviceGetName(name, 256, dev));
 
-        std::cout << "Device " << iDev << ": " << name << std::endl;
+        if (!jsonOutput) {
+            std::cout << "Device " << iDev << ": " << name << std::endl;
+        }
     }
-    std::cout << std::endl;
+    if (!jsonOutput) {
+        std::cout << std::endl;
+    }
 
     // This triggers the loading of all kernels on all devices, even with lazy loading enabled.
     // Some tests can create complex dependencies between devices and function loading requires a
@@ -214,6 +271,10 @@ int main(int argc, char **argv) {
         for (const auto& testcaseIndex : testcasesToRun) {
             runTestcase(testcases, testcaseIndex);
         }
+    }
+
+    if (jsonOutput) {
+        jsonMgr.printJson();
     }
 
     for (auto testcase : testcases) { delete testcase; }
