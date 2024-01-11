@@ -49,3 +49,5 @@ endif()
 add_executable(nvbandwidth ${src})
 target_include_directories(nvbandwidth PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES} .)
 target_link_libraries(nvbandwidth Boost::program_options ${NVML_LIB_NAME} cuda)
+
+install(TARGETS nvbandwidth)
