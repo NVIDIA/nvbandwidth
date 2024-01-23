@@ -233,6 +233,10 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
     return o;
 }
 
+#ifdef _MSC_VER
+#define __PRETTY_FUNCTION__ __FUNCTION__
+#endif
+
 // CUDA Error handling
 #define CU_ASSERT(x) do { \
     CUresult cuResult = (x); \
