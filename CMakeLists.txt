@@ -30,6 +30,9 @@ set(src
     kernels.cu
     memcpy.cpp
     nvbandwidth.cpp
+    output.cpp
+    json_output.cpp
+    json/jsoncpp.cpp
 )
 
 execute_process(

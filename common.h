@@ -48,6 +48,7 @@ extern unsigned int averageLoopCount;
 extern bool disableAffinity;
 extern bool skipVerification;
 extern bool useMean;
+extern bool jsonOutput;
 // Verbosity
 extern bool verbose;
 class Verbosity {
@@ -55,8 +56,10 @@ public:
     Verbosity() = default;
     template<typename T>
     Verbosity& operator<<(T input) {
-      if (verbose) std::cout << input;
-      return *this;
+        if (!jsonOutput && verbose) {
+            std::cout << input;
+        }
+        return *this;
     }
 };
 extern Verbosity VERBOSE;
@@ -236,72 +239,5 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
 #ifdef _MSC_VER
 #define __PRETTY_FUNCTION__ __FUNCTION__
 #endif
-
-// CUDA Error handling
-#define CU_ASSERT(x) do { \
-    CUresult cuResult = (x); \
-    if ((cuResult) != CUDA_SUCCESS) { \
-        const char *errDescStr, *errNameStr; \
-        cuGetErrorString(cuResult, &errDescStr); \
-        cuGetErrorName(cuResult, &errNameStr); \
-        std::cout << "[" << errNameStr << "] " << errDescStr << " in expression " << #x << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ ; \
-        std::cout << std::endl; \
-        std::exit(1); \
-    }  \
-} while(0)
-
-// NVML Error handling
-#define NVML_ASSERT(x) do { \
-    nvmlReturn_t nvmlResult = (x); \
-    if ((nvmlResult) != NVML_SUCCESS) { \
-        std::cout << "NVML_ERROR: [" << nvmlErrorString(nvmlResult) << "] in expression " << #x << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ ; \
-        std::cout << std::endl; \
-        std::exit(1); \
-    }  \
-} while(0)
-
-// NUMA optimal affinity
-inline void setOptimalCpuAffinity(int cudaDeviceID) {
-#ifdef _WIN32
-    // NVML doesn't support setting affinity on Windows
-    return;
-#endif
-    if (disableAffinity) {
-        return;
-    }
-
-    nvmlDevice_t device;
-    CUuuid dev_uuid;
-
-    std::stringstream s;
-    std::unordered_set <unsigned char> dashPos {0, 4, 6, 8, 10};
-
-    CU_ASSERT(cuDeviceGetUuid(&dev_uuid, cudaDeviceID));
-
-    s << "GPU";
-    for (int i = 0; i < 16; i++) {
-        if (dashPos.count(i)) {
-            s << '-';
-        }
-        s << std::hex << std::setfill('0') << std::setw(2) << (0xFF & (int)dev_uuid.bytes[i]);
-    }
-
-    NVML_ASSERT(nvmlDeviceGetHandleByUUID(s.str().c_str(), &device));
-    nvmlReturn_t result = nvmlDeviceSetCpuAffinity(device);
-    if (result != NVML_ERROR_NOT_SUPPORTED) {
-        NVML_ASSERT(result);
-    }
-}
-
-inline bool isMemoryOwnedByCUDA(void *memory) {
-    CUmemorytype memorytype;
-    CUresult status = cuPointerGetAttribute(&memorytype, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (CUdeviceptr)memory);
-    if (status == CUDA_ERROR_INVALID_VALUE) {
-        return false;
-    } else {
-        CU_ASSERT(status);
-        return true;
-    }
-}
 
 #endif
