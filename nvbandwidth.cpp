@@ -63,6 +63,8 @@ std::vector<Testcase*> createTestcases() {
         new OneToAllReadCE(),
         new HostToDeviceSM(),
         new DeviceToHostSM(),
+        new HostToDeviceBidirSM(),
+        new DeviceToHostBidirSM(),
         new DeviceToDeviceReadSM(),
         new DeviceToDeviceWriteSM(),
         new DeviceToDeviceBidirReadSM(),
