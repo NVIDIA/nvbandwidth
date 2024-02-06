@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
+#include "common.h"
+#include "output.h"
 #include "testcase.h"
+#include "inline_common.h"
 
 Testcase::Testcase(std::string key, std::string desc) : 
     key(std::move(key)), desc(std::move(desc))
@@ -220,3 +223,4 @@ void Testcase::allHostBidirHelper(unsigned long long size, MemcpyOperation &memc
         }
     }
 }
+    

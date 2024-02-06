@@ -20,6 +20,7 @@
 
 #include <cuda.h>
 #include "common.h"
+#include "inline_common.h"
 
 const unsigned long long DEFAULT_SPIN_KERNEL_TIMEOUT_MS = 10000ULL;   // 10 seconds
 
