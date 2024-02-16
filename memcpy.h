@@ -88,7 +88,7 @@ public:
     MemcpyDispatchInfo(std::vector<const MemcpyNode*> srcNodes, std::vector<const MemcpyNode*> dstNodes, std::vector<CUcontext> contexts);
 };
 
-class ConcurrencyEngine {
+class HostNodeType {
 public:
     virtual MemcpyDispatchInfo dispatchMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes, ContextPreference ctxPreference) = 0;
     
@@ -106,12 +106,12 @@ public:
     virtual void streamBlockerBlock(CUstream stream) = 0;
 };
 
-class ConcurrencyEngineSingleNode : public ConcurrencyEngine {
+class HostNodeTypeSingle : public HostNodeType {
 private:
     volatile int* blockingVarHost;
 public: 
-    ConcurrencyEngineSingleNode();
-    ~ConcurrencyEngineSingleNode();
+    HostNodeTypeSingle();
+    ~HostNodeTypeSingle();
     MemcpyDispatchInfo dispatchMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes, ContextPreference ctxPreference);
     double calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount);
     double calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats);
@@ -168,12 +168,12 @@ protected:
     size_t *procMask;
     BandwidthValue bandwidthValue;
 
-    std::shared_ptr<ConcurrencyEngine> concurrencyEngine;
+    std::shared_ptr<HostNodeType> hostNodeType;
     std::shared_ptr<MemcpyInitiator> memcpyInitiator;
 
 public:
     MemcpyOperation(unsigned long long loopCount, MemcpyInitiator *_memcpyInitiator, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
-    MemcpyOperation(unsigned long long loopCount, MemcpyInitiator *_memcpyInitiator, ConcurrencyEngine *_concurrencyEngine, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
+    MemcpyOperation(unsigned long long loopCount, MemcpyInitiator *_memcpyInitiator, HostNodeType *_hostNodeType, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
     virtual ~MemcpyOperation();
 
     // Lists of paired nodes will be executed sumultaneously

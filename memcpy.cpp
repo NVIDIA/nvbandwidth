@@ -209,12 +209,12 @@ bool DeviceNode::enablePeerAcess(const DeviceNode &peerNode) {
 }
 
 MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
-    MemcpyOperation(loopCount, memcpyInitiator, new ConcurrencyEngineSingleNode(), ctxPreference, bandwidthValue)
+    MemcpyOperation(loopCount, memcpyInitiator, new HostNodeTypeSingle(), ctxPreference, bandwidthValue)
 {
 }
 
-MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, ConcurrencyEngine* concurrencyEngine, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
-        loopCount(loopCount), memcpyInitiator(memcpyInitiator), concurrencyEngine(concurrencyEngine), ctxPreference(ctxPreference), bandwidthValue(bandwidthValue)
+MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, HostNodeType* hostNodeType, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
+        loopCount(loopCount), memcpyInitiator(memcpyInitiator), hostNodeType(hostNodeType), ctxPreference(ctxPreference), bandwidthValue(bandwidthValue)
 {
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
     PROC_MASK_SET(procMask, getFirstEnabledCPU());
@@ -234,15 +234,15 @@ MemcpyDispatchInfo::MemcpyDispatchInfo(std::vector<const MemcpyNode*> srcNodes, 
     srcNodes(srcNodes), dstNodes(dstNodes), contexts(contexts)
 {}
 
-ConcurrencyEngineSingleNode::ConcurrencyEngineSingleNode() {
+HostNodeTypeSingle::HostNodeTypeSingle() {
     CU_ASSERT(cuMemHostAlloc((void **)&blockingVarHost, sizeof(*blockingVarHost), CU_MEMHOSTALLOC_PORTABLE));
 }
 
-ConcurrencyEngineSingleNode::~ConcurrencyEngineSingleNode() {
+HostNodeTypeSingle::~HostNodeTypeSingle() {
     CU_ASSERT(cuMemFreeHost((void*)blockingVarHost));
 }
 
-MemcpyDispatchInfo ConcurrencyEngineSingleNode::dispatchMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes, ContextPreference ctxPreference) {
+MemcpyDispatchInfo HostNodeTypeSingle::dispatchMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes, ContextPreference ctxPreference) {
     std::vector<CUcontext> contexts(srcNodes.size());
 
     for (int i = 0; i < srcNodes.size(); i++) {
@@ -257,11 +257,11 @@ MemcpyDispatchInfo ConcurrencyEngineSingleNode::dispatchMemcpy(const std::vector
     return MemcpyDispatchInfo(srcNodes, dstNodes, contexts);
 }
 
-double ConcurrencyEngineSingleNode::calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount) {
+double HostNodeTypeSingle::calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount) {
     return (totalSize * loopCount * 1000ull * 1000ull) / totalTime;
 }
 
-double ConcurrencyEngineSingleNode::calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) {
+double HostNodeTypeSingle::calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) {
     double sum = 0.0;
     for (auto stat : bandwidthStats) {
         sum += stat.returnAppropriateMetric() * 1e-9;
@@ -269,33 +269,33 @@ double ConcurrencyEngineSingleNode::calculateSumBandwidth(std::vector<Performanc
     return sum;
 }
 
-double ConcurrencyEngineSingleNode::calculateFirstBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) {
+double HostNodeTypeSingle::calculateFirstBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) {
     return bandwidthStats[0].returnAppropriateMetric() * 1e-9;
 }
 
-void ConcurrencyEngineSingleNode::synchronizeProcess() {
+void HostNodeTypeSingle::synchronizeProcess() {
     // NOOP
 }
 
-CUresult ConcurrencyEngineSingleNode::streamSynchronizeWrapper(CUstream stream) const {
+CUresult HostNodeTypeSingle::streamSynchronizeWrapper(CUstream stream) const {
     return cuStreamSynchronize(stream);
 }
 
-void ConcurrencyEngineSingleNode::streamBlockerReset() {
+void HostNodeTypeSingle::streamBlockerReset() {
     *blockingVarHost = 0;
 }
 
-void ConcurrencyEngineSingleNode::streamBlockerRelease() {
+void HostNodeTypeSingle::streamBlockerRelease() {
     *blockingVarHost = 1;
 }
 
-void ConcurrencyEngineSingleNode::streamBlockerBlock(CUstream stream) {
+void HostNodeTypeSingle::streamBlockerBlock(CUstream stream) {
     // start the spin kernel on the stream
     CU_ASSERT(spinKernel(blockingVarHost, stream));
 }
 
 double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes) {
-    MemcpyDispatchInfo dispatchInfo = concurrencyEngine->dispatchMemcpy(srcNodes, dstNodes, ctxPreference);
+    MemcpyDispatchInfo dispatchInfo = hostNodeType->dispatchMemcpy(srcNodes, dstNodes, ctxPreference);
     return doMemcpyCore(dispatchInfo.srcNodes, dispatchInfo.dstNodes, dispatchInfo.contexts);
 }
 
@@ -329,8 +329,8 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyNode*> &srcNo
 
     // This loop is for sampling the testcase (which itself has a loop count)
     for (unsigned int n = 0; n < averageLoopCount; n++) {
-        concurrencyEngine->streamBlockerReset();
-        concurrencyEngine->synchronizeProcess();
+        hostNodeType->streamBlockerReset();
+        hostNodeType->synchronizeProcess();
 
         // Set the memory patterns correctly before spin kernel launch etc.
         for (int i = 0; i < srcNodes.size(); i++) {
@@ -341,7 +341,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyNode*> &srcNo
         for (int i = 0; i < srcNodes.size(); i++) {
             CU_ASSERT(cuCtxSetCurrent(contexts[i]));
 
-            concurrencyEngine->streamBlockerBlock(streams[i]);
+            hostNodeType->streamBlockerBlock(streams[i]);
 
             // warmup
             memcpyInitiator->memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), WARMUP_COUNT);
@@ -377,13 +377,13 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyNode*> &srcNo
         }
 
         // unblock the streams
-        concurrencyEngine->streamBlockerRelease();
+        hostNodeType->streamBlockerRelease();
 
         for (CUstream stream : streams) {
-            CU_ASSERT(concurrencyEngine->streamSynchronizeWrapper(stream));
+            CU_ASSERT(hostNodeType->streamSynchronizeWrapper(stream));
         }
 
-        concurrencyEngine->synchronizeProcess();
+        hostNodeType->synchronizeProcess();
 
         if (!skipVerification) {
             for (int i = 0; i < srcNodes.size(); i++) {            
@@ -416,7 +416,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyNode*> &srcNo
                 totalSize += size;
             }
 
-            double bandwidth = concurrencyEngine->calculateTotalBandwidth(elapsedTotalInUs, totalSize, loopCount);
+            double bandwidth = hostNodeType->calculateTotalBandwidth(elapsedTotalInUs, totalSize, loopCount);
             totalBandwidth(bandwidth);
             VERBOSE << "\tSample " << n << ": Total Bandwidth : " <<
                 std::fixed << std::setprecision(2) << (double)bandwidth * 1e-9 << " GB/s\n";
@@ -433,11 +433,11 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyNode*> &srcNo
     }
 
     if (bandwidthValue == BandwidthValue::SUM_BW) {
-        return concurrencyEngine->calculateSumBandwidth(bandwidthStats);
+        return hostNodeType->calculateSumBandwidth(bandwidthStats);
     } else if (bandwidthValue == BandwidthValue::TOTAL_BW) {
         return totalBandwidth.returnAppropriateMetric() * 1e-9;
     } else {
-        return concurrencyEngine->calculateFirstBandwidth(bandwidthStats);
+        return hostNodeType->calculateFirstBandwidth(bandwidthStats);
     }
 }
 
