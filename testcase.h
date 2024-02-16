@@ -19,6 +19,7 @@
 #define BENCHMARK_H
 
 #include "common.h"
+#include "inline_common.h"
 #include "memcpy.h"
 
 class Testcase {

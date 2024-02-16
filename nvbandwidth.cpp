@@ -35,11 +35,15 @@ unsigned int averageLoopCount;
 unsigned long long bufferSize;
 unsigned long long loopCount;
 bool verbose;
+bool shouldOutput = true;
 bool disableAffinity;
 bool skipVerification;
 bool useMean;
+
+Verbosity VERBOSE(verbose);
+Verbosity OUTPUT(shouldOutput);
+
 bool jsonOutput;
-Verbosity VERBOSE;
 Output *output;
 
 // Define testcases here
@@ -74,7 +78,7 @@ std::vector<Testcase*> createTestcases() {
         new AllToOneWriteSM(),
         new AllToOneReadSM(),
         new OneToAllWriteSM(),
-        new OneToAllReadSM()
+        new OneToAllReadSM(),
     };
 }
 
@@ -138,7 +142,6 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
 }
 
 int main(int argc, char **argv) {
-    
     std::vector<Testcase*> testcases = createTestcases();
     std::vector<std::string> testcasesToRun;
     std::vector<std::string> testcasePrefixes;
@@ -194,7 +197,7 @@ int main(int argc, char **argv) {
     output->addVersionInfo();
 
     if (vm.count("help")) {
-        std::cout << visible_opts << std::endl;
+        OUTPUT << visible_opts << "\n";
         return 0;
     }
 

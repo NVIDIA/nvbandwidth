@@ -19,32 +19,65 @@
 #define INLINE_COMMON_H
 
 #include "common.h"
-#include "output.h"
+#include "error_handling.h"
 
-// CUDA Error handling
-#define CU_ASSERT(x) do { \
-    CUresult cuResult = (x); \
-    if ((cuResult) != CUDA_SUCCESS) { \
-        const char *errDescStr, *errNameStr; \
-        cuGetErrorString(cuResult, &errDescStr); \
-        cuGetErrorName(cuResult, &errNameStr); \
-        std::stringstream errmsg; \
-        errmsg << "[" << errNameStr << "] " << errDescStr << " in expression " << #x << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ ; \
-        output->recordError(errmsg.str()); \
-        std::exit(1); \
-    }  \
-} while(0)
+template <class T> struct PeerValueMatrix {
+    std::vector<std::optional <T>> m_matrix;
+    int m_rows, m_columns;
+    std::string key;
 
-// NVML Error handling
-#define NVML_ASSERT(x) do { \
-    nvmlReturn_t nvmlResult = (x); \
-    if ((nvmlResult) != NVML_SUCCESS) { \
-        std::stringstream errmsg; \
-        errmsg << "NVML_ERROR: [" << nvmlErrorString(nvmlResult) << "] in expression " << #x << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ ; \
-        output->recordError(errmsg.str()); \
-        std::exit(1); \
-    }  \
-} while(0)
+    PeerValueMatrix(int rows, int columns, std::string key = ""): m_matrix(rows * columns), m_rows(rows), m_columns(columns), key(key) {}
+
+    std::optional <T> &value(int src, int dst) {
+        ASSERT(src >= 0 && src < m_rows);
+        ASSERT(dst >= 0 && dst < m_columns);
+        return m_matrix[src * m_columns + dst];
+    }
+    const std::optional <T> &value(int src, int dst) const {
+        ASSERT(src >= 0 && src < m_rows);
+        ASSERT(dst >= 0 && dst < m_columns);
+        return m_matrix[src * m_columns + dst];
+    }
+};
+
+template <class T>
+std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
+    // This assumes T is numeric
+    T maxVal = std::numeric_limits<T>::min();
+    T minVal = std::numeric_limits<T>::max();
+    T sum = 0;
+    int count = 0;
+
+    o << "  ";
+    for (int currentDevice = 0; currentDevice < matrix.m_columns; currentDevice++) {
+        o << std::setw(10) << currentDevice;
+    }
+    o << std::endl;
+    for (int currentDevice = 0; currentDevice < matrix.m_rows; currentDevice++) {
+        o << std::setw(2) << currentDevice;
+        for (int peer = 0; peer < matrix.m_columns; peer++) {
+            std::optional <T> val = matrix.value(currentDevice, peer);
+            if (val) {
+                o << std::setw(10) << val.value();
+            }
+            else {
+                o << std::setw(10) << "N/A";
+            }
+            sum += val.value_or(0.0);
+            maxVal = std::max(maxVal, val.value_or(0.0));
+            minVal = std::min(minVal, val.value_or(0.0));
+            if (val.value_or(0.0) > 0) count++;
+        }
+        o << std::endl;
+    }
+    o << std::endl;
+    o << "SUM " << matrix.key << " " << sum << std::endl;
+
+    VERBOSE << "MIN " << matrix.key << " " << minVal << '\n';
+    VERBOSE << "MAX " << matrix.key << " " << maxVal << '\n';
+    VERBOSE << "AVG " << matrix.key << " " << sum / count << '\n';
+    return o;
+}
 
 // NUMA optimal affinity
 inline void setOptimalCpuAffinity(int cudaDeviceID) {

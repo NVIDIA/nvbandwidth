@@ -21,6 +21,7 @@
 #include "output.h"
 #include "kernels.cuh"
 #include "vector_types.h"
+#include "common.h"
 
 #define WARMUP_COUNT 4
 
@@ -33,7 +34,7 @@ CUdeviceptr MemcpyNode::getBuffer() const {
 size_t MemcpyNode::getBufferSize() const {
     return bufferSize;
 }
-void MemcpyNode::memsetPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) {
+void MemcpyNode::memsetPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const {
     unsigned int* pattern;
     unsigned int n = 0;
     void * _buffer = (void*) buffer;
@@ -45,18 +46,18 @@ void MemcpyNode::memsetPattern(CUdeviceptr buffer, unsigned long long size, unsi
     xorshift2MBPattern(pattern, seed);
 
     for (n = 0; n < _2MBchunkCount; n++) {
-        CU_ASSERT(cuMemcpy((CUdeviceptr)_buffer, (CUdeviceptr)pattern, 1024 * 1024 * 2));
+        CU_ASSERT(cuMemcpyAsync((CUdeviceptr)_buffer, (CUdeviceptr)pattern, 1024 * 1024 * 2, CU_STREAM_PER_THREAD));
         _buffer = (char*)_buffer + (1024 * 1024 * 2);
     }
     if (remaining) {
-        CU_ASSERT(cuMemcpy((CUdeviceptr)_buffer, (CUdeviceptr)pattern, (size_t)remaining));
+        CU_ASSERT(cuMemcpyAsync((CUdeviceptr)_buffer, (CUdeviceptr)pattern, (size_t)remaining, CU_STREAM_PER_THREAD));
     }
 
-    CU_ASSERT(cuCtxSynchronize());
+    CU_ASSERT(streamSynchronizeWrapper(CU_STREAM_PER_THREAD));
     CU_ASSERT(cuMemFreeHost((void*)pattern));
 }
 
-void MemcpyNode::memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) {
+void MemcpyNode::memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const {
      unsigned int* devicePattern;
     unsigned int* pattern;
     unsigned long long _2MBchunkCount = size / (1024 * 1024 * 2);
@@ -71,8 +72,9 @@ void MemcpyNode::memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsi
     xorshift2MBPattern(pattern, seed);
 
     for (n = 0; n < _2MBchunkCount; n++) {
-        CU_ASSERT(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)_buffer, 1024 * 1024 * 2));
-        CU_ASSERT(cuCtxSynchronize());
+        CU_ASSERT(cuMemcpyAsync((CUdeviceptr)devicePattern, (CUdeviceptr)_buffer, 1024 * 1024 * 2, CU_STREAM_PER_THREAD));
+        CU_ASSERT(streamSynchronizeWrapper(CU_STREAM_PER_THREAD));
+
         if (memcmp(pattern, devicePattern, 1024 * 1024 * 2) != 0) {
             for (x = 0; x < (1024 * 1024 * 2) / sizeof(unsigned int); x++) {
                 if (devicePattern[x] != pattern[x]) {
@@ -91,7 +93,8 @@ void MemcpyNode::memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsi
         _buffer = (char*)_buffer + (1024 * 1024 * 2);
     }
     if (remaining) {
-        CU_ASSERT(cuMemcpy((CUdeviceptr)devicePattern, (CUdeviceptr)_buffer, (size_t)remaining));
+        CU_ASSERT(cuMemcpyAsync((CUdeviceptr)devicePattern, (CUdeviceptr)_buffer, (size_t)remaining, CU_STREAM_PER_THREAD));
+        CU_ASSERT(streamSynchronizeWrapper(CU_STREAM_PER_THREAD));
         if (memcmp(pattern, devicePattern, (size_t)remaining) != 0) {
             for (x = 0; x < remaining / sizeof(unsigned int); x++) {
                 if (devicePattern[x] != pattern[x]) {
@@ -107,12 +110,11 @@ void MemcpyNode::memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsi
         }
     }
 
-    CU_ASSERT(cuCtxSynchronize());
     CU_ASSERT(cuMemFreeHost((void*)devicePattern));
     free(pattern);
 }
-void MemcpyNode::xorshift2MBPattern(unsigned int* buffer, unsigned int seed)
-{
+
+void MemcpyNode::xorshift2MBPattern(unsigned int* buffer, unsigned int seed) const {
     unsigned int oldValue = seed;
     unsigned int n = 0;
     for (n = 0; n < (1024 * 1024 * 2) / sizeof(unsigned int); n++) {
@@ -124,6 +126,11 @@ void MemcpyNode::xorshift2MBPattern(unsigned int* buffer, unsigned int seed)
         buffer[n] = oldValue;
     }
 }
+
+CUresult MemcpyNode::streamSynchronizeWrapper(CUstream stream) const {
+    return cuStreamSynchronize(stream);
+}
+
 HostNode::HostNode(size_t bufferSize, int targetDeviceId): MemcpyNode(bufferSize) {
     CUcontext targetCtx;
 
@@ -201,8 +208,13 @@ bool DeviceNode::enablePeerAcess(const DeviceNode &peerNode) {
     return false;
 }
 
-MemcpyOperation::MemcpyOperation(unsigned long long loopCount, ContextPreference ctxPreference, BandwidthValue bandwidthValue) : 
-        loopCount(loopCount), ctxPreference(ctxPreference), bandwidthValue(bandwidthValue)
+MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
+    MemcpyOperation(loopCount, memcpyInitiator, new ConcurrencyEngineSingleNode(), ctxPreference, bandwidthValue)
+{
+}
+
+MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, ConcurrencyEngine* concurrencyEngine, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
+        loopCount(loopCount), memcpyInitiator(memcpyInitiator), concurrencyEngine(concurrencyEngine), ctxPreference(ctxPreference), bandwidthValue(bandwidthValue)
 {
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
     PROC_MASK_SET(procMask, getFirstEnabledCPU());
@@ -218,9 +230,76 @@ double MemcpyOperation::doMemcpy(const MemcpyNode &srcNode, const MemcpyNode &ds
     return doMemcpy(srcNodes, dstNodes);
 }
 
-double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes) {
-    volatile int* blockingVar;
+MemcpyDispatchInfo::MemcpyDispatchInfo(std::vector<const MemcpyNode*> srcNodes, std::vector<const MemcpyNode*> dstNodes, std::vector<CUcontext> contexts) :
+    srcNodes(srcNodes), dstNodes(dstNodes), contexts(contexts)
+{}
+
+ConcurrencyEngineSingleNode::ConcurrencyEngineSingleNode() {
+    CU_ASSERT(cuMemHostAlloc((void **)&blockingVarHost, sizeof(*blockingVarHost), CU_MEMHOSTALLOC_PORTABLE));
+}
+
+ConcurrencyEngineSingleNode::~ConcurrencyEngineSingleNode() {
+    CU_ASSERT(cuMemFreeHost((void*)blockingVarHost));
+}
+
+MemcpyDispatchInfo ConcurrencyEngineSingleNode::dispatchMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes, ContextPreference ctxPreference) {
     std::vector<CUcontext> contexts(srcNodes.size());
+
+    for (int i = 0; i < srcNodes.size(); i++) {
+        // prefer source context
+        if (ctxPreference == PREFER_SRC_CONTEXT && srcNodes[i]->getPrimaryCtx() != nullptr) {
+            contexts[i] = srcNodes[i]->getPrimaryCtx();
+        } else if (dstNodes[i]->getPrimaryCtx() != nullptr) {
+            contexts[i] = dstNodes[i]->getPrimaryCtx();
+        }
+    }
+
+    return MemcpyDispatchInfo(srcNodes, dstNodes, contexts);
+}
+
+double ConcurrencyEngineSingleNode::calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount) {
+    return (totalSize * loopCount * 1000ull * 1000ull) / totalTime;
+}
+
+double ConcurrencyEngineSingleNode::calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) {
+    double sum = 0.0;
+    for (auto stat : bandwidthStats) {
+        sum += stat.returnAppropriateMetric() * 1e-9;
+    }
+    return sum;
+}
+
+double ConcurrencyEngineSingleNode::calculateFirstBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) {
+    return bandwidthStats[0].returnAppropriateMetric() * 1e-9;
+}
+
+void ConcurrencyEngineSingleNode::synchronizeProcess() {
+    // NOOP
+}
+
+CUresult ConcurrencyEngineSingleNode::streamSynchronizeWrapper(CUstream stream) const {
+    return cuStreamSynchronize(stream);
+}
+
+void ConcurrencyEngineSingleNode::streamBlockerReset() {
+    *blockingVarHost = 0;
+}
+
+void ConcurrencyEngineSingleNode::streamBlockerRelease() {
+    *blockingVarHost = 1;
+}
+
+void ConcurrencyEngineSingleNode::streamBlockerBlock(CUstream stream) {
+    // start the spin kernel on the stream
+    CU_ASSERT(spinKernel(blockingVarHost, stream));
+}
+
+double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes) {
+    MemcpyDispatchInfo dispatchInfo = concurrencyEngine->dispatchMemcpy(srcNodes, dstNodes, ctxPreference);
+    return doMemcpyCore(dispatchInfo.srcNodes, dispatchInfo.dstNodes, dispatchInfo.contexts);
+}
+
+double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes, const std::vector<CUcontext> &contexts) {
     std::vector<CUstream> streams(srcNodes.size());
     std::vector<CUevent> startEvents(srcNodes.size());
     std::vector<CUevent> endEvents(srcNodes.size());
@@ -230,18 +309,8 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
     CUevent totalEnd;
     std::vector<size_t> finalCopySize(srcNodes.size());
 
-    CU_ASSERT(cuMemHostAlloc((void **)&blockingVar, sizeof(*blockingVar), CU_MEMHOSTALLOC_PORTABLE));
-
     for (int i = 0; i < srcNodes.size(); i++) {
-        // prefer source context
-        if (ctxPreference == MemcpyOperation::PREFER_SRC_CONTEXT && srcNodes[i]->getPrimaryCtx() != nullptr) {
-            CU_ASSERT(cuCtxSetCurrent(srcNodes[i]->getPrimaryCtx()));
-            contexts[i] = srcNodes[i]->getPrimaryCtx();
-        } else if (dstNodes[i]->getPrimaryCtx() != nullptr) {
-            CU_ASSERT(cuCtxSetCurrent(dstNodes[i]->getPrimaryCtx()));
-            contexts[i] = dstNodes[i]->getPrimaryCtx();
-        }
-
+        CU_ASSERT(cuCtxSetCurrent(contexts[i]));
         // allocate the per simulaneous copy resources
         CU_ASSERT(cuStreamCreate(&streams[i], CU_STREAM_NON_BLOCKING));
         CU_ASSERT(cuEventCreate(&startEvents[i], CU_EVENT_DEFAULT));
@@ -249,14 +318,20 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
         // Get the final copy size that will be used.
         // CE and SM copy sizes will differ due to possible truncation
         // during SM copies.
-        finalCopySize[i] = getAdjustedCopySize(srcNodes[0]->getBufferSize(), streams[i]);
-    }   
-    CU_ASSERT(cuCtxSetCurrent(contexts[0]));
+        finalCopySize[i] = memcpyInitiator->getAdjustedCopySize(srcNodes[i]->getBufferSize(), streams[i]);
+    }
+    
+    if (contexts.size() > 0) {
+        CU_ASSERT(cuCtxSetCurrent(contexts[0]));
+    }
+    // If no memcpy operations are happening on this node, let's still record a totalEnd event to simplify code
     CU_ASSERT(cuEventCreate(&totalEnd, CU_EVENT_DEFAULT));
 
     // This loop is for sampling the testcase (which itself has a loop count)
     for (unsigned int n = 0; n < averageLoopCount; n++) {
-        *blockingVar = 0;
+        concurrencyEngine->streamBlockerReset();
+        concurrencyEngine->synchronizeProcess();
+
         // Set the memory patterns correctly before spin kernel launch etc.
         for (int i = 0; i < srcNodes.size(); i++) {
             dstNodes[i]->memsetPattern(dstNodes[i]->getBuffer(), finalCopySize[i], 0xCAFEBABE);
@@ -266,15 +341,17 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
         for (int i = 0; i < srcNodes.size(); i++) {
             CU_ASSERT(cuCtxSetCurrent(contexts[i]));
 
-            // start the spin kernel on the stream
-            CU_ASSERT(spinKernel(blockingVar, streams[i]));
+            concurrencyEngine->streamBlockerBlock(streams[i]);
 
             // warmup
-            memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), WARMUP_COUNT);
+            memcpyInitiator->memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), WARMUP_COUNT);
         }
 
-        CU_ASSERT(cuCtxSetCurrent(contexts[0]));
-        CU_ASSERT(cuEventRecord(startEvents[0], streams[0]));
+        if (srcNodes.size() > 0) {
+            CU_ASSERT(cuCtxSetCurrent(contexts[0]));
+            CU_ASSERT(cuEventRecord(startEvents[0], streams[0]));
+        }
+
         for (int i = 1; i < srcNodes.size(); i++) {
             // ensure that all copies are launched at the same time
             CU_ASSERT(cuCtxSetCurrent(contexts[i]));
@@ -284,8 +361,8 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
 
         for (int i = 0; i < srcNodes.size(); i++) {
             CU_ASSERT(cuCtxSetCurrent(contexts[i]));
-            assert(srcNodes[i]->getBufferSize() == dstNodes[i]->getBufferSize());
-            adjustedCopySizes[i] = memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), loopCount);
+            ASSERT(srcNodes[i]->getBufferSize() == dstNodes[i]->getBufferSize());
+            adjustedCopySizes[i] = memcpyInitiator->memcpyFunc(dstNodes[i]->getBuffer(), srcNodes[i]->getBuffer(), streams[i], srcNodes[i]->getBufferSize(), loopCount);
             CU_ASSERT(cuEventRecord(endEvents[i], streams[i]));
             if (bandwidthValue == BandwidthValue::TOTAL_BW && i != 0) {
                 // make stream0 wait on the all the others so we can measure total completion time
@@ -294,15 +371,19 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
         }
 
         // record the total end - only valid if BandwidthValue::TOTAL_BW is used due to StreamWaitEvent above
-        CU_ASSERT(cuCtxSetCurrent(contexts[0]));
-        CU_ASSERT(cuEventRecord(totalEnd, streams[0]));
+        if (srcNodes.size() > 0) {
+            CU_ASSERT(cuCtxSetCurrent(contexts[0]));
+            CU_ASSERT(cuEventRecord(totalEnd, streams[0]));
+        }
 
         // unblock the streams
-        *blockingVar = 1;
+        concurrencyEngine->streamBlockerRelease();
 
         for (CUstream stream : streams) {
-            CU_ASSERT(cuStreamSynchronize(stream));
+            CU_ASSERT(concurrencyEngine->streamSynchronizeWrapper(stream));
         }
+
+        concurrencyEngine->synchronizeProcess();
 
         if (!skipVerification) {
             for (int i = 0; i < srcNodes.size(); i++) {            
@@ -330,22 +411,19 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
             double elapsedTotalInUs = ((double) totalTime * 1000.0);
 
             // get total bytes copied
-            size_t totalSize = 0;
-            for (size_t size : adjustedCopySizes) {
+            double totalSize = 0;
+            for (double size : adjustedCopySizes) {
                 totalSize += size;
             }
 
-            unsigned long long bandwidth = (totalSize * loopCount * 1000ull * 1000ull) / (unsigned long long) elapsedTotalInUs;
-            totalBandwidth((double) bandwidth);
-
+            double bandwidth = concurrencyEngine->calculateTotalBandwidth(elapsedTotalInUs, totalSize, loopCount);
+            totalBandwidth(bandwidth);
             VERBOSE << "\tSample " << n << ": Total Bandwidth : " <<
                 std::fixed << std::setprecision(2) << (double)bandwidth * 1e-9 << " GB/s\n";
         }
     }
 
     // cleanup
-    CU_ASSERT(cuMemFreeHost((void*)blockingVar));
-
     CU_ASSERT(cuEventDestroy(totalEnd));
 
     for (int i = 0; i < srcNodes.size(); i++) {
@@ -355,29 +433,18 @@ double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes,
     }
 
     if (bandwidthValue == BandwidthValue::SUM_BW) {
-        double sum = 0.0;
-        for (auto stat : bandwidthStats) {
-            sum += stat.returnAppropriateMetric() * 1e-9;
-        }
-        return sum;
+        return concurrencyEngine->calculateSumBandwidth(bandwidthStats);
     } else if (bandwidthValue == BandwidthValue::TOTAL_BW) {
         return totalBandwidth.returnAppropriateMetric() * 1e-9;
     } else {
-        return bandwidthStats[0].returnAppropriateMetric() * 1e-9;
+        return concurrencyEngine->calculateFirstBandwidth(bandwidthStats);
     }
 }
-size_t MemcpyOperationCE::getAdjustedCopySize(size_t size, CUstream stream) {
-    //CE does not change/truncate buffer size
-    return size;
-}
 
-MemcpyOperationSM::MemcpyOperationSM(unsigned long long loopCount, ContextPreference ctxPreference, BandwidthValue bandwidthValue) : 
-        MemcpyOperation(loopCount, ctxPreference, bandwidthValue) {}
-
-size_t MemcpyOperationSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
+size_t MemcpyInitiatorSM::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
     return copyKernel(dst, src, copySize, stream, loopCount);
 }
-size_t MemcpyOperationSM::getAdjustedCopySize(size_t size, CUstream stream) {
+size_t MemcpyInitiatorSM::getAdjustedCopySize(size_t size, CUstream stream) {
     CUdevice dev;
     CUcontext ctx;
 
@@ -400,13 +467,15 @@ size_t MemcpyOperationSM::getAdjustedCopySize(size_t size, CUstream stream) {
     return sizeInElement * sizeof(uint4);
 }
 
-MemcpyOperationCE::MemcpyOperationCE(unsigned long long loopCount, ContextPreference ctxPreference, BandwidthValue bandwidthValue) : 
-        MemcpyOperation(loopCount, ctxPreference, bandwidthValue) {}
-
-size_t MemcpyOperationCE::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
+size_t MemcpyInitiatorCE::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) {
     for (unsigned int l = 0; l < loopCount; l++) {
         CU_ASSERT(cuMemcpyAsync(dst, src, copySize, stream));
     }
 
     return copySize;
+}
+
+size_t MemcpyInitiatorCE::getAdjustedCopySize(size_t size, CUstream stream) {
+    //CE does not change/truncate buffer size
+    return size;
 }
