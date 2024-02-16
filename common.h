@@ -18,7 +18,6 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include <cassert>
 #include <cmath>
 #include <cstdlib>
 #include <cuda.h>
@@ -36,6 +35,8 @@
 #include <optional>
 #include <cstring>
 
+#define STRING_LENGTH 256
+
 // Default constants
 const unsigned long long defaultLoopCount = 16;
 const unsigned long long defaultBufferSize = 64; // 64MB
@@ -51,18 +52,33 @@ extern bool useMean;
 extern bool jsonOutput;
 // Verbosity
 extern bool verbose;
+
 class Verbosity {
 public:    
-    Verbosity() = default;
+    bool &controlVariable;
+    
+    Verbosity(bool &controlVariable): controlVariable(controlVariable) {};
+
     template<typename T>
     Verbosity& operator<<(T input) {
-        if (!jsonOutput && verbose) {
-            std::cout << input;
+        if (!jsonOutput && controlVariable) std::cout << input;
+        return *this;
+    }
+
+    using StreamType = decltype(std::cout);
+    Verbosity &operator<<(StreamType &(*func)(StreamType &)) {
+        if (!jsonOutput && controlVariable) {
+            func(std::cout);
         }
         return *this;
     }
 };
 extern Verbosity VERBOSE;
+extern Verbosity OUTPUT;
+
+#ifdef _MSC_VER
+#define __PRETTY_FUNCTION__ __FUNCTION__
+#endif
 
 // Rounds n up to the nearest multiple of "multiple".
 // if n is already a multiple of "multiple", n is returned unchanged.
@@ -178,66 +194,5 @@ public:
     }
 };
 
-template <class T> struct PeerValueMatrix {
-    std::vector<std::optional <T>> m_matrix;
-    int m_rows, m_columns;
-    std::string key;
-
-    PeerValueMatrix(int rows, int columns, std::string key = ""): m_matrix(rows * columns), m_rows(rows), m_columns(columns), key(key) {}
-
-    std::optional <T> &value(int src, int dst) {
-        assert(src >= 0 && src < m_rows);
-        assert(dst >= 0 && dst < m_columns);
-        return m_matrix[src * m_columns + dst];
-    }
-    const std::optional <T> &value(int src, int dst) const {
-        assert(src >= 0 && src < m_rows);
-        assert(dst >= 0 && dst < m_columns);
-        return m_matrix[src * m_columns + dst];
-    }
-};
-
-template <class T>
-std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
-    // This assumes T is numeric
-    T maxVal = std::numeric_limits<T>::min();
-    T minVal = std::numeric_limits<T>::max();
-    T sum = 0;
-    int count = 0;
-
-    o << ' ';
-    for (int currentDevice = 0; currentDevice < matrix.m_columns; currentDevice++) {
-        o << std::setw(10) << currentDevice;
-    }
-    o << std::endl;
-    for (int currentDevice = 0; currentDevice < matrix.m_rows; currentDevice++) {
-        o << currentDevice;
-        for (int peer = 0; peer < matrix.m_columns; peer++) {
-            std::optional <T> val = matrix.value(currentDevice, peer);
-            if (val) {
-                o << std::setw(10) << val.value();
-            }
-            else {
-                o << std::setw(10) << "N/A";
-            }
-            sum += val.value_or(0.0);
-            maxVal = std::max(maxVal, val.value_or(0.0));
-            minVal = std::min(minVal, val.value_or(0.0));
-            if (val.value_or(0.0) > 0) count++;
-        }
-        o << std::endl;
-    }
-    o << std::endl;
-    o << "SUM " << matrix.key << " " << sum << std::endl;
-
-    VERBOSE << "MIN " << matrix.key << " " << minVal << '\n';
-    VERBOSE << "MAX " << matrix.key << " " << maxVal << '\n';
-    VERBOSE << "AVG " << matrix.key << " " << sum / count << '\n';
-    return o;
-}
-
-#ifdef _MSC_VER
-#define __PRETTY_FUNCTION__ __FUNCTION__
-#endif
 
 #endif

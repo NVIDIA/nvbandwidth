@@ -19,76 +19,82 @@
 #include "output.h"
 #include "version.h"
 
+#include <unistd.h>
+
 void Output::addVersionInfo() {
-    std::cout << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
-    std::cout << "Built from Git version: " << GIT_VERSION << std::endl << std::endl;
+    OUTPUT << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
+    OUTPUT << "Built from Git version: " << GIT_VERSION << std::endl << std::endl;
 }
 
 void Output::printInfo() {
-    std::cout << "NOTE: This tool reports current measured bandwidth on your system." << std::endl 
+    OUTPUT << "NOTE: This tool reports current measured bandwidth on your system." << std::endl 
               << "Additional system-specific tuning may be required to achieve maximal peak bandwidth." << std::endl << std::endl;
 }
 
 void Output::addCudaAndDriverInfo(int cudaVersion, const std::string &driverVersion) {
-    std::cout << "CUDA Runtime Version: " << cudaVersion << std::endl;
-    std::cout << "CUDA Driver Version: " << cudaVersion << std::endl;
-    std::cout << "Driver Version: " << driverVersion << std::endl << std::endl;
+    OUTPUT << "CUDA Runtime Version: " << cudaVersion << std::endl;
+    OUTPUT << "CUDA Driver Version: " << cudaVersion << std::endl;
+    OUTPUT << "Driver Version: " << driverVersion << std::endl << std::endl;
 }
 
 void Output::recordError(const std::string &error) {
-    std::cout << error << std::endl;
+    OUTPUT << error << std::endl;
 }
 
 void Output::recordError(const std::vector<std::string> &errorParts) {
     bool first = true;
     for (auto &part : errorParts) {
         if (first) {
-            std::cout << part << ":\n\n";
+            OUTPUT << part << ":\n\n";
             first = false;
         } else {
-            std::cout << part << std::endl;
+            OUTPUT << part << std::endl;
         }
     }
 }
 
 void Output::listTestcases(const std::vector<Testcase*> &testcases) {
     size_t numTestcases = testcases.size();
-    std::cout << "Index, Name:\n\tDescription\n";
-    std::cout << "=======================\n";
+    OUTPUT << "Index, Name:\n\tDescription\n";
+    OUTPUT << "=======================\n";
     for (unsigned int i = 0; i < numTestcases; i++) {
-        std::cout << i << ", " << testcases.at(i)->testKey() << ":\n" << testcases.at(i)->testDesc() << "\n\n";
+        OUTPUT << i << ", " << testcases.at(i)->testKey() << ":\n" << testcases.at(i)->testDesc() << "\n\n";
     }
 }
 
-void Output::recordDevices(int deviceCount) {
+static void printGPUs(){
     for (int iDev = 0; iDev < deviceCount; iDev++) {
         CUdevice dev;
-        char name[256];
+        char name[STRING_LENGTH];
 
         CU_ASSERT(cuDeviceGet(&dev, iDev));
-        CU_ASSERT(cuDeviceGetName(name, 256, dev));
+        CU_ASSERT(cuDeviceGetName(name, STRING_LENGTH, dev));
 
-        std::cout << "Device " << iDev << ": " << name << std::endl;
+        OUTPUT << "Device " << iDev << ": " << name << std::endl;
     }
-    std::cout << std::endl;
+    OUTPUT << std::endl;
+}
+
+void Output::recordDevices(int deviceCount) {
+    printGPUs();
 }
 
 void Output::addTestcase(const std::string &name, const std::string &status, const std::string &msg) {
     if (status == NVB_RUNNING) {
-        std::cout << status << " " << name << ".\n";
+        OUTPUT << status << " " << name << ".\n";
     } else {
-        std::cout << name << " " << status << "." << std::endl << std::endl;
+        OUTPUT << name << " " << status << "." << std::endl << std::endl;
     }
 }
 
 void Output::setTestcaseStatusAndAddIfNeeded(const std::string &name, const std::string &status, const std::string &msg) {
     // For plain text output, the name has always been printed already and therefore isn't needed here
-    std::cout << status << ": " << msg << std::endl;
+    OUTPUT << status << ": " << msg << std::endl;
 }
 
 void Output::addTestcaseResults(const PeerValueMatrix<double> &bandwidthValues, const std::string &description) {
-    std::cout << description << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    OUTPUT << description << std::endl;
+    OUTPUT << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
 }
 
 void Output::print() {
@@ -96,9 +102,13 @@ void Output::print() {
 }
 
 void Output::recordErrorCurrentTest(const std::string &errorLine1, const std::string &errorLine2) {
-    std::cout << errorLine1 << std::endl << errorLine2 << std::endl;
+    OUTPUT << errorLine1 << std::endl << errorLine2 << std::endl;
 }
 
 void Output::recordWarning(const std::string &warning) {
     recordError(warning);
+}
+
+void RecordError(const std::stringstream &errmsg) {
+    output->recordError(errmsg.str());
 }
