@@ -49,6 +49,42 @@ void DeviceToHostSM::run(unsigned long long size, unsigned long long loopCount) 
     output->addTestcaseResults(bandwidthValues, "memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)");
 }
 
+void HostToDeviceBidirSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationSM memcpyInstance(loopCount);
+
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        // Double the size of the interference copy to ensure it interferes correctly
+        HostNode host1(size, deviceId), host2(size * 2, deviceId);
+        DeviceNode dev1(size, deviceId), dev2(size * 2, deviceId);
+
+        std::vector<const MemcpyNode*> srcNodes = {&host1, &dev2};
+        std::vector<const MemcpyNode*> dstNodes = {&dev1, &host2};
+
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+    }
+
+    output->addTestcaseResults(bandwidthValues, "memcpy SM CPU(row) <- GPU(column) bandwidth (GB/s)");
+}
+
+void DeviceToHostBidirSM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperationSM memcpyInstance(loopCount);
+
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        // Double the size of the interference copy to ensure it interferes correctly
+        HostNode host1(size, deviceId), host2(size * 2, deviceId);
+        DeviceNode dev1(size, deviceId), dev2(size * 2, deviceId);
+
+        std::vector<const MemcpyNode*> srcNodes = {&dev1, &host2};
+        std::vector<const MemcpyNode*> dstNodes = {&host1, &dev2};
+
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+    }
+
+    output->addTestcaseResults(bandwidthValues, "memcpy SM CPU(row) <- GPU(column) bandwidth (GB/s)");
+}
+
 // DtoD Read test - copy from dst to src (backwards) using src contxt
 void DeviceToDeviceReadSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
