@@ -51,7 +51,7 @@ void DeviceToHostSM::run(unsigned long long size, unsigned long long loopCount) 
 
 void HostToDeviceBidirSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationSM memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM());
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         // Double the size of the interference copy to ensure it interferes correctly
@@ -69,7 +69,7 @@ void HostToDeviceBidirSM::run(unsigned long long size, unsigned long long loopCo
 
 void DeviceToHostBidirSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationSM memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM());
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         // Double the size of the interference copy to ensure it interferes correctly
