@@ -10,12 +10,14 @@ Install a cuda toolkit (version 11.X or above)
 
 Install a compiler package which supports c++17. GCC 7.x or above is a possible option.
 
-Install cmake (version 3.20 or above)
+Install cmake (version 3.20 or above).
+Cmake version 3.24 or newer is enocuraged.
 
 Install Boost program options library (More details in the next section)
 
 Ensure that path to nvcc binary (install via toolkit) is available in the $PATH variable on linux systems
-
+In order to run nvbandwidth, the system should have a CUDA enabled GPU and an NVIDIA display driver that is compatible with the CUDA Toolkit being used to build nvbandwidth.
+For more information, refer to https://docs.nvidia.com/deploy/cuda-compatibility/
 
 ## Dependencies
 To build and run nvbandwidth please install the Boost program_options library (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html).

@@ -13,10 +13,11 @@ if (CMAKE_VERSION VERSION_GREATER "3.24")
     set(CMAKE_CUDA_ARCHITECTURES "native")
     message(STATUS "Setting CMAKE_CUDA_ARCHITECTURES to 'native'")
 else()
-    set(supported_archs "70" "75" "80" "86" "89" "90")
+    set(supported_archs "52" "70" "75" "80" "86" "89" "90")
     set(CMAKE_CUDA_ARCHITECTURES ${supported_archs})
     message(STATUS "Detecting underlying CUDA Arch to set CMAKE_CUDA_ARCHITECTURES")
     include(detect_cuda_arch.cmake)
+    # Set CMAKE_CUDA_ARCHITECURES based on the underlying device
     cuda_detect_architectures(supported_archs CMAKE_CUDA_ARCHITECTURES)
 endif()
 
