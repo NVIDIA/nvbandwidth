@@ -90,6 +90,26 @@ public:
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
+// Host to device bidirectional SM memcpy
+class HostToDeviceBidirSM: public Testcase {
+public:
+    HostToDeviceBidirSM() : Testcase("host_to_device_bidirectional_memcpy_sm",
+            "\tA host to device copy is measured while a device to host copy is run simultaneously.\n"
+            "\tOnly the host to device copy bandwidth is reported.") {}
+    virtual ~HostToDeviceBidirSM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
+// Device to host bidirectional SM memcpy
+class DeviceToHostBidirSM: public Testcase {
+public:
+    DeviceToHostBidirSM() : Testcase("device_to_host_bidirectional_memcpy_sm",
+            "\tA device to host copy is measured while a host to device copy is run simultaneously.\n"
+            "\tOnly the device to host copy bandwidth is reported.") {}
+    virtual ~DeviceToHostBidirSM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
 // Device to Device CE Read memcpy using cuMemcpyAsync
 class DeviceToDeviceReadCE: public Testcase {
 public:
