@@ -11,7 +11,7 @@ Install a cuda toolkit (version 11.X or above)
 Install a compiler package which supports c++17. GCC 7.x or above is a possible option.
 
 Install cmake (version 3.20 or above).
-Cmake version 3.24 or newer is enocuraged.
+Cmake version 3.24 or newer is encouraged.
 
 Install Boost program options library (More details in the next section)
 
