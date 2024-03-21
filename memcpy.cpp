@@ -25,16 +25,16 @@
 
 #define WARMUP_COUNT 4
 
-MemcpyNode::MemcpyNode(size_t bufferSize): bufferSize(bufferSize), buffer(nullptr) {}
+MemcpyBuffer::MemcpyBuffer(size_t bufferSize): bufferSize(bufferSize), buffer(nullptr) {}
 
-CUdeviceptr MemcpyNode::getBuffer() const {
+CUdeviceptr MemcpyBuffer::getBuffer() const {
     return (CUdeviceptr)buffer;
 }
 
-size_t MemcpyNode::getBufferSize() const {
+size_t MemcpyBuffer::getBufferSize() const {
     return bufferSize;
 }
-void MemcpyNode::memsetPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const {
+void MemcpyBuffer::memsetPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const {
     unsigned int* pattern;
     unsigned int n = 0;
     void * _buffer = (void*) buffer;
@@ -57,7 +57,7 @@ void MemcpyNode::memsetPattern(CUdeviceptr buffer, unsigned long long size, unsi
     CU_ASSERT(cuMemFreeHost((void*)pattern));
 }
 
-void MemcpyNode::memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const {
+void MemcpyBuffer::memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const {
      unsigned int* devicePattern;
     unsigned int* pattern;
     unsigned long long _2MBchunkCount = size / (1024 * 1024 * 2);
@@ -114,7 +114,7 @@ void MemcpyNode::memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsi
     free(pattern);
 }
 
-void MemcpyNode::xorshift2MBPattern(unsigned int* buffer, unsigned int seed) const {
+void MemcpyBuffer::xorshift2MBPattern(unsigned int* buffer, unsigned int seed) const {
     unsigned int oldValue = seed;
     unsigned int n = 0;
     for (n = 0; n < (1024 * 1024 * 2) / sizeof(unsigned int); n++) {
@@ -127,11 +127,11 @@ void MemcpyNode::xorshift2MBPattern(unsigned int* buffer, unsigned int seed) con
     }
 }
 
-CUresult MemcpyNode::streamSynchronizeWrapper(CUstream stream) const {
+CUresult MemcpyBuffer::streamSynchronizeWrapper(CUstream stream) const {
     return cuStreamSynchronize(stream);
 }
 
-HostNode::HostNode(size_t bufferSize, int targetDeviceId): MemcpyNode(bufferSize) {
+HostNode::HostNode(size_t bufferSize, int targetDeviceId): MemcpyBuffer(bufferSize) {
     CUcontext targetCtx;
 
     // Before allocating host memory, set correct NUMA affinity
@@ -164,7 +164,7 @@ std::string HostNode::getNodeString() const {
     return "Host";
 }
 
-DeviceNode::DeviceNode(size_t bufferSize, int deviceIdx): deviceIdx(deviceIdx), MemcpyNode(bufferSize) {
+DeviceNode::DeviceNode(size_t bufferSize, int deviceIdx): deviceIdx(deviceIdx), MemcpyBuffer(bufferSize) {
     CU_ASSERT(cuDevicePrimaryCtxRetain(&primaryCtx, deviceIdx));
     CU_ASSERT(cuCtxSetCurrent(primaryCtx));
     CU_ASSERT(cuMemAlloc((CUdeviceptr*)&buffer, bufferSize));
@@ -209,11 +209,11 @@ bool DeviceNode::enablePeerAcess(const DeviceNode &peerNode) {
 }
 
 MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
-    MemcpyOperation(loopCount, memcpyInitiator, new HostNodeTypeSingle(), ctxPreference, bandwidthValue)
+    MemcpyOperation(loopCount, memcpyInitiator, new NodeHelperSingle(), ctxPreference, bandwidthValue)
 {
 }
 
-MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, HostNodeType* hostNodeType, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
+MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, NodeHelper* hostNodeType, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
         loopCount(loopCount), memcpyInitiator(memcpyInitiator), hostNodeType(hostNodeType), ctxPreference(ctxPreference), bandwidthValue(bandwidthValue)
 {
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
@@ -224,25 +224,25 @@ MemcpyOperation::~MemcpyOperation() {
     PROC_MASK_CLEAR(procMask, 0);
 }
 
-double MemcpyOperation::doMemcpy(const MemcpyNode &srcNode, const MemcpyNode &dstNode) {
-    std::vector<const MemcpyNode*> srcNodes = {&srcNode};
-    std::vector<const MemcpyNode*> dstNodes = {&dstNode};
+double MemcpyOperation::doMemcpy(const MemcpyBuffer &srcNode, const MemcpyBuffer &dstNode) {
+    std::vector<const MemcpyBuffer*> srcNodes = {&srcNode};
+    std::vector<const MemcpyBuffer*> dstNodes = {&dstNode};
     return doMemcpy(srcNodes, dstNodes);
 }
 
-MemcpyDispatchInfo::MemcpyDispatchInfo(std::vector<const MemcpyNode*> srcNodes, std::vector<const MemcpyNode*> dstNodes, std::vector<CUcontext> contexts) :
+MemcpyDispatchInfo::MemcpyDispatchInfo(std::vector<const MemcpyBuffer*> srcNodes, std::vector<const MemcpyBuffer*> dstNodes, std::vector<CUcontext> contexts) :
     srcNodes(srcNodes), dstNodes(dstNodes), contexts(contexts)
 {}
 
-HostNodeTypeSingle::HostNodeTypeSingle() {
+NodeHelperSingle::NodeHelperSingle() {
     CU_ASSERT(cuMemHostAlloc((void **)&blockingVarHost, sizeof(*blockingVarHost), CU_MEMHOSTALLOC_PORTABLE));
 }
 
-HostNodeTypeSingle::~HostNodeTypeSingle() {
+NodeHelperSingle::~NodeHelperSingle() {
     CU_ASSERT(cuMemFreeHost((void*)blockingVarHost));
 }
 
-MemcpyDispatchInfo HostNodeTypeSingle::dispatchMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes, ContextPreference ctxPreference) {
+MemcpyDispatchInfo NodeHelperSingle::dispatchMemcpy(const std::vector<const MemcpyBuffer*> &srcNodes, const std::vector<const MemcpyBuffer*> &dstNodes, ContextPreference ctxPreference) {
     std::vector<CUcontext> contexts(srcNodes.size());
 
     for (int i = 0; i < srcNodes.size(); i++) {
@@ -257,11 +257,11 @@ MemcpyDispatchInfo HostNodeTypeSingle::dispatchMemcpy(const std::vector<const Me
     return MemcpyDispatchInfo(srcNodes, dstNodes, contexts);
 }
 
-double HostNodeTypeSingle::calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount) {
+double NodeHelperSingle::calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount) {
     return (totalSize * loopCount * 1000ull * 1000ull) / totalTime;
 }
 
-double HostNodeTypeSingle::calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) {
+double NodeHelperSingle::calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) {
     double sum = 0.0;
     for (auto stat : bandwidthStats) {
         sum += stat.returnAppropriateMetric() * 1e-9;
@@ -269,37 +269,37 @@ double HostNodeTypeSingle::calculateSumBandwidth(std::vector<PerformanceStatisti
     return sum;
 }
 
-double HostNodeTypeSingle::calculateFirstBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) {
+double NodeHelperSingle::calculateFirstBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) {
     return bandwidthStats[0].returnAppropriateMetric() * 1e-9;
 }
 
-void HostNodeTypeSingle::synchronizeProcess() {
+void NodeHelperSingle::synchronizeProcess() {
     // NOOP
 }
 
-CUresult HostNodeTypeSingle::streamSynchronizeWrapper(CUstream stream) const {
+CUresult NodeHelperSingle::streamSynchronizeWrapper(CUstream stream) const {
     return cuStreamSynchronize(stream);
 }
 
-void HostNodeTypeSingle::streamBlockerReset() {
+void NodeHelperSingle::streamBlockerReset() {
     *blockingVarHost = 0;
 }
 
-void HostNodeTypeSingle::streamBlockerRelease() {
+void NodeHelperSingle::streamBlockerRelease() {
     *blockingVarHost = 1;
 }
 
-void HostNodeTypeSingle::streamBlockerBlock(CUstream stream) {
+void NodeHelperSingle::streamBlockerBlock(CUstream stream) {
     // start the spin kernel on the stream
     CU_ASSERT(spinKernel(blockingVarHost, stream));
 }
 
-double MemcpyOperation::doMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes) {
+double MemcpyOperation::doMemcpy(const std::vector<const MemcpyBuffer*> &srcNodes, const std::vector<const MemcpyBuffer*> &dstNodes) {
     MemcpyDispatchInfo dispatchInfo = hostNodeType->dispatchMemcpy(srcNodes, dstNodes, ctxPreference);
     return doMemcpyCore(dispatchInfo.srcNodes, dispatchInfo.dstNodes, dispatchInfo.contexts);
 }
 
-double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes, const std::vector<CUcontext> &contexts) {
+double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcNodes, const std::vector<const MemcpyBuffer*> &dstNodes, const std::vector<CUcontext> &contexts) {
     std::vector<CUstream> streams(srcNodes.size());
     std::vector<CUevent> startEvents(srcNodes.size());
     std::vector<CUevent> endEvents(srcNodes.size());

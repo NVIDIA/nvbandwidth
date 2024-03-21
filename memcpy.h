@@ -21,13 +21,13 @@
 #include <memory>
 #include "common.h"
 
-class MemcpyNode {
+class MemcpyBuffer {
 protected:
     void* buffer{};
     size_t bufferSize;
 public:
-    MemcpyNode(size_t bufferSize);
-    virtual ~MemcpyNode() {}
+    MemcpyBuffer(size_t bufferSize);
+    virtual ~MemcpyBuffer() {}
     CUdeviceptr getBuffer() const;
     size_t getBufferSize() const;
     
@@ -43,7 +43,7 @@ public:
 };
 
 // Represents the host buffer abstraction
-class HostNode : public MemcpyNode {
+class HostNode : public MemcpyBuffer {
 public:
     // NUMA affinity is set here through allocation of memory in the socket group where `targetDeviceId` resides
     HostNode(size_t bufferSize, int targetDeviceId);
@@ -55,7 +55,7 @@ public:
 };
 
 // Represents the device buffer and context abstraction
-class DeviceNode : public MemcpyNode {
+class DeviceNode : public MemcpyBuffer {
 private:
     int deviceIdx;
     CUcontext primaryCtx{};
@@ -82,15 +82,15 @@ class MemcpyOperation;
 class MemcpyDispatchInfo {
 public:
     std::vector<CUcontext> contexts;
-    std::vector<const MemcpyNode*> srcNodes;
-    std::vector<const MemcpyNode*> dstNodes;
+    std::vector<const MemcpyBuffer*> srcNodes;
+    std::vector<const MemcpyBuffer*> dstNodes;
 
-    MemcpyDispatchInfo(std::vector<const MemcpyNode*> srcNodes, std::vector<const MemcpyNode*> dstNodes, std::vector<CUcontext> contexts);
+    MemcpyDispatchInfo(std::vector<const MemcpyBuffer*> srcNodes, std::vector<const MemcpyBuffer*> dstNodes, std::vector<CUcontext> contexts);
 };
 
-class HostNodeType {
+class NodeHelper {
 public:
-    virtual MemcpyDispatchInfo dispatchMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes, ContextPreference ctxPreference) = 0;
+    virtual MemcpyDispatchInfo dispatchMemcpy(const std::vector<const MemcpyBuffer*> &srcNodes, const std::vector<const MemcpyBuffer*> &dstNodes, ContextPreference ctxPreference) = 0;
     
     virtual double calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount) = 0;
     virtual double calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) = 0;
@@ -106,13 +106,13 @@ public:
     virtual void streamBlockerBlock(CUstream stream) = 0;
 };
 
-class HostNodeTypeSingle : public HostNodeType {
+class NodeHelperSingle : public NodeHelper {
 private:
     volatile int* blockingVarHost;
 public: 
-    HostNodeTypeSingle();
-    ~HostNodeTypeSingle();
-    MemcpyDispatchInfo dispatchMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes, ContextPreference ctxPreference);
+    NodeHelperSingle();
+    ~NodeHelperSingle();
+    MemcpyDispatchInfo dispatchMemcpy(const std::vector<const MemcpyBuffer*> &srcNodes, const std::vector<const MemcpyBuffer*> &dstNodes, ContextPreference ctxPreference);
     double calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount);
     double calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats);
     double calculateFirstBandwidth(std::vector<PerformanceStatistic> &bandwidthStats);
@@ -168,19 +168,19 @@ protected:
     size_t *procMask;
     BandwidthValue bandwidthValue;
 
-    std::shared_ptr<HostNodeType> hostNodeType;
+    std::shared_ptr<NodeHelper> hostNodeType;
     std::shared_ptr<MemcpyInitiator> memcpyInitiator;
 
 public:
     MemcpyOperation(unsigned long long loopCount, MemcpyInitiator *_memcpyInitiator, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
-    MemcpyOperation(unsigned long long loopCount, MemcpyInitiator *_memcpyInitiator, HostNodeType *_hostNodeType, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
+    MemcpyOperation(unsigned long long loopCount, MemcpyInitiator *_memcpyInitiator, NodeHelper *_hostNodeType, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
     virtual ~MemcpyOperation();
 
     // Lists of paired nodes will be executed sumultaneously
     // context of srcNodes is preferred (if not host) unless otherwise specified
-    double doMemcpyCore(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes, const std::vector<CUcontext> &contexts);
-    double doMemcpy(const std::vector<const MemcpyNode*> &srcNodes, const std::vector<const MemcpyNode*> &dstNodes);
-    double doMemcpy(const MemcpyNode &srcNode, const MemcpyNode &dstNode);
+    double doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcNodes, const std::vector<const MemcpyBuffer*> &dstNodes, const std::vector<CUcontext> &contexts);
+    double doMemcpy(const std::vector<const MemcpyBuffer*> &srcNodes, const std::vector<const MemcpyBuffer*> &dstNodes);
+    double doMemcpy(const MemcpyBuffer &srcNode, const MemcpyBuffer &dstNode);
 };
 
 #endif
