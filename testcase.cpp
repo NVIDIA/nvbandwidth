@@ -58,8 +58,8 @@ void Testcase::allToOneHelper(unsigned long long size, MemcpyOperation &memcpyIn
     }
 
     for (int dstDeviceId = 0; dstDeviceId < deviceCount; dstDeviceId++) {
-        std::vector<const MemcpyNode*> dstNodes;
-        std::vector<const MemcpyNode*> srcNodes;
+        std::vector<const MemcpyBuffer*> dstNodes;
+        std::vector<const MemcpyBuffer*> srcNodes;
 
         for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
             if (srcDeviceId == dstDeviceId) {
@@ -105,8 +105,8 @@ void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyIn
     }
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
-        std::vector<const MemcpyNode*> dstNodes;
-        std::vector<const MemcpyNode*> srcNodes;
+        std::vector<const MemcpyBuffer*> dstNodes;
+        std::vector<const MemcpyBuffer*> srcNodes;
 
         for (int dstDeviceId = 0; dstDeviceId < deviceCount; dstDeviceId++) {
             if (srcDeviceId == dstDeviceId) {
@@ -145,8 +145,8 @@ void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyIn
 
 void Testcase::allHostHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost) {
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        std::vector<const MemcpyNode*> deviceNodes;
-        std::vector<const MemcpyNode*> hostNodes;
+        std::vector<const MemcpyBuffer*> deviceNodes;
+        std::vector<const MemcpyBuffer*> hostNodes;
 
         deviceNodes.push_back(new DeviceNode(size, deviceId));
         hostNodes.push_back(new HostNode(size, deviceId));
@@ -179,8 +179,8 @@ void Testcase::allHostHelper(unsigned long long size, MemcpyOperation &memcpyIns
 
 void Testcase::allHostBidirHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost) {
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        std::vector<const MemcpyNode*> srcNodes;
-        std::vector<const MemcpyNode*> dstNodes;
+        std::vector<const MemcpyBuffer*> srcNodes;
+        std::vector<const MemcpyBuffer*> dstNodes;
 
         if (sourceIsHost) {
             srcNodes.push_back(new HostNode(size, deviceId));
