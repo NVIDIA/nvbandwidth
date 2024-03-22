@@ -55,19 +55,19 @@ public:
 };
 
 // Represents the device buffer and context abstraction
-class DeviceNode : public MemcpyBuffer {
+class DeviceBuffer : public MemcpyBuffer {
 private:
     int deviceIdx;
     CUcontext primaryCtx{};
 public:
-    DeviceNode(size_t bufferSize, int deviceIdx);
-    ~DeviceNode();
+    DeviceBuffer(size_t bufferSize, int deviceIdx);
+    ~DeviceBuffer();
 
     int getNodeIdx() const override;
     CUcontext getPrimaryCtx() const override;
     virtual std::string getNodeString() const override;
 
-    bool enablePeerAcess(const DeviceNode &peerNode);
+    bool enablePeerAcess(const DeviceBuffer &peerNode);
 };
 
 // Specifies the preferred node's context to do the operation from

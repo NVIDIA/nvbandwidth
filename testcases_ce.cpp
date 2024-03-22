@@ -29,7 +29,7 @@ void HostToDeviceCE::run(unsigned long long size, unsigned long long loopCount) 
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         HostBuffer hostNode(size, deviceId);
-        DeviceNode deviceNode(size, deviceId);
+        DeviceBuffer deviceNode(size, deviceId);
 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNode, deviceNode);
     }
@@ -43,7 +43,7 @@ void DeviceToHostCE::run(unsigned long long size, unsigned long long loopCount) 
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         HostBuffer hostNode(size, deviceId);
-        DeviceNode deviceNode(size, deviceId);
+        DeviceBuffer deviceNode(size, deviceId);
 
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNode, hostNode);
     }
@@ -58,7 +58,7 @@ void HostToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCo
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         // Double the size of the interference copy to ensure it interferes correctly
         HostBuffer host1(size, deviceId), host2(size * 2, deviceId);
-        DeviceNode dev1(size, deviceId), dev2(size * 2, deviceId);
+        DeviceBuffer dev1(size, deviceId), dev2(size * 2, deviceId);
 
         std::vector<const MemcpyBuffer*> srcNodes = {&host1, &dev2};
         std::vector<const MemcpyBuffer*> dstNodes = {&dev1, &host2};
@@ -76,7 +76,7 @@ void DeviceToHostBidirCE::run(unsigned long long size, unsigned long long loopCo
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         // Double the size of the interference copy to ensure it interferes correctly
         HostBuffer host1(size, deviceId), host2(size * 2, deviceId);
-        DeviceNode dev1(size, deviceId), dev2(size * 2, deviceId);
+        DeviceBuffer dev1(size, deviceId), dev2(size * 2, deviceId);
 
         std::vector<const MemcpyBuffer*> srcNodes = {&dev1, &host2};
         std::vector<const MemcpyBuffer*> dstNodes = {&host1, &dev2};
@@ -98,8 +98,8 @@ void DeviceToDeviceReadCE::run(unsigned long long size, unsigned long long loopC
                 continue;
             }
 
-            DeviceNode srcNode(size, srcDeviceId);
-            DeviceNode peerNode(size, peerDeviceId);
+            DeviceBuffer srcNode(size, srcDeviceId);
+            DeviceBuffer peerNode(size, peerDeviceId);
 
             if (!srcNode.enablePeerAcess(peerNode)) {
                 continue;
@@ -124,8 +124,8 @@ void DeviceToDeviceWriteCE::run(unsigned long long size, unsigned long long loop
                 continue;
             }
 
-            DeviceNode srcNode(size, srcDeviceId);
-            DeviceNode peerNode(size, peerDeviceId);
+            DeviceBuffer srcNode(size, srcDeviceId);
+            DeviceBuffer peerNode(size, peerDeviceId);
 
             if (!srcNode.enablePeerAcess(peerNode)) {
                 continue;
@@ -150,8 +150,8 @@ void DeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned long long 
             }
 
             // Double the size of the interference copy to ensure it interferes correctly
-            DeviceNode src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
-            DeviceNode peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
+            DeviceBuffer src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
+            DeviceBuffer peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
 
             if (!src1.enablePeerAcess(peer1)) {
                 continue;
@@ -180,8 +180,8 @@ void DeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned long long
             }
 
             // Double the size of the interference copy to ensure it interferes correctly
-            DeviceNode src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
-            DeviceNode peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
+            DeviceBuffer src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
+            DeviceBuffer peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
 
             if (!src1.enablePeerAcess(peer1)) {
                 continue;

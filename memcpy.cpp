@@ -164,31 +164,31 @@ std::string HostBuffer::getNodeString() const {
     return "Host";
 }
 
-DeviceNode::DeviceNode(size_t bufferSize, int deviceIdx): deviceIdx(deviceIdx), MemcpyBuffer(bufferSize) {
+DeviceBuffer::DeviceBuffer(size_t bufferSize, int deviceIdx): deviceIdx(deviceIdx), MemcpyBuffer(bufferSize) {
     CU_ASSERT(cuDevicePrimaryCtxRetain(&primaryCtx, deviceIdx));
     CU_ASSERT(cuCtxSetCurrent(primaryCtx));
     CU_ASSERT(cuMemAlloc((CUdeviceptr*)&buffer, bufferSize));
 }
 
-DeviceNode::~DeviceNode() {
+DeviceBuffer::~DeviceBuffer() {
     CU_ASSERT(cuCtxSetCurrent(primaryCtx));
     CU_ASSERT(cuMemFree((CUdeviceptr)buffer));
     CU_ASSERT(cuDevicePrimaryCtxRelease(deviceIdx));
 }
 
-CUcontext DeviceNode::getPrimaryCtx() const {
+CUcontext DeviceBuffer::getPrimaryCtx() const {
     return primaryCtx;
 }
 
-int DeviceNode::getNodeIdx() const {
+int DeviceBuffer::getNodeIdx() const {
     return deviceIdx;
 }
 
-std::string DeviceNode::getNodeString() const {
+std::string DeviceBuffer::getNodeString() const {
     return "Device " + std::to_string(deviceIdx);
 }
 
-bool DeviceNode::enablePeerAcess(const DeviceNode &peerNode) {
+bool DeviceBuffer::enablePeerAcess(const DeviceBuffer &peerNode) {
     int canAccessPeer = 0;
     CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, getNodeIdx(), peerNode.getNodeIdx()));
     if (canAccessPeer) {
