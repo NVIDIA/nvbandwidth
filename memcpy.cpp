@@ -160,7 +160,7 @@ int HostBuffer::getNodeIdx() const {
     return 0;
 }
 
-std::string HostBuffer::getNodeString() const {
+std::string HostBuffer::getBufferString() const {
     return "Host";
 }
 
@@ -184,7 +184,7 @@ int DeviceBuffer::getNodeIdx() const {
     return deviceIdx;
 }
 
-std::string DeviceBuffer::getNodeString() const {
+std::string DeviceBuffer::getBufferString() const {
     return "Device " + std::to_string(deviceIdx);
 }
 
@@ -400,7 +400,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
 
             if (bandwidthValue == BandwidthValue::SUM_BW || BandwidthValue::TOTAL_BW || i == 0) {
                 // Verbose print only the values that are used for the final output
-                VERBOSE << "\tSample " << n << ": " << srcNodes[i]->getNodeString() << " -> " << dstNodes[i]->getNodeString() << ": " <<
+                VERBOSE << "\tSample " << n << ": " << srcNodes[i]->getBufferString() << " -> " << dstNodes[i]->getBufferString() << ": " <<
                     std::fixed << std::setprecision(2) << (double)bandwidth * 1e-9 << " GB/s\n";
             }
         }

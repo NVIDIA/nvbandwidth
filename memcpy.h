@@ -33,7 +33,7 @@ public:
     
     virtual int getNodeIdx() const = 0;
     virtual CUcontext getPrimaryCtx() const = 0;
-    virtual std::string getNodeString() const = 0;
+    virtual std::string getBufferString() const = 0;
     void memsetPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const;
     void memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const;
     void xorshift2MBPattern(unsigned int* buffer, unsigned int seed) const;
@@ -51,7 +51,7 @@ public:
 
     int getNodeIdx() const override;
     CUcontext getPrimaryCtx() const override;
-    virtual std::string getNodeString() const override;
+    virtual std::string getBufferString() const override;
 };
 
 // Represents the device buffer and context abstraction
@@ -65,7 +65,7 @@ public:
 
     int getNodeIdx() const override;
     CUcontext getPrimaryCtx() const override;
-    virtual std::string getNodeString() const override;
+    virtual std::string getBufferString() const override;
 
     bool enablePeerAcess(const DeviceBuffer &peerBuffer);
 };
