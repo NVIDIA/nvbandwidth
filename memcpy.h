@@ -168,12 +168,12 @@ protected:
     size_t *procMask;
     BandwidthValue bandwidthValue;
 
-    std::shared_ptr<NodeHelper> hostNodeType;
+    std::shared_ptr<NodeHelper> nodeHelper;
     std::shared_ptr<MemcpyInitiator> memcpyInitiator;
 
 public:
     MemcpyOperation(unsigned long long loopCount, MemcpyInitiator *_memcpyInitiator, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
-    MemcpyOperation(unsigned long long loopCount, MemcpyInitiator *_memcpyInitiator, NodeHelper *_hostNodeType, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
+    MemcpyOperation(unsigned long long loopCount, MemcpyInitiator *_memcpyInitiator, NodeHelper *_nodeHelper, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
     virtual ~MemcpyOperation();
 
     // Lists of paired nodes will be executed sumultaneously

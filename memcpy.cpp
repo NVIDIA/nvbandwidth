@@ -213,8 +213,8 @@ MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* 
 {
 }
 
-MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, NodeHelper* hostNodeType, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
-        loopCount(loopCount), memcpyInitiator(memcpyInitiator), hostNodeType(hostNodeType), ctxPreference(ctxPreference), bandwidthValue(bandwidthValue)
+MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, NodeHelper* nodeHelper, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
+        loopCount(loopCount), memcpyInitiator(memcpyInitiator), nodeHelper(nodeHelper), ctxPreference(ctxPreference), bandwidthValue(bandwidthValue)
 {
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
     PROC_MASK_SET(procMask, getFirstEnabledCPU());
@@ -295,7 +295,7 @@ void NodeHelperSingle::streamBlockerBlock(CUstream stream) {
 }
 
 double MemcpyOperation::doMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers) {
-    MemcpyDispatchInfo dispatchInfo = hostNodeType->dispatchMemcpy(srcBuffers, dstBuffers, ctxPreference);
+    MemcpyDispatchInfo dispatchInfo = nodeHelper->dispatchMemcpy(srcBuffers, dstBuffers, ctxPreference);
     return doMemcpyCore(dispatchInfo.srcBuffers, dispatchInfo.dstBuffers, dispatchInfo.contexts);
 }
 
@@ -329,8 +329,8 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
 
     // This loop is for sampling the testcase (which itself has a loop count)
     for (unsigned int n = 0; n < averageLoopCount; n++) {
-        hostNodeType->streamBlockerReset();
-        hostNodeType->synchronizeProcess();
+        nodeHelper->streamBlockerReset();
+        nodeHelper->synchronizeProcess();
 
         // Set the memory patterns correctly before spin kernel launch etc.
         for (int i = 0; i < srcBuffers.size(); i++) {
@@ -341,7 +341,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
         for (int i = 0; i < srcBuffers.size(); i++) {
             CU_ASSERT(cuCtxSetCurrent(contexts[i]));
 
-            hostNodeType->streamBlockerBlock(streams[i]);
+            nodeHelper->streamBlockerBlock(streams[i]);
 
             // warmup
             memcpyInitiator->memcpyFunc(dstBuffers[i]->getBuffer(), srcBuffers[i]->getBuffer(), streams[i], srcBuffers[i]->getBufferSize(), WARMUP_COUNT);
@@ -377,13 +377,13 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
         }
 
         // unblock the streams
-        hostNodeType->streamBlockerRelease();
+        nodeHelper->streamBlockerRelease();
 
         for (CUstream stream : streams) {
-            CU_ASSERT(hostNodeType->streamSynchronizeWrapper(stream));
+            CU_ASSERT(nodeHelper->streamSynchronizeWrapper(stream));
         }
 
-        hostNodeType->synchronizeProcess();
+        nodeHelper->synchronizeProcess();
 
         if (!skipVerification) {
             for (int i = 0; i < srcBuffers.size(); i++) {            
@@ -416,7 +416,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
                 totalSize += size;
             }
 
-            double bandwidth = hostNodeType->calculateTotalBandwidth(elapsedTotalInUs, totalSize, loopCount);
+            double bandwidth = nodeHelper->calculateTotalBandwidth(elapsedTotalInUs, totalSize, loopCount);
             totalBandwidth(bandwidth);
             VERBOSE << "\tSample " << n << ": Total Bandwidth : " <<
                 std::fixed << std::setprecision(2) << (double)bandwidth * 1e-9 << " GB/s\n";
@@ -433,11 +433,11 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
     }
 
     if (bandwidthValue == BandwidthValue::SUM_BW) {
-        return hostNodeType->calculateSumBandwidth(bandwidthStats);
+        return nodeHelper->calculateSumBandwidth(bandwidthStats);
     } else if (bandwidthValue == BandwidthValue::TOTAL_BW) {
         return totalBandwidth.returnAppropriateMetric() * 1e-9;
     } else {
-        return hostNodeType->calculateFirstBandwidth(bandwidthStats);
+        return nodeHelper->calculateFirstBandwidth(bandwidthStats);
     }
 }
 
