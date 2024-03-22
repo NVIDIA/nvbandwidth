@@ -155,7 +155,7 @@ CUcontext HostBuffer::getPrimaryCtx() const {
     return nullptr;
 }
 
-// Host Nodes always return zero as they always represent one row in the bandwidth matrix
+// Host buffers always return zero as they always represent one row in the bandwidth matrix
 int HostBuffer::getBufferIdx() const {
     return 0;
 }

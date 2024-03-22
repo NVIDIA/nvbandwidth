@@ -73,8 +73,8 @@ public:
 // Specifies the preferred node's context to do the operation from
 // It's only a preference because if the preferred node is a HostBuffer, it has no context and will fall back to the other node
 enum ContextPreference { 
-        PREFER_SRC_CONTEXT,    // Prefer the source Node's context if available
-        PREFER_DST_CONTEXT     // Prefer the destination Node's context if available
+        PREFER_SRC_CONTEXT,    // Prefer the source buffer's context if available
+        PREFER_DST_CONTEXT     // Prefer the destination buffer's context if available
 };
 
 class MemcpyOperation;
