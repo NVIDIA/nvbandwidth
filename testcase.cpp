@@ -97,11 +97,11 @@ void Testcase::allToOneHelper(unsigned long long size, MemcpyOperation &memcpyIn
 }
 
 void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead) {
-    std::vector<const DeviceBuffer*> allDstNodes;
+    std::vector<const DeviceBuffer*> allDstBuffers;
 
     //allocate all src nodes up front, re-use to avoid reallocation
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        allDstNodes.push_back(new DeviceBuffer(size, deviceId));
+        allDstBuffers.push_back(new DeviceBuffer(size, deviceId));
     }
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
@@ -115,13 +115,13 @@ void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyIn
 
             DeviceBuffer* srcBuffer = new DeviceBuffer(size, srcDeviceId);
 
-            if (!srcBuffer->enablePeerAcess(*allDstNodes[dstDeviceId])) {
+            if (!srcBuffer->enablePeerAcess(*allDstBuffers[dstDeviceId])) {
                 delete srcBuffer;
                 continue;
             }
 
             srcBuffers.push_back(srcBuffer);
-            dstBuffers.push_back(allDstNodes[dstDeviceId]);
+            dstBuffers.push_back(allDstBuffers[dstDeviceId]);
         }
         // If no peer GPUs, skip measurements.
         if(!srcBuffers.empty()){
@@ -138,7 +138,7 @@ void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyIn
         }
     }
 
-    for (auto node : allDstNodes) {
+    for (auto node : allDstBuffers) {
         delete node;
     }
 }
