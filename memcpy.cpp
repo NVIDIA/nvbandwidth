@@ -156,7 +156,7 @@ CUcontext HostBuffer::getPrimaryCtx() const {
 }
 
 // Host Nodes always return zero as they always represent one row in the bandwidth matrix
-int HostBuffer::getNodeIdx() const {
+int HostBuffer::getBufferIdx() const {
     return 0;
 }
 
@@ -180,7 +180,7 @@ CUcontext DeviceBuffer::getPrimaryCtx() const {
     return primaryCtx;
 }
 
-int DeviceBuffer::getNodeIdx() const {
+int DeviceBuffer::getBufferIdx() const {
     return deviceIdx;
 }
 
@@ -190,7 +190,7 @@ std::string DeviceBuffer::getBufferString() const {
 
 bool DeviceBuffer::enablePeerAcess(const DeviceBuffer &peerBuffer) {
     int canAccessPeer = 0;
-    CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, getNodeIdx(), peerBuffer.getNodeIdx()));
+    CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, getBufferIdx(), peerBuffer.getBufferIdx()));
     if (canAccessPeer) {
         CUresult res;
         CU_ASSERT(cuCtxSetCurrent(peerBuffer.getPrimaryCtx()));

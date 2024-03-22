@@ -31,7 +31,7 @@ public:
     CUdeviceptr getBuffer() const;
     size_t getBufferSize() const;
     
-    virtual int getNodeIdx() const = 0;
+    virtual int getBufferIdx() const = 0;
     virtual CUcontext getPrimaryCtx() const = 0;
     virtual std::string getBufferString() const = 0;
     void memsetPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const;
@@ -49,7 +49,7 @@ public:
     HostBuffer(size_t bufferSize, int targetDeviceId);
     ~HostBuffer();
 
-    int getNodeIdx() const override;
+    int getBufferIdx() const override;
     CUcontext getPrimaryCtx() const override;
     virtual std::string getBufferString() const override;
 };
@@ -63,7 +63,7 @@ public:
     DeviceBuffer(size_t bufferSize, int deviceIdx);
     ~DeviceBuffer();
 
-    int getNodeIdx() const override;
+    int getBufferIdx() const override;
     CUcontext getPrimaryCtx() const override;
     virtual std::string getBufferString() const override;
 
