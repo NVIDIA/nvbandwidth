@@ -61,9 +61,9 @@ void HostToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCo
         DeviceBuffer dev1(size, deviceId), dev2(size * 2, deviceId);
 
         std::vector<const MemcpyBuffer*> srcBuffers = {&host1, &dev2};
-        std::vector<const MemcpyBuffer*> dstNodes = {&dev1, &host2};
+        std::vector<const MemcpyBuffer*> dstBuffers = {&dev1, &host2};
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstNodes);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
     }
 
     output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
@@ -79,9 +79,9 @@ void DeviceToHostBidirCE::run(unsigned long long size, unsigned long long loopCo
         DeviceBuffer dev1(size, deviceId), dev2(size * 2, deviceId);
 
         std::vector<const MemcpyBuffer*> srcBuffers = {&dev1, &host2};
-        std::vector<const MemcpyBuffer*> dstNodes = {&host1, &dev2};
+        std::vector<const MemcpyBuffer*> dstBuffers = {&host1, &dev2};
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstNodes);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
     }
 
     output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");

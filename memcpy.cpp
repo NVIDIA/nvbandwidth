@@ -224,14 +224,14 @@ MemcpyOperation::~MemcpyOperation() {
     PROC_MASK_CLEAR(procMask, 0);
 }
 
-double MemcpyOperation::doMemcpy(const MemcpyBuffer &srcBuffer, const MemcpyBuffer &dstNode) {
+double MemcpyOperation::doMemcpy(const MemcpyBuffer &srcBuffer, const MemcpyBuffer &dstBuffer) {
     std::vector<const MemcpyBuffer*> srcBuffers = {&srcBuffer};
-    std::vector<const MemcpyBuffer*> dstNodes = {&dstNode};
-    return doMemcpy(srcBuffers, dstNodes);
+    std::vector<const MemcpyBuffer*> dstBuffers = {&dstBuffer};
+    return doMemcpy(srcBuffers, dstBuffers);
 }
 
-MemcpyDispatchInfo::MemcpyDispatchInfo(std::vector<const MemcpyBuffer*> srcBuffers, std::vector<const MemcpyBuffer*> dstNodes, std::vector<CUcontext> contexts) :
-    srcBuffers(srcBuffers), dstNodes(dstNodes), contexts(contexts)
+MemcpyDispatchInfo::MemcpyDispatchInfo(std::vector<const MemcpyBuffer*> srcBuffers, std::vector<const MemcpyBuffer*> dstBuffers, std::vector<CUcontext> contexts) :
+    srcBuffers(srcBuffers), dstBuffers(dstBuffers), contexts(contexts)
 {}
 
 NodeHelperSingle::NodeHelperSingle() {
@@ -242,19 +242,19 @@ NodeHelperSingle::~NodeHelperSingle() {
     CU_ASSERT(cuMemFreeHost((void*)blockingVarHost));
 }
 
-MemcpyDispatchInfo NodeHelperSingle::dispatchMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstNodes, ContextPreference ctxPreference) {
+MemcpyDispatchInfo NodeHelperSingle::dispatchMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, ContextPreference ctxPreference) {
     std::vector<CUcontext> contexts(srcBuffers.size());
 
     for (int i = 0; i < srcBuffers.size(); i++) {
         // prefer source context
         if (ctxPreference == PREFER_SRC_CONTEXT && srcBuffers[i]->getPrimaryCtx() != nullptr) {
             contexts[i] = srcBuffers[i]->getPrimaryCtx();
-        } else if (dstNodes[i]->getPrimaryCtx() != nullptr) {
-            contexts[i] = dstNodes[i]->getPrimaryCtx();
+        } else if (dstBuffers[i]->getPrimaryCtx() != nullptr) {
+            contexts[i] = dstBuffers[i]->getPrimaryCtx();
         }
     }
 
-    return MemcpyDispatchInfo(srcBuffers, dstNodes, contexts);
+    return MemcpyDispatchInfo(srcBuffers, dstBuffers, contexts);
 }
 
 double NodeHelperSingle::calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount) {
@@ -294,12 +294,12 @@ void NodeHelperSingle::streamBlockerBlock(CUstream stream) {
     CU_ASSERT(spinKernel(blockingVarHost, stream));
 }
 
-double MemcpyOperation::doMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstNodes) {
-    MemcpyDispatchInfo dispatchInfo = hostNodeType->dispatchMemcpy(srcBuffers, dstNodes, ctxPreference);
-    return doMemcpyCore(dispatchInfo.srcBuffers, dispatchInfo.dstNodes, dispatchInfo.contexts);
+double MemcpyOperation::doMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers) {
+    MemcpyDispatchInfo dispatchInfo = hostNodeType->dispatchMemcpy(srcBuffers, dstBuffers, ctxPreference);
+    return doMemcpyCore(dispatchInfo.srcBuffers, dispatchInfo.dstBuffers, dispatchInfo.contexts);
 }
 
-double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstNodes, const std::vector<CUcontext> &contexts) {
+double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, const std::vector<CUcontext> &contexts) {
     std::vector<CUstream> streams(srcBuffers.size());
     std::vector<CUevent> startEvents(srcBuffers.size());
     std::vector<CUevent> endEvents(srcBuffers.size());
@@ -334,7 +334,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
 
         // Set the memory patterns correctly before spin kernel launch etc.
         for (int i = 0; i < srcBuffers.size(); i++) {
-            dstNodes[i]->memsetPattern(dstNodes[i]->getBuffer(), finalCopySize[i], 0xCAFEBABE);
+            dstBuffers[i]->memsetPattern(dstBuffers[i]->getBuffer(), finalCopySize[i], 0xCAFEBABE);
             srcBuffers[i]->memsetPattern(srcBuffers[i]->getBuffer(), finalCopySize[i], 0xBAADF00D);
         }        
         // block stream, and enqueue copy
@@ -344,7 +344,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
             hostNodeType->streamBlockerBlock(streams[i]);
 
             // warmup
-            memcpyInitiator->memcpyFunc(dstNodes[i]->getBuffer(), srcBuffers[i]->getBuffer(), streams[i], srcBuffers[i]->getBufferSize(), WARMUP_COUNT);
+            memcpyInitiator->memcpyFunc(dstBuffers[i]->getBuffer(), srcBuffers[i]->getBuffer(), streams[i], srcBuffers[i]->getBufferSize(), WARMUP_COUNT);
         }
 
         if (srcBuffers.size() > 0) {
@@ -361,8 +361,8 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
 
         for (int i = 0; i < srcBuffers.size(); i++) {
             CU_ASSERT(cuCtxSetCurrent(contexts[i]));
-            ASSERT(srcBuffers[i]->getBufferSize() == dstNodes[i]->getBufferSize());
-            adjustedCopySizes[i] = memcpyInitiator->memcpyFunc(dstNodes[i]->getBuffer(), srcBuffers[i]->getBuffer(), streams[i], srcBuffers[i]->getBufferSize(), loopCount);
+            ASSERT(srcBuffers[i]->getBufferSize() == dstBuffers[i]->getBufferSize());
+            adjustedCopySizes[i] = memcpyInitiator->memcpyFunc(dstBuffers[i]->getBuffer(), srcBuffers[i]->getBuffer(), streams[i], srcBuffers[i]->getBufferSize(), loopCount);
             CU_ASSERT(cuEventRecord(endEvents[i], streams[i]));
             if (bandwidthValue == BandwidthValue::TOTAL_BW && i != 0) {
                 // make stream0 wait on the all the others so we can measure total completion time
@@ -387,7 +387,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
 
         if (!skipVerification) {
             for (int i = 0; i < srcBuffers.size(); i++) {            
-                dstNodes[i]->memcmpPattern(dstNodes[i]->getBuffer(), finalCopySize[i], 0xBAADF00D);
+                dstBuffers[i]->memcmpPattern(dstBuffers[i]->getBuffer(), finalCopySize[i], 0xBAADF00D);
             }
         }
 
@@ -400,7 +400,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
 
             if (bandwidthValue == BandwidthValue::SUM_BW || BandwidthValue::TOTAL_BW || i == 0) {
                 // Verbose print only the values that are used for the final output
-                VERBOSE << "\tSample " << n << ": " << srcBuffers[i]->getBufferString() << " -> " << dstNodes[i]->getBufferString() << ": " <<
+                VERBOSE << "\tSample " << n << ": " << srcBuffers[i]->getBufferString() << " -> " << dstBuffers[i]->getBufferString() << ": " <<
                     std::fixed << std::setprecision(2) << (double)bandwidth * 1e-9 << " GB/s\n";
             }
         }

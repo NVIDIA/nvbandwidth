@@ -83,14 +83,14 @@ class MemcpyDispatchInfo {
 public:
     std::vector<CUcontext> contexts;
     std::vector<const MemcpyBuffer*> srcBuffers;
-    std::vector<const MemcpyBuffer*> dstNodes;
+    std::vector<const MemcpyBuffer*> dstBuffers;
 
-    MemcpyDispatchInfo(std::vector<const MemcpyBuffer*> srcBuffers, std::vector<const MemcpyBuffer*> dstNodes, std::vector<CUcontext> contexts);
+    MemcpyDispatchInfo(std::vector<const MemcpyBuffer*> srcBuffers, std::vector<const MemcpyBuffer*> dstBuffers, std::vector<CUcontext> contexts);
 };
 
 class NodeHelper {
 public:
-    virtual MemcpyDispatchInfo dispatchMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstNodes, ContextPreference ctxPreference) = 0;
+    virtual MemcpyDispatchInfo dispatchMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, ContextPreference ctxPreference) = 0;
     
     virtual double calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount) = 0;
     virtual double calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) = 0;
@@ -112,7 +112,7 @@ private:
 public: 
     NodeHelperSingle();
     ~NodeHelperSingle();
-    MemcpyDispatchInfo dispatchMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstNodes, ContextPreference ctxPreference);
+    MemcpyDispatchInfo dispatchMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, ContextPreference ctxPreference);
     double calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount);
     double calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats);
     double calculateFirstBandwidth(std::vector<PerformanceStatistic> &bandwidthStats);
@@ -178,9 +178,9 @@ public:
 
     // Lists of paired nodes will be executed sumultaneously
     // context of srcBuffers is preferred (if not host) unless otherwise specified
-    double doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstNodes, const std::vector<CUcontext> &contexts);
-    double doMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstNodes);
-    double doMemcpy(const MemcpyBuffer &srcBuffer, const MemcpyBuffer &dstNode);
+    double doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, const std::vector<CUcontext> &contexts);
+    double doMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers);
+    double doMemcpy(const MemcpyBuffer &srcBuffer, const MemcpyBuffer &dstBuffer);
 };
 
 #endif
