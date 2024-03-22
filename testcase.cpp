@@ -145,10 +145,10 @@ void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyIn
 
 void Testcase::allHostHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost) {
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        std::vector<const MemcpyBuffer*> deviceNodes;
+        std::vector<const MemcpyBuffer*> deviceBuffers;
         std::vector<const MemcpyBuffer*> hostNodes;
 
-        deviceNodes.push_back(new DeviceBuffer(size, deviceId));
+        deviceBuffers.push_back(new DeviceBuffer(size, deviceId));
         hostNodes.push_back(new HostBuffer(size, deviceId));
 
         for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
@@ -157,17 +157,17 @@ void Testcase::allHostHelper(unsigned long long size, MemcpyOperation &memcpyIns
             }
 
             // Double the size of the interference copy to ensure it interferes correctly
-            deviceNodes.push_back(new DeviceBuffer(size * 2, interferenceDeviceId));
+            deviceBuffers.push_back(new DeviceBuffer(size * 2, interferenceDeviceId));
             hostNodes.push_back(new HostBuffer(size * 2, interferenceDeviceId));
         }
 
         if (sourceIsHost) {
-            bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNodes, deviceNodes);
+            bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNodes, deviceBuffers);
         } else {
-            bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNodes, hostNodes);
+            bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceBuffers, hostNodes);
         }
 
-        for (auto node : deviceNodes) {
+        for (auto node : deviceBuffers) {
             delete node;
         }
 

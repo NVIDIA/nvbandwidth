@@ -29,9 +29,9 @@ void HostToDeviceCE::run(unsigned long long size, unsigned long long loopCount) 
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         HostBuffer hostNode(size, deviceId);
-        DeviceBuffer deviceNode(size, deviceId);
+        DeviceBuffer deviceBuffer(size, deviceId);
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNode, deviceNode);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNode, deviceBuffer);
     }
 
     output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)");
@@ -43,9 +43,9 @@ void DeviceToHostCE::run(unsigned long long size, unsigned long long loopCount) 
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         HostBuffer hostNode(size, deviceId);
-        DeviceBuffer deviceNode(size, deviceId);
+        DeviceBuffer deviceBuffer(size, deviceId);
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNode, hostNode);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceBuffer, hostNode);
     }
 
     output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
