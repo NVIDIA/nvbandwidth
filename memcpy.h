@@ -43,11 +43,11 @@ public:
 };
 
 // Represents the host buffer abstraction
-class HostNode : public MemcpyBuffer {
+class HostBuffer : public MemcpyBuffer {
 public:
     // NUMA affinity is set here through allocation of memory in the socket group where `targetDeviceId` resides
-    HostNode(size_t bufferSize, int targetDeviceId);
-    ~HostNode();
+    HostBuffer(size_t bufferSize, int targetDeviceId);
+    ~HostBuffer();
 
     int getNodeIdx() const override;
     CUcontext getPrimaryCtx() const override;
@@ -71,7 +71,7 @@ public:
 };
 
 // Specifies the preferred node's context to do the operation from
-// It's only a preference because if the preferred node is a HostNode, it has no context and will fall back to the other node
+// It's only a preference because if the preferred node is a HostBuffer, it has no context and will fall back to the other node
 enum ContextPreference { 
         PREFER_SRC_CONTEXT,    // Prefer the source Node's context if available
         PREFER_DST_CONTEXT     // Prefer the destination Node's context if available

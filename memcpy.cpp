@@ -131,7 +131,7 @@ CUresult MemcpyBuffer::streamSynchronizeWrapper(CUstream stream) const {
     return cuStreamSynchronize(stream);
 }
 
-HostNode::HostNode(size_t bufferSize, int targetDeviceId): MemcpyBuffer(bufferSize) {
+HostBuffer::HostBuffer(size_t bufferSize, int targetDeviceId): MemcpyBuffer(bufferSize) {
     CUcontext targetCtx;
 
     // Before allocating host memory, set correct NUMA affinity
@@ -142,7 +142,7 @@ HostNode::HostNode(size_t bufferSize, int targetDeviceId): MemcpyBuffer(bufferSi
     CU_ASSERT(cuMemHostAlloc(&buffer, bufferSize, CU_MEMHOSTALLOC_PORTABLE));
 }
 
-HostNode::~HostNode() {
+HostBuffer::~HostBuffer() {
     if (isMemoryOwnedByCUDA(buffer)) {
         CU_ASSERT(cuMemFreeHost(buffer));
     } else {
@@ -151,16 +151,16 @@ HostNode::~HostNode() {
 }
 
 // Host nodes don't have a context, return null
-CUcontext HostNode::getPrimaryCtx() const {
+CUcontext HostBuffer::getPrimaryCtx() const {
     return nullptr;
 }
 
 // Host Nodes always return zero as they always represent one row in the bandwidth matrix
-int HostNode::getNodeIdx() const {
+int HostBuffer::getNodeIdx() const {
     return 0;
 }
 
-std::string HostNode::getNodeString() const {
+std::string HostBuffer::getNodeString() const {
     return "Host";
 }
 

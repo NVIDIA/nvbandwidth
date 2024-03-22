@@ -149,7 +149,7 @@ void Testcase::allHostHelper(unsigned long long size, MemcpyOperation &memcpyIns
         std::vector<const MemcpyBuffer*> hostNodes;
 
         deviceNodes.push_back(new DeviceNode(size, deviceId));
-        hostNodes.push_back(new HostNode(size, deviceId));
+        hostNodes.push_back(new HostBuffer(size, deviceId));
 
         for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
             if (interferenceDeviceId == deviceId) {
@@ -158,7 +158,7 @@ void Testcase::allHostHelper(unsigned long long size, MemcpyOperation &memcpyIns
 
             // Double the size of the interference copy to ensure it interferes correctly
             deviceNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
-            hostNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
+            hostNodes.push_back(new HostBuffer(size * 2, interferenceDeviceId));
         }
 
         if (sourceIsHost) {
@@ -183,19 +183,19 @@ void Testcase::allHostBidirHelper(unsigned long long size, MemcpyOperation &memc
         std::vector<const MemcpyBuffer*> dstNodes;
 
         if (sourceIsHost) {
-            srcNodes.push_back(new HostNode(size, deviceId));
+            srcNodes.push_back(new HostBuffer(size, deviceId));
             dstNodes.push_back(new DeviceNode(size, deviceId));
 
             // Double the size of the interference copy to ensure it interferes correctly
             srcNodes.push_back(new DeviceNode(size * 2, deviceId));
-            dstNodes.push_back(new HostNode(size * 2, deviceId));
+            dstNodes.push_back(new HostBuffer(size * 2, deviceId));
         }
         else {
             srcNodes.push_back(new DeviceNode(size, deviceId));
-            dstNodes.push_back(new HostNode(size, deviceId));
+            dstNodes.push_back(new HostBuffer(size, deviceId));
 
             // Double the size of the interference copy to ensure it interferes correctly
-            srcNodes.push_back(new HostNode(size * 2, deviceId));
+            srcNodes.push_back(new HostBuffer(size * 2, deviceId));
             dstNodes.push_back(new DeviceNode(size * 2, deviceId));
         }
 
@@ -206,9 +206,9 @@ void Testcase::allHostBidirHelper(unsigned long long size, MemcpyOperation &memc
 
             // Double the size of the interference copy to ensure it interferes correctly
             srcNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
-            dstNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
+            dstNodes.push_back(new HostBuffer(size * 2, interferenceDeviceId));
 
-            srcNodes.push_back(new HostNode(size * 2, interferenceDeviceId));
+            srcNodes.push_back(new HostBuffer(size * 2, interferenceDeviceId));
             dstNodes.push_back(new DeviceNode(size * 2, interferenceDeviceId));
         }
 
