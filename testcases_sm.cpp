@@ -58,10 +58,10 @@ void HostToDeviceBidirSM::run(unsigned long long size, unsigned long long loopCo
         HostBuffer host1(size, deviceId), host2(size * 2, deviceId);
         DeviceBuffer dev1(size, deviceId), dev2(size * 2, deviceId);
 
-        std::vector<const MemcpyBuffer*> srcNodes = {&host1, &dev2};
+        std::vector<const MemcpyBuffer*> srcBuffers = {&host1, &dev2};
         std::vector<const MemcpyBuffer*> dstNodes = {&dev1, &host2};
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstNodes);
     }
 
     output->addTestcaseResults(bandwidthValues, "memcpy SM CPU(row) <- GPU(column) bandwidth (GB/s)");
@@ -76,10 +76,10 @@ void DeviceToHostBidirSM::run(unsigned long long size, unsigned long long loopCo
         HostBuffer host1(size, deviceId), host2(size * 2, deviceId);
         DeviceBuffer dev1(size, deviceId), dev2(size * 2, deviceId);
 
-        std::vector<const MemcpyBuffer*> srcNodes = {&dev1, &host2};
+        std::vector<const MemcpyBuffer*> srcBuffers = {&dev1, &host2};
         std::vector<const MemcpyBuffer*> dstNodes = {&host1, &dev2};
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstNodes);
     }
 
     output->addTestcaseResults(bandwidthValues, "memcpy SM CPU(row) <- GPU(column) bandwidth (GB/s)");
@@ -96,15 +96,15 @@ void DeviceToDeviceReadSM::run(unsigned long long size, unsigned long long loopC
                 continue;
             }
 
-            DeviceBuffer srcNode(size, srcDeviceId);
+            DeviceBuffer srcBuffer(size, srcDeviceId);
             DeviceBuffer peerBuffer(size, peerDeviceId);
 
-            if (!srcNode.enablePeerAcess(peerBuffer)) {
+            if (!srcBuffer.enablePeerAcess(peerBuffer)) {
                 continue;
             }
 
-            // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(peerBuffer, srcNode);
+            // swap src and peer nodes, but use srcBuffers (the copy's destination) context
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(peerBuffer, srcBuffer);
         }
     }
 
@@ -122,14 +122,14 @@ void DeviceToDeviceWriteSM::run(unsigned long long size, unsigned long long loop
                 continue;
             }
 
-            DeviceBuffer srcNode(size, srcDeviceId);
+            DeviceBuffer srcBuffer(size, srcDeviceId);
             DeviceBuffer peerBuffer(size, peerDeviceId);
 
-            if (!srcNode.enablePeerAcess(peerBuffer)) {
+            if (!srcBuffer.enablePeerAcess(peerBuffer)) {
                 continue;
             }
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNode, peerBuffer);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcBuffer, peerBuffer);
         }
     }
 
@@ -155,11 +155,11 @@ void DeviceToDeviceBidirReadSM::run(unsigned long long size, unsigned long long 
                 continue;
             }
 
-            // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            std::vector<const MemcpyBuffer*> srcNodes = {&peer1, &src2};
+            // swap src and peer nodes, but use srcBuffers (the copy's destination) context
+            std::vector<const MemcpyBuffer*> srcBuffers = {&peer1, &src2};
             std::vector<const MemcpyBuffer*> peerBuffers = {&src1, &peer2};
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerBuffers);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcBuffers, peerBuffers);
         }
     }
 
@@ -184,10 +184,10 @@ void DeviceToDeviceBidirWriteSM::run(unsigned long long size, unsigned long long
                 continue;
             }
 
-            std::vector<const MemcpyBuffer*> srcNodes = {&src1, &peer2};
+            std::vector<const MemcpyBuffer*> srcBuffers = {&src1, &peer2};
             std::vector<const MemcpyBuffer*> peerBuffers = {&peer1, &src2};
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerBuffers);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcBuffers, peerBuffers);
         }
     }
 
