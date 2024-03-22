@@ -99,14 +99,14 @@ void DeviceToDeviceReadCE::run(unsigned long long size, unsigned long long loopC
             }
 
             DeviceBuffer srcNode(size, srcDeviceId);
-            DeviceBuffer peerNode(size, peerDeviceId);
+            DeviceBuffer peerBuffer(size, peerDeviceId);
 
-            if (!srcNode.enablePeerAcess(peerNode)) {
+            if (!srcNode.enablePeerAcess(peerBuffer)) {
                 continue;
             }
 
             // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(peerNode, srcNode);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(peerBuffer, srcNode);
         }
     }
 
@@ -125,13 +125,13 @@ void DeviceToDeviceWriteCE::run(unsigned long long size, unsigned long long loop
             }
 
             DeviceBuffer srcNode(size, srcDeviceId);
-            DeviceBuffer peerNode(size, peerDeviceId);
+            DeviceBuffer peerBuffer(size, peerDeviceId);
 
-            if (!srcNode.enablePeerAcess(peerNode)) {
+            if (!srcNode.enablePeerAcess(peerBuffer)) {
                 continue;
             }
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNode, peerNode);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNode, peerBuffer);
         }
     }
 
@@ -159,9 +159,9 @@ void DeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned long long 
 
             // swap src and peer nodes, but use srcNodes (the copy's destination) context
             std::vector<const MemcpyBuffer*> srcNodes = {&peer1, &src2};
-            std::vector<const MemcpyBuffer*> peerNodes = {&src1, &peer2};
+            std::vector<const MemcpyBuffer*> peerBuffers = {&src1, &peer2};
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerBuffers);
         }
     }
 
@@ -188,9 +188,9 @@ void DeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned long long
             }
 
             std::vector<const MemcpyBuffer*> srcNodes = {&src1, &peer2};
-            std::vector<const MemcpyBuffer*> peerNodes = {&peer1, &src2};
+            std::vector<const MemcpyBuffer*> peerBuffers = {&peer1, &src2};
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerBuffers);
         }
     }
 

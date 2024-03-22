@@ -67,7 +67,7 @@ public:
     CUcontext getPrimaryCtx() const override;
     virtual std::string getNodeString() const override;
 
-    bool enablePeerAcess(const DeviceBuffer &peerNode);
+    bool enablePeerAcess(const DeviceBuffer &peerBuffer);
 };
 
 // Specifies the preferred node's context to do the operation from

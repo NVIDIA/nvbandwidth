@@ -188,18 +188,18 @@ std::string DeviceBuffer::getNodeString() const {
     return "Device " + std::to_string(deviceIdx);
 }
 
-bool DeviceBuffer::enablePeerAcess(const DeviceBuffer &peerNode) {
+bool DeviceBuffer::enablePeerAcess(const DeviceBuffer &peerBuffer) {
     int canAccessPeer = 0;
-    CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, getNodeIdx(), peerNode.getNodeIdx()));
+    CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, getNodeIdx(), peerBuffer.getNodeIdx()));
     if (canAccessPeer) {
         CUresult res;
-        CU_ASSERT(cuCtxSetCurrent(peerNode.getPrimaryCtx()));
+        CU_ASSERT(cuCtxSetCurrent(peerBuffer.getPrimaryCtx()));
         res = cuCtxEnablePeerAccess(getPrimaryCtx(), 0);
         if (res != CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED)
             CU_ASSERT(res);
 
         CU_ASSERT(cuCtxSetCurrent(getPrimaryCtx()));
-        res = cuCtxEnablePeerAccess(peerNode.getPrimaryCtx(), 0);
+        res = cuCtxEnablePeerAccess(peerBuffer.getPrimaryCtx(), 0);
         if (res != CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED)
             CU_ASSERT(res);
 
