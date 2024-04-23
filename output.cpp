@@ -83,7 +83,7 @@ void Output::addTestcase(const std::string &name, const std::string &status, con
     if (status == NVB_RUNNING) {
         OUTPUT << status << " " << name << ".\n";
     } else {
-        OUTPUT << name << " " << status << "." << std::endl << std::endl;
+        OUTPUT << status << ": " << msg << std::endl;
     }
 }
 
