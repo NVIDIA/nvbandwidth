@@ -94,11 +94,11 @@ Testcase* findTestcase(std::vector<Testcase*> &testcases, std::string id) {
         if (it != testcases.end()) {
             return testcases.at(std::distance(testcases.begin(), it));
         } else {
-            return nullptr;
+            throw "Testcase " + id + " not found!";
         }
     } else {
         // ID is index
-        if (index >= testcases.size()) throw "Testcase index " + id + " out of bound!";
+        if (index < 0 || index >= static_cast<long>(testcases.size())) throw "Testcase index " + id + " out of bound!";
         return testcases.at(index);
     }
 }
@@ -116,12 +116,11 @@ std::vector<std::string> expandTestcases(std::vector<Testcase*> &testcases, std:
 
 void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseID) {
     CUcontext testCtx;
-
-    Testcase* test = findTestcase(testcases, testcaseID);
-    if (test == nullptr) {
-        std::stringstream buf;
-        buf << "Test case '" << testcaseID << "' not found.";
-        output->addTestcase(testcaseID, NVB_ERROR_STATUS, buf.str());
+    Testcase* test{nullptr};
+    try {
+        test = findTestcase(testcases, testcaseID);
+    } catch (std::string &s) {
+        output->addTestcase(testcaseID, "ERROR", s);
         return;
     }
 
