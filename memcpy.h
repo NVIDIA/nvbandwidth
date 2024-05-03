@@ -149,8 +149,15 @@ public:
     size_t getAdjustedCopySize(size_t size, CUstream stream);
 };
 
+// Abstraction of a memory Operation.
+class MemoryOperation {
+public:
+    MemoryOperation () = default;
+    ~MemoryOperation() = default;
+};
+
 // Abstraction of a memcpy operation
-class MemcpyOperation {
+class MemcpyOperation : public MemoryOperation {
 public:
     // Specifies which bandwidths to use for the final result of simultaneous copies
     enum BandwidthValue { 
@@ -181,6 +188,15 @@ public:
     double doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, const std::vector<CUcontext> &contexts);
     double doMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers);
     double doMemcpy(const MemcpyBuffer &srcBuffer, const MemcpyBuffer &dstBuffer);
+};
+
+class MemPtrChaseOperation : public MemoryOperation {
+public:
+    MemPtrChaseOperation(unsigned long long loopCount);
+    ~MemPtrChaseOperation() = default;
+    double doPtrChase(const int srcId, const MemcpyBuffer &peerBuffer);
+private:
+    unsigned long long loopCount;
 };
 
 #endif
