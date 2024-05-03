@@ -43,7 +43,8 @@ const unsigned long long defaultBufferSize = 64; // 64MB
 const unsigned int defaultAverageLoopCount = 3;
 const unsigned int _MiB = 1024 * 1024;
 const unsigned int numThreadPerBlock = 512;
-
+const unsigned int strideLen = 16; /* cacheLine size 128 Bytes, 16 words */
+const unsigned int latencyMemAccessCnt = 100000; /* 100k  read accesses to gauge latency */
 extern int deviceCount;
 extern unsigned int averageLoopCount;
 extern bool disableAffinity;
@@ -192,6 +193,10 @@ public:
             return median();
         }
     }
+};
+
+struct LatencyNode {
+    struct LatencyNode *next;
 };
 
 

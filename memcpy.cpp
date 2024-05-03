@@ -479,3 +479,13 @@ size_t MemcpyInitiatorCE::getAdjustedCopySize(size_t size, CUstream stream) {
     //CE does not change/truncate buffer size
     return size;
 }
+
+MemPtrChaseOperation::MemPtrChaseOperation(unsigned long long loopCount) : loopCount(loopCount)
+{
+}
+
+double MemPtrChaseOperation::doPtrChase(const int srcId, const MemcpyBuffer &peerBuffer) {
+    double lat = 0.0;
+    lat = latencyPtrChaseKernel(srcId, (void*)peerBuffer.getBuffer(), peerBuffer.getBufferSize(), loopCount);
+    return lat;
+}

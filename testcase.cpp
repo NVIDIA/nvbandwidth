@@ -49,6 +49,20 @@ bool Testcase::filterHasAccessiblePeerPairs() {
     return false;
 }
 
+void Testcase::latencyHelper(const MemcpyBuffer &dataBuffer, bool measureDeviceToDeviceLatency) {
+    uint64_t n_ptrs = dataBuffer.getBufferSize() / sizeof(struct LatencyNode);
+    struct LatencyNode *mem;
+    void *hostStagingBuffer;
+    CU_ASSERT(cuMemHostAlloc(&hostStagingBuffer, dataBuffer.getBufferSize(), CU_MEMHOSTALLOC_PORTABLE));
+    measureDeviceToDeviceLatency ? mem = (struct LatencyNode*) hostStagingBuffer : mem = (struct LatencyNode*) dataBuffer.getBuffer();
+    for ( uint64_t i = 0; i < n_ptrs; i++) {
+        mem[i].next = &mem[(i + strideLen) % n_ptrs];
+    }
+    if (measureDeviceToDeviceLatency) {
+        CU_ASSERT(cuMemcpy(dataBuffer.getBuffer(), (CUdeviceptr)hostStagingBuffer, dataBuffer.getBufferSize()));
+    }
+}
+
 void Testcase::allToOneHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead) {
     std::vector<const DeviceBuffer*> allSrcBuffers;
 

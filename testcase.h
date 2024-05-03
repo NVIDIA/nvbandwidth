@@ -34,6 +34,7 @@ protected:
     void oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
     void allHostHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost);
     void allHostBidirHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost);
+    void latencyHelper(const MemcpyBuffer &dataBuffer, bool measureDeviceToDeviceLatency);
 
 public:
     Testcase(std::string key, std::string desc);
@@ -248,6 +249,14 @@ public:
 };
 
 // SM Testcase classes
+// Host to device SM latency using a ptr chase kernel
+class HostDeviceLatencySM: public Testcase {
+public:
+    HostDeviceLatencySM() : Testcase("host_device_latency_sm", 
+            "\tHost - device SM copy latency using a ptr chase kernel") {}
+    virtual ~HostDeviceLatencySM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
 
 // Host to device SM memcpy using a copy kernel
 class HostToDeviceSM: public Testcase {
@@ -274,6 +283,17 @@ public:
             "\tMeasures bandwidth of a copy kernel between each pair of accessible peers.\n"
             "\tRead tests launch a copy from the peer device to the target using the target's context.") {}
     virtual ~DeviceToDeviceReadSM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+    bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
+};
+
+// Device to Device SM Latency ptr chase kernel
+class DeviceToDeviceLatencySM: public Testcase {
+public:
+    DeviceToDeviceLatencySM() : Testcase("device_to_device_latency_sm",
+            "\tMeasures latency of a pointer derefernce operation between each pair of accessible peers.\n"
+            "Memory is allocated on a GPU and is accessed by the peer GPU to determine latency.") {}
+    virtual ~DeviceToDeviceLatencySM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };

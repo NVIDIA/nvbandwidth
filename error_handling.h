@@ -21,6 +21,16 @@
 void RecordError(const std::stringstream &errmsg);
 
 // CUDA Error handling
+#define CUDA_ASSERT(x) do { \
+    cudaError_t cudaErr = (x); \
+    if ((cudaErr) != cudaSuccess) { \
+        std::stringstream errmsg; \
+        errmsg << "[" << cudaGetErrorName(cudaErr) << "] " << cudaGetErrorString(cudaErr) << " in expression " << #x << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ << std::endl; \
+        RecordError(errmsg); \
+        std::exit(1); \
+    }  \
+} while(0)
+
 #define CU_ASSERT(x) do { \
     CUresult cuResult = (x); \
     if ((cuResult) != CUDA_SUCCESS) { \

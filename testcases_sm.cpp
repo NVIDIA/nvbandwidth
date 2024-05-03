@@ -21,6 +21,19 @@
 #include "common.h"
 #include "output.h"
 
+void HostDeviceLatencySM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> latencyValues(1, deviceCount, key);
+    MemPtrChaseOperation ptrChaseOp(loopCount);
+
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        HostBuffer dataBuffer(size, deviceId);
+        latencyHelper(dataBuffer, false);
+        latencyValues.value(0, deviceId) = ptrChaseOp.doPtrChase(deviceId, dataBuffer);
+    }
+
+    output->addTestcaseResults(latencyValues, "memory latency SM CPU(row) <-> GPU(column) (ns)");
+}
+
 void HostToDeviceSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM());
@@ -109,6 +122,31 @@ void DeviceToDeviceReadSM::run(unsigned long long size, unsigned long long loopC
     }
 
     output->addTestcaseResults(bandwidthValues, "memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)");
+}
+
+void DeviceToDeviceLatencySM::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> latencyValues(deviceCount, deviceCount, key);
+    MemPtrChaseOperation ptrChaseOp(loopCount);
+
+    for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
+        for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+            if (peerDeviceId == srcDeviceId) {
+                continue;
+            }
+
+            // Note: srcBuffer is not used in the pointer chase operation
+            // It is simply used here to enable peer access
+            DeviceBuffer srcBuffer(size, srcDeviceId);
+            DeviceBuffer peerBuffer(size, peerDeviceId);
+
+            if (!srcBuffer.enablePeerAcess(peerBuffer)) {
+                continue;
+            }
+            latencyHelper(peerBuffer, true);
+            latencyValues.value(srcDeviceId, peerDeviceId) = ptrChaseOp.doPtrChase(srcDeviceId, peerBuffer);
+        }
+    }
+    output->addTestcaseResults(latencyValues, "Device to Device Latency SM GPU(row) <-> GPU(column) (ns)");
 }
 
 // DtoD Write test - copy from src to dst using src context
