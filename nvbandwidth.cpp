@@ -117,7 +117,6 @@ std::vector<std::string> expandTestcases(std::vector<Testcase*> &testcases, std:
 }
 
 void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseID) {
-    CUcontext testCtx;
     Testcase* test{nullptr};
     try {
         test = findTestcase(testcases, testcaseID);
@@ -134,11 +133,8 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
 
         output->addTestcase(test->testKey(), NVB_RUNNING);
 
-        CU_ASSERT(cuCtxCreate(&testCtx, 0, 0));
-        CU_ASSERT(cuCtxSetCurrent(testCtx));
         // Run the testcase
         test->run(bufferSize * _MiB, loopCount);
-        CU_ASSERT(cuCtxDestroy(testCtx));
     } catch (std::string &s) {
         output->setTestcaseStatusAndAddIfNeeded(test->testKey(), NVB_ERROR_STATUS, s);
     }
