@@ -66,11 +66,18 @@ static void printGPUs(){
     for (int iDev = 0; iDev < deviceCount; iDev++) {
         CUdevice dev;
         char name[STRING_LENGTH];
+        int busId, deviceId, domainId;
 
         CU_ASSERT(cuDeviceGet(&dev, iDev));
         CU_ASSERT(cuDeviceGetName(name, STRING_LENGTH, dev));
-
-        OUTPUT << "Device " << iDev << ": " << name << std::endl;
+        CU_ASSERT(cuDeviceGetAttribute(&busId, CU_DEVICE_ATTRIBUTE_PCI_BUS_ID, dev));
+        CU_ASSERT(cuDeviceGetAttribute(&deviceId, CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID, dev));
+        CU_ASSERT(cuDeviceGetAttribute(&domainId, CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID, dev));
+        OUTPUT << "Device " << iDev << ": "
+               << name << " (" <<
+               std::hex << busId << ":" <<
+               std::hex << deviceId << ":" <<
+               std::hex << domainId << ")" << std::endl;
     }
     OUTPUT << std::endl;
 }
