@@ -19,7 +19,6 @@
 #include "output.h"
 #include "version.h"
 
-#include <unistd.h>
 
 void Output::addVersionInfo() {
     OUTPUT << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
