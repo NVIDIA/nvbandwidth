@@ -1,4 +1,5 @@
 stages:          # List of stages for jobs, and their order of execution
+  - lint
   - build
   - test
 
@@ -23,3 +24,83 @@ test-job:   # This job runs in the test stage.
   tags: [ nvbandwidth, gpu ]
   script:
     - ./nvbandwidth
+
+cpp_linter:
+  stage: lint
+  before_script:
+    - apt update
+    - apt-get install -y python3-pip
+    - pip3 install cpplint
+  script:
+    - |
+      filter_flags=""
+      filter_flags+="-build/class,"
+      filter_flags+="-build/c++11,"
+      filter_flags+="-build/c++14,"
+      filter_flags+="-build/c++tr1,"
+      filter_flags+="-build/deprecated,"
+      filter_flags+="-build/endif_comment,"
+      filter_flags+="-build/explicit_make_pair,"
+      filter_flags+="-build/forward_decl,"
+      filter_flags+="-build/header_guard,"
+      filter_flags+="-build/include,"
+      filter_flags+="-build/include_subdir,"
+      filter_flags+="-build/include_alpha,"
+      filter_flags+="-build/include_order,"
+      filter_flags+="-build/include_what_you_use,"
+      filter_flags+="-build/namespaces_headers,"
+      filter_flags+="-build/namespaces_literals,"
+      filter_flags+="-build/namespaces,"
+      filter_flags+="-build/printf_format,"
+      filter_flags+="-build/storage_class,"
+      filter_flags+="-legal/copyright,"
+      filter_flags+="-readability/alt_tokens,"
+      filter_flags+="-readability/braces,"
+      filter_flags+="-readability/casting,"
+      filter_flags+="-readability/check,"
+      filter_flags+="-readability/constructors,"
+      filter_flags+="-readability/fn_size,"
+      filter_flags+="-readability/inheritance,"
+      filter_flags+="-readability/multiline_comment,"
+      filter_flags+="-readability/multiline_string,"
+      filter_flags+="-readability/namespace,"
+      filter_flags+="-readability/nolint,"
+      filter_flags+="-readability/nul,"
+      filter_flags+="-readability/strings,"
+      filter_flags+="-readability/todo,"
+      filter_flags+="-readability/utf8,"
+      filter_flags+="-runtime/arrays,"
+      filter_flags+="-runtime/casting,"
+      filter_flags+="-runtime/explicit,"
+      filter_flags+="-runtime/int,"
+      filter_flags+="-runtime/init,"
+      filter_flags+="-runtime/invalid_increment,"
+      filter_flags+="-runtime/member_string_references,"
+      filter_flags+="-runtime/memset,"
+      filter_flags+="-runtime/indentation_namespace,"
+      filter_flags+="-runtime/operator,"
+      filter_flags+="-runtime/printf,"
+      filter_flags+="-runtime/printf_format,"
+      filter_flags+="-runtime/references,"
+      filter_flags+="-runtime/string,"
+      filter_flags+="-runtime/threadsafe_fn,"
+      filter_flags+="-runtime/vlog,"
+      filter_flags+="-whitespace/blank_line,"
+      filter_flags+="-whitespace/braces,"
+      filter_flags+="-whitespace/comma,"
+      filter_flags+="-whitespace/comments,"
+      filter_flags+="-whitespace/empty_conditional_body,"
+      filter_flags+="-whitespace/empty_if_body,"
+      filter_flags+="-whitespace/empty_loop_body,"
+      filter_flags+="-whitespace/end_of_line,"
+      filter_flags+="-whitespace/ending_newline,"
+      filter_flags+="-whitespace/forcolon,"
+      filter_flags+="-whitespace/indent,"
+      filter_flags+="-whitespace/line_length,"
+      filter_flags+="-whitespace/newline,"
+      filter_flags+="-whitespace/operators,"
+      filter_flags+="-whitespace/parens,"
+      filter_flags+="-whitespace/semicolon,"
+      filter_flags+="+whitespace/tab,"
+      filter_flags+="+whitespace/todo"
+    - cpplint --recursive --filter=$filter_flags --quiet *.cu *.cpp *.h *.cuh
