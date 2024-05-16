@@ -20,7 +20,7 @@
 #include "testcase.h"
 #include "inline_common.h"
 
-Testcase::Testcase(std::string key, std::string desc) : 
+Testcase::Testcase(std::string key, std::string desc) :
     key(std::move(key)), desc(std::move(desc))
 {}
 
@@ -55,7 +55,7 @@ void Testcase::latencyHelper(const MemcpyBuffer &dataBuffer, bool measureDeviceT
     void *hostStagingBuffer;
     CU_ASSERT(cuMemHostAlloc(&hostStagingBuffer, dataBuffer.getBufferSize(), CU_MEMHOSTALLOC_PORTABLE));
     measureDeviceToDeviceLatency ? mem = (struct LatencyNode*) hostStagingBuffer : mem = (struct LatencyNode*) dataBuffer.getBuffer();
-    for ( uint64_t i = 0; i < n_ptrs; i++) {
+    for ( uint64_t i = 0; i < n_ptrs; i++ ) {
         mem[i].next = &mem[(i + strideLen) % n_ptrs];
     }
     if (measureDeviceToDeviceLatency) {
@@ -66,7 +66,7 @@ void Testcase::latencyHelper(const MemcpyBuffer &dataBuffer, bool measureDeviceT
 void Testcase::allToOneHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead) {
     std::vector<const DeviceBuffer*> allSrcBuffers;
 
-    //allocate all src nodes up front, re-use to avoid reallocation
+    // allocate all src nodes up front, re-use to avoid reallocation
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         allSrcBuffers.push_back(new DeviceBuffer(size, deviceId));
     }
@@ -91,7 +91,7 @@ void Testcase::allToOneHelper(unsigned long long size, MemcpyOperation &memcpyIn
             dstBuffers.push_back(dstBuffer);
         }
         // If no peer GPUs, skip measurements.
-        if (!srcBuffers.empty()){
+        if (!srcBuffers.empty()) {
             if (isRead) {
                 // swap dst and src for read tests
                 bandwidthValues.value(0, dstDeviceId) = memcpyInstance.doMemcpy(dstBuffers, srcBuffers);
@@ -113,7 +113,7 @@ void Testcase::allToOneHelper(unsigned long long size, MemcpyOperation &memcpyIn
 void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead) {
     std::vector<const DeviceBuffer*> allDstBuffers;
 
-    //allocate all src nodes up front, re-use to avoid reallocation
+    // allocate all src nodes up front, re-use to avoid reallocation
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         allDstBuffers.push_back(new DeviceBuffer(size, deviceId));
     }
@@ -138,7 +138,7 @@ void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyIn
             dstBuffers.push_back(allDstBuffers[dstDeviceId]);
         }
         // If no peer GPUs, skip measurements.
-        if(!srcBuffers.empty()){
+        if ( !srcBuffers.empty() ) {
             if (isRead) {
                 // swap dst and src for read tests
                 bandwidthValues.value(0, srcDeviceId) = memcpyInstance.doMemcpy(dstBuffers, srcBuffers);
@@ -203,8 +203,7 @@ void Testcase::allHostBidirHelper(unsigned long long size, MemcpyOperation &memc
             // Double the size of the interference copy to ensure it interferes correctly
             srcBuffers.push_back(new DeviceBuffer(size * 2, deviceId));
             dstBuffers.push_back(new HostBuffer(size * 2, deviceId));
-        }
-        else {
+        } else {
             srcBuffers.push_back(new DeviceBuffer(size, deviceId));
             dstBuffers.push_back(new HostBuffer(size, deviceId));
 
@@ -237,4 +236,4 @@ void Testcase::allHostBidirHelper(unsigned long long size, MemcpyOperation &memc
         }
     }
 }
-    
+

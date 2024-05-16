@@ -15,8 +15,8 @@
  * limitations under the license.
  */
 
-#ifndef ERROR_HANDLING_H
-#define ERROR_HANDLING_H
+#ifndef ERROR_HANDLING_H_
+#define ERROR_HANDLING_H_
 
 void RecordError(const std::stringstream &errmsg);
 
@@ -29,7 +29,7 @@ void RecordError(const std::stringstream &errmsg);
         RecordError(errmsg); \
         std::exit(1); \
     }  \
-} while(0)
+} while ( 0 )
 
 #define CU_ASSERT(x) do { \
     CUresult cuResult = (x); \
@@ -42,7 +42,7 @@ void RecordError(const std::stringstream &errmsg);
         RecordError(errmsg); \
         std::exit(1); \
     }  \
-} while(0)
+} while ( 0 )
 
 // NVML Error handling
 #define NVML_ASSERT(x) do { \
@@ -53,7 +53,7 @@ void RecordError(const std::stringstream &errmsg);
         RecordError(errmsg); \
         std::exit(1); \
     }  \
-} while(0)
+} while ( 0 )
 
 // Generic Error handling
 #define ASSERT(x) do { \
@@ -63,6 +63,6 @@ void RecordError(const std::stringstream &errmsg);
         RecordError(errmsg); \
         std::exit(1); \
     }  \
-} while(0)
+} while ( 0 )
 
-#endif
+#endif  // ERROR_HANDLING_H_

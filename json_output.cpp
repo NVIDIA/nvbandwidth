@@ -67,8 +67,7 @@ void JsonOutput::addTestcaseResults(const PeerValueMatrix<double> &matrix, const
                 std::stringstream buf;
                 buf << val.value();
                 row.append(buf.str());
-            }
-            else {
+            } else {
                 row.append("N/A");
             }
             sum += val.value_or(0.0);

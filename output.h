@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef OUTPUT_H
-#define OUTPUT_H
+#ifndef OUTPUT_H_
+#define OUTPUT_H_
 
 #include <string>
 #include <vector>
@@ -44,9 +44,8 @@ extern const std::string NVB_WAIVED;
 extern const std::string NVB_NOT_FOUND;
 extern const std::string NVB_ERROR_STATUS;
 
-class Output
-{
-public:
+class Output {
+ public:
     virtual void addTestcase(const std::string &name, const std::string &status, const std::string &msg = "");
 
     /*
@@ -60,9 +59,9 @@ public:
     virtual void setTestcaseStatusAndAddIfNeeded(const std::string &name, const std::string &status, const std::string &msg = "");
 
     virtual void print();
-    
+
     /*
-     * Records a global error 
+     * Records a global error
      *
      * @param errorParts - each entry in this vector is one line of an error. In JSON output, all lines are combined.
      */
@@ -74,7 +73,7 @@ public:
     virtual void recordError(const std::string &error);
 
     /*
-     * Records a test error 
+     * Records a test error
      *
      * @param errorPart1 - the first part of the error. For plain text output, this is printed on line 1.
      * @param errorPart2 - the second part of the error. For plain text output, this is printed on line 2.
@@ -98,4 +97,5 @@ public:
 };
 
 extern Output *output;
-#endif
+
+#endif  // OUTPUT_H_

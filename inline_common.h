@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef INLINE_COMMON_H
-#define INLINE_COMMON_H
+#ifndef INLINE_COMMON_H_
+#define INLINE_COMMON_H_
 
 #include "common.h"
 #include "error_handling.h"
@@ -59,8 +59,7 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
             std::optional <T> val = matrix.value(currentDevice, peer);
             if (val) {
                 o << std::setw(10) << val.value();
-            }
-            else {
+            } else {
                 o << std::setw(10) << "N/A";
             }
             sum += val.value_or(0.0);
@@ -123,4 +122,4 @@ inline bool isMemoryOwnedByCUDA(void *memory) {
     }
 }
 
-#endif
+#endif  // INLINE_COMMON_H_
