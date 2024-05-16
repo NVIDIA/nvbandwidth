@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef NVBANDWIDTH__KERNELS_CUH
-#define NVBANDWIDTH__KERNELS_CUH
+#ifndef KERNELS_CUH_
+#define KERNELS_CUH_
 
 #include <cuda.h>
 #include "common.h"
@@ -29,4 +29,4 @@ CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long tim
 void preloadKernels(int deviceCount);
 double latencyPtrChaseKernel(const int srcId, void* data, size_t size, unsigned long long loopCount);
 
-#endif //NVBANDWIDTH__KERNELS_CUH
+#endif  // KERNELS_CUH_

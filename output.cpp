@@ -26,7 +26,7 @@ void Output::addVersionInfo() {
 }
 
 void Output::printInfo() {
-    OUTPUT << "NOTE: This tool reports current measured bandwidth on your system." << std::endl 
+    OUTPUT << "NOTE: This tool reports current measured bandwidth on your system." << std::endl
               << "Additional system-specific tuning may be required to achieve maximal peak bandwidth." << std::endl << std::endl;
 }
 
@@ -61,7 +61,7 @@ void Output::listTestcases(const std::vector<Testcase*> &testcases) {
     }
 }
 
-static void printGPUs(){
+static void printGPUs() {
     for (int iDev = 0; iDev < deviceCount; iDev++) {
         CUdevice dev;
         char name[STRING_LENGTH];

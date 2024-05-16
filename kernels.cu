@@ -95,13 +95,13 @@ double latencyPtrChaseKernel(const int srcId, void* data, size_t size, unsigned 
     CUcontext srcCtx;
     CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, srcId));
     CU_ASSERT(cuCtxSetCurrent(srcCtx));
-    
+
     CU_ASSERT(cuStreamCreate(&stream, CU_STREAM_DEFAULT));
     CU_ASSERT(cuMemAllocManaged((CUdeviceptr*) &hTime, sizeof(unsigned long long), CU_MEM_ATTACH_GLOBAL));
     CU_ASSERT(cuCtxGetDevice(&device));
     CU_ASSERT(cuDeviceGetAttribute(&clock_rate_khz, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device));
 
-    for ( int i = 0; i < loopCount; i++) {
+    for ( int i = 0; i < loopCount; i++ ) {
         memset((void*)hTime, 0, sizeof(unsigned long long));
         ptrChasingKernel <<< 1, 1, 0, stream>>> ((struct LatencyNode*) data, size, latencyMemAccessCnt, hTime);
         CUDA_ASSERT(cudaGetLastError());
@@ -110,8 +110,8 @@ double latencyPtrChaseKernel(const int srcId, void* data, size_t size, unsigned 
     }
     finalLatencyPerAccessNs = (latencySum * 1.0E9) / (loopCount * latencyMemAccessCnt);
     return finalLatencyPerAccessNs;
-
 }
+
 size_t copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUstream stream, unsigned long long loopCount) {
     CUdevice dev;
     CUcontext ctx;
@@ -129,7 +129,7 @@ size_t copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUs
     // Please note that to achieve peak bandwidth, it is suggested to use the
     // default buffer size, which in turn triggers the use of the optimized
     // kernel.
-    if (size < (defaultBufferSize * _MiB) ) {
+    if (size < (defaultBufferSize * _MiB)) {
         // copy size is rounded down to 16 bytes
         int numUint4 = size / sizeof(uint4);
         // we allow max 1024 threads per block, and then scale out the copy across multiple blocks
@@ -153,8 +153,7 @@ size_t copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUs
     return sizeInElement * sizeof(uint4);
 }
 
-__global__ void spinKernelDevice(volatile int *latch, const unsigned long long timeoutClocks)
-{
+__global__ void spinKernelDevice(volatile int *latch, const unsigned long long timeoutClocks) {
     register unsigned long long endTime = clock64() + timeoutClocks;
     while (!*latch) {
         if (timeoutClocks != ~0ULL && clock64() > endTime) {
@@ -163,8 +162,7 @@ __global__ void spinKernelDevice(volatile int *latch, const unsigned long long t
     }
 }
 
-CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long timeoutMs)
-{
+CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long timeoutMs) {
     int clocksPerMs = 0;
     CUcontext ctx;
     CUdevice dev;
@@ -181,8 +179,7 @@ CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long tim
     return CUDA_SUCCESS;
 }
 
-void preloadKernels(int deviceCount)
-{
+void preloadKernels(int deviceCount) {
     cudaFuncAttributes unused;
     for (int iDev = 0; iDev < deviceCount; iDev++) {
         cudaSetDevice(iDev);

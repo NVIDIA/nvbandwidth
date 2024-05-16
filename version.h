@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
-#ifndef VERSION_H
-#define VERSION_H
+#ifndef VERSION_H_
+#define VERSION_H_
 
 #define NVBANDWIDTH_VERSION "v0.5"
 #ifndef GIT_VERSION
 #define GIT_VERSION "unknown"
 #endif
 
-#endif
+#endif  // VERSION_H_

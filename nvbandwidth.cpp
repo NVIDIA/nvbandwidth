@@ -107,13 +107,13 @@ Testcase* findTestcase(std::vector<Testcase*> &testcases, std::string id) {
 
 std::vector<std::string> expandTestcases(std::vector<Testcase*> &testcases, std::vector<std::string> prefixes) {
     std::vector<std::string> testcasesToRun;
-    for (auto testcase: testcases){ 
+    for (auto testcase : testcases) {
          auto it = find_if(prefixes.begin(), prefixes.end(), [&testcase](std::string prefix) {return testcase->testKey().compare(0, prefix.size(), prefix) == 0;});
             if (it != prefixes.end()) {
                 testcasesToRun.push_back(testcase->testKey());
             }
     }
-    return testcasesToRun;  
+    return testcasesToRun;
 }
 
 void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseID) {
@@ -170,7 +170,6 @@ int main(int argc, char **argv) {
     try {
         opt::store(opt::parse_command_line(argc, argv, all_opts), vm);
         opt::notify(vm);
-    
     } catch (...) {
         output->addVersionInfo();
 
@@ -192,7 +191,7 @@ int main(int argc, char **argv) {
         delete output;
         output = new JsonOutput();
     }
-    
+
     output->addVersionInfo();
 
     if (vm.count("help")) {

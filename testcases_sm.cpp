@@ -272,7 +272,7 @@ void HostToAllBidirSM::run(unsigned long long size, unsigned long long loopCount
 void AllToOneWriteSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
-    
+
     allToOneHelper(size, memcpyInstance, bandwidthValues, false);
 
     output->addTestcaseResults(bandwidthValues, "memcpy SM CPU(row) -> GPU(column) bandwidth (GB/s)");

@@ -21,7 +21,6 @@
 #include "output.h"
 #include "testcase.h"
 #include "memcpy.h"
-#include "common.h"
 
 void HostToDeviceCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);

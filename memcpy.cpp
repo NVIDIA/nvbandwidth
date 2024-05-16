@@ -21,7 +21,6 @@
 #include "output.h"
 #include "kernels.cuh"
 #include "vector_types.h"
-#include "common.h"
 
 #define WARMUP_COUNT 4
 
@@ -86,7 +85,6 @@ void MemcpyBuffer::memcmpPattern(CUdeviceptr buffer, unsigned long long size, un
                     output->print();
                     std::abort();
                 }
-            
             }
         }
 
@@ -209,13 +207,11 @@ bool DeviceBuffer::enablePeerAcess(const DeviceBuffer &peerBuffer) {
 }
 
 MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
-    MemcpyOperation(loopCount, memcpyInitiator, new NodeHelperSingle(), ctxPreference, bandwidthValue)
-{
+    MemcpyOperation(loopCount, memcpyInitiator, new NodeHelperSingle(), ctxPreference, bandwidthValue) {
 }
 
 MemcpyOperation::MemcpyOperation(unsigned long long loopCount, MemcpyInitiator* memcpyInitiator, NodeHelper* nodeHelper, ContextPreference ctxPreference, BandwidthValue bandwidthValue) :
-        loopCount(loopCount), memcpyInitiator(memcpyInitiator), nodeHelper(nodeHelper), ctxPreference(ctxPreference), bandwidthValue(bandwidthValue)
-{
+        loopCount(loopCount), memcpyInitiator(memcpyInitiator), nodeHelper(nodeHelper), ctxPreference(ctxPreference), bandwidthValue(bandwidthValue) {
     procMask = (size_t *)calloc(1, PROC_MASK_SIZE);
     PROC_MASK_SET(procMask, getFirstEnabledCPU());
 }
@@ -231,8 +227,8 @@ double MemcpyOperation::doMemcpy(const MemcpyBuffer &srcBuffer, const MemcpyBuff
 }
 
 MemcpyDispatchInfo::MemcpyDispatchInfo(std::vector<const MemcpyBuffer*> srcBuffers, std::vector<const MemcpyBuffer*> dstBuffers, std::vector<CUcontext> contexts) :
-    srcBuffers(srcBuffers), dstBuffers(dstBuffers), contexts(contexts)
-{}
+    srcBuffers(srcBuffers), dstBuffers(dstBuffers), contexts(contexts) {
+}
 
 NodeHelperSingle::NodeHelperSingle() {
     CU_ASSERT(cuMemHostAlloc((void **)&blockingVarHost, sizeof(*blockingVarHost), CU_MEMHOSTALLOC_PORTABLE));
@@ -320,7 +316,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
         // during SM copies.
         finalCopySize[i] = memcpyInitiator->getAdjustedCopySize(srcBuffers[i]->getBufferSize(), streams[i]);
     }
-    
+
     if (contexts.size() > 0) {
         CU_ASSERT(cuCtxSetCurrent(contexts[0]));
     }
@@ -336,7 +332,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
         for (int i = 0; i < srcBuffers.size(); i++) {
             dstBuffers[i]->memsetPattern(dstBuffers[i]->getBuffer(), finalCopySize[i], 0xCAFEBABE);
             srcBuffers[i]->memsetPattern(srcBuffers[i]->getBuffer(), finalCopySize[i], 0xBAADF00D);
-        }        
+        }
         // block stream, and enqueue copy
         for (int i = 0; i < srcBuffers.size(); i++) {
             CU_ASSERT(cuCtxSetCurrent(contexts[i]));
@@ -386,7 +382,7 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
         nodeHelper->synchronizeProcess();
 
         if (!skipVerification) {
-            for (int i = 0; i < srcBuffers.size(); i++) {            
+            for (int i = 0; i < srcBuffers.size(); i++) {
                 dstBuffers[i]->memcmpPattern(dstBuffers[i]->getBuffer(), finalCopySize[i], 0xBAADF00D);
             }
         }
@@ -455,7 +451,7 @@ size_t MemcpyInitiatorSM::getAdjustedCopySize(size_t size, CUstream stream) {
     unsigned int totalThreadCount = numSm * numThreadPerBlock;
     // We want to calculate the exact copy sizes that will be
     // used by the copy kernels.
-    if (size < (defaultBufferSize * _MiB) ) {
+    if (size < (defaultBufferSize * _MiB)) {
         // copy size is rounded down to 16 bytes
         int numUint4 = size / sizeof(uint4);
         return numUint4 * sizeof(uint4);
@@ -476,12 +472,11 @@ size_t MemcpyInitiatorCE::memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream 
 }
 
 size_t MemcpyInitiatorCE::getAdjustedCopySize(size_t size, CUstream stream) {
-    //CE does not change/truncate buffer size
+    // CE does not change/truncate buffer size
     return size;
 }
 
-MemPtrChaseOperation::MemPtrChaseOperation(unsigned long long loopCount) : loopCount(loopCount)
-{
+MemPtrChaseOperation::MemPtrChaseOperation(unsigned long long loopCount) : loopCount(loopCount) {
 }
 
 double MemPtrChaseOperation::doPtrChase(const int srcId, const MemcpyBuffer &peerBuffer) {
