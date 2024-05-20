@@ -66,12 +66,10 @@ std::vector<Testcase*> createTestcases() {
         new OneToAllWriteCE(),
         new OneToAllReadCE(),
         new HostToDeviceSM(),
-        new HostDeviceLatencySM(),
         new DeviceToHostSM(),
         new HostToDeviceBidirSM(),
         new DeviceToHostBidirSM(),
         new DeviceToDeviceReadSM(),
-        new DeviceToDeviceLatencySM(),
         new DeviceToDeviceWriteSM(),
         new DeviceToDeviceBidirReadSM(),
         new DeviceToDeviceBidirWriteSM(),
@@ -83,6 +81,8 @@ std::vector<Testcase*> createTestcases() {
         new AllToOneReadSM(),
         new OneToAllWriteSM(),
         new OneToAllReadSM(),
+        new HostDeviceLatencySM(),
+        new DeviceToDeviceLatencySM(),
     };
 }
 
