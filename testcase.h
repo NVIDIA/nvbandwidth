@@ -293,7 +293,7 @@ class DeviceToDeviceLatencySM: public Testcase {
  public:
     DeviceToDeviceLatencySM() : Testcase("device_to_device_latency_sm",
             "\tMeasures latency of a pointer derefernce operation between each pair of accessible peers.\n"
-            "Memory is allocated on a GPU and is accessed by the peer GPU to determine latency.") {}
+            "\tMemory is allocated on a GPU and is accessed by the peer GPU to determine latency.") {}
     virtual ~DeviceToDeviceLatencySM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
