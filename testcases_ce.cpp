@@ -169,9 +169,9 @@ void DeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned long long 
         }
     }
 
-    output->addTestcaseResults(bandwidthValuesRead1, "memcpy CE CPU(row) <-> GPU(column) Read1 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesRead2, "memcpy CE CPU(row) <-> GPU(column) Read2 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesTotal, "memcpy CE CPU(row) <-> GPU(column) Total bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesRead1, "memcpy CE GPU(row) <-> GPU(column) Read1 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesRead2, "memcpy CE GPU(row) <-> GPU(column) Read2 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesTotal, "memcpy CE GPU(row) <-> GPU(column) Total bandwidth (GB/s)");
 }
 
 // DtoD Bidir Write test - copy from src to dst using src context
@@ -206,9 +206,9 @@ void DeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned long long
         }
     }
 
-    output->addTestcaseResults(bandwidthValuesWrite1, "memcpy CE CPU(row) <-> GPU(column) Read1 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesWrite2, "memcpy CE CPU(row) <-> GPU(column) Read2 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesTotal, "memcpy CE CPU(row) <-> GPU(column) Total bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesWrite1, "memcpy CE GPU(row) <-> GPU(column) Read1 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesWrite2, "memcpy CE GPU(row) <-> GPU(column) Read2 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesTotal, "memcpy CE GPU(row) <-> GPU(column) Total bandwidth (GB/s)");
 }
 
 void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {

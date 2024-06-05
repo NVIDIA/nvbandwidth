@@ -206,9 +206,9 @@ void DeviceToDeviceBidirReadSM::run(unsigned long long size, unsigned long long 
         }
     }
 
-    output->addTestcaseResults(bandwidthValuesRead1, "memcpy SM CPU(row) <-> GPU(column) Read1 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesRead2, "memcpy SM CPU(row) <-> GPU(column) Read2 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesTotal, "memcpy SM CPU(row) <-> GPU(column) Total bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesRead1, "memcpy SM GPU(row) <-> GPU(column) Read1 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesRead2, "memcpy SM GPU(row) <-> GPU(column) Read2 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesTotal, "memcpy SM GPU(row) <-> GPU(column) Total bandwidth (GB/s)");
 }
 
 // DtoD Bidir Write test - copy from  src to dst using src contxt
@@ -243,9 +243,9 @@ void DeviceToDeviceBidirWriteSM::run(unsigned long long size, unsigned long long
         }
     }
 
-    output->addTestcaseResults(bandwidthValuesWrite1, "memcpy SM CPU(row) <-> GPU(column) Write1 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesWrite2, "memcpy SM CPU(row) <-> GPU(column) Write2 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesTotal, "memcpy SM CPU(row) <-> GPU(column) Total bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesWrite1, "memcpy SM GPU(row) <-> GPU(column) Write1 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesWrite2, "memcpy SM GPU(row) <-> GPU(column) Write2 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesTotal, "memcpy SM GPU(row) <-> GPU(column) Total bandwidth (GB/s)");
 }
 
 void AllToHostSM::run(unsigned long long size, unsigned long long loopCount) {
