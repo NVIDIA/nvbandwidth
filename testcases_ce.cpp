@@ -65,7 +65,7 @@ void HostToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCo
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
     }
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
 
 void DeviceToHostBidirCE::run(unsigned long long size, unsigned long long loopCount) {
@@ -83,7 +83,7 @@ void DeviceToHostBidirCE::run(unsigned long long size, unsigned long long loopCo
         bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
     }
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
 
 // DtoD Read test - copy from dst to src (backwards) using src contxt
@@ -109,7 +109,7 @@ void DeviceToDeviceReadCE::run(unsigned long long size, unsigned long long loopC
         }
     }
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)");
 }
 
 // DtoD Write test - copy from src to dst using src context
@@ -134,7 +134,7 @@ void DeviceToDeviceWriteCE::run(unsigned long long size, unsigned long long loop
         }
     }
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)");
 }
 
 // DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
@@ -169,9 +169,9 @@ void DeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned long long 
         }
     }
 
-    output->addTestcaseResults(bandwidthValuesRead1, "memcpy CE CPU(row) -> GPU(column) Read1 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesRead2, "memcpy CE CPU(row) -> GPU(column) Read2 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesTotal, "memcpy CE CPU(row) -> GPU(column) Total bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesRead1, "memcpy CE CPU(row) <-> GPU(column) Read1 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesRead2, "memcpy CE CPU(row) <-> GPU(column) Read2 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesTotal, "memcpy CE CPU(row) <-> GPU(column) Total bandwidth (GB/s)");
 }
 
 // DtoD Bidir Write test - copy from src to dst using src context
@@ -206,9 +206,9 @@ void DeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned long long
         }
     }
 
-    output->addTestcaseResults(bandwidthValuesWrite1, "memcpy CE CPU(row) -> GPU(column) Read1 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesWrite2, "memcpy CE CPU(row) -> GPU(column) Read2 bandwidth (GB/s)");
-    output->addTestcaseResults(bandwidthValuesTotal, "memcpy CE CPU(row) -> GPU(column) Total bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesWrite1, "memcpy CE CPU(row) <-> GPU(column) Read1 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesWrite2, "memcpy CE CPU(row) <-> GPU(column) Read2 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesTotal, "memcpy CE CPU(row) <-> GPU(column) Total bandwidth (GB/s)");
 }
 
 void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {
@@ -226,7 +226,7 @@ void AllToHostBidirCE::run(unsigned long long size, unsigned long long loopCount
 
     allHostBidirHelper(size, memcpyInstance, bandwidthValues, false);
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
 
 void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
@@ -235,7 +235,7 @@ void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
 
     allHostHelper(size, memcpyInstance, bandwidthValues, true);
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)");
 }
 
 void HostToAllBidirCE::run(unsigned long long size, unsigned long long loopCount) {
@@ -244,7 +244,7 @@ void HostToAllBidirCE::run(unsigned long long size, unsigned long long loopCount
 
     allHostBidirHelper(size, memcpyInstance, bandwidthValues, true);
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
 
 // Write test - copy from src to dst using src context
@@ -253,7 +253,7 @@ void AllToOneWriteCE::run(unsigned long long size, unsigned long long loopCount)
     MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
     allToOneHelper(size, memcpyInstance, bandwidthValues, false);
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)");
 }
 
 // Read test - copy from dst to src (backwards) using src contxt
@@ -262,7 +262,7 @@ void AllToOneReadCE::run(unsigned long long size, unsigned long long loopCount) 
     MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), PREFER_DST_CONTEXT, MemcpyOperation::TOTAL_BW);
     allToOneHelper(size, memcpyInstance, bandwidthValues, true);
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)");
 }
 
 // Write test - copy from src to dst using src context
@@ -271,7 +271,7 @@ void OneToAllWriteCE::run(unsigned long long size, unsigned long long loopCount)
     MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
     oneToAllHelper(size, memcpyInstance, bandwidthValues, false);
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)");
 }
 
 // Read test - copy from dst to src (backwards) using src contxt
@@ -280,5 +280,5 @@ void OneToAllReadCE::run(unsigned long long size, unsigned long long loopCount) 
     MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), PREFER_DST_CONTEXT, MemcpyOperation::TOTAL_BW);
     oneToAllHelper(size, memcpyInstance, bandwidthValues, true);
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)");
 }
