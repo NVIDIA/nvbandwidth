@@ -26,8 +26,8 @@ void Output::addVersionInfo() {
 }
 
 void Output::printInfo() {
-    OUTPUT << "NOTE: This tool reports current measured bandwidth on your system." << std::endl 
-              << "Additional system-specific tuning may be required to achieve maximal peak bandwidth." << std::endl << std::endl;
+    OUTPUT << "NOTE: The reported results may not reflect the full capabilities of the platform." << std::endl
+           << "Performance can vary with software drivers, hardware clocks, and system topology." << std::endl << std::endl;
 }
 
 void Output::addCudaAndDriverInfo(int cudaVersion, const std::string &driverVersion) {
@@ -65,11 +65,19 @@ static void printGPUs(){
     for (int iDev = 0; iDev < deviceCount; iDev++) {
         CUdevice dev;
         char name[STRING_LENGTH];
+        int busId, deviceId, domainId;
 
         CU_ASSERT(cuDeviceGet(&dev, iDev));
         CU_ASSERT(cuDeviceGetName(name, STRING_LENGTH, dev));
-
-        OUTPUT << "Device " << iDev << ": " << name << std::endl;
+        CU_ASSERT(cuDeviceGetAttribute(&domainId, CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID, dev));
+        CU_ASSERT(cuDeviceGetAttribute(&busId, CU_DEVICE_ATTRIBUTE_PCI_BUS_ID, dev));
+        CU_ASSERT(cuDeviceGetAttribute(&deviceId, CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID, dev));
+        OUTPUT << "Device " << iDev << ": "
+               << name << " (" <<
+               std::hex << std::setw(8) << std::setfill('0') << domainId << ":" <<
+               std::hex << std::setw(2) << std::setfill('0') << busId << ":" <<
+               std::hex << std::setw(2) << std::setfill('0') << deviceId << ")" <<
+               std::dec << std::setfill(' ') << std::setw(0) << std::endl;  // reset formatting
     }
     OUTPUT << std::endl;
 }

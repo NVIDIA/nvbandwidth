@@ -95,6 +95,7 @@ public:
     virtual double calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount) = 0;
     virtual double calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) = 0;
     virtual double calculateFirstBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) = 0;
+    virtual std::vector<double> calculateVectorBandwidth(std::vector<double> &results) = 0;
     virtual void synchronizeProcess() = 0;
     // In MPI configuration we want to avoid using blocking functions such as cuStreamSynchronize to adhere to MPI notion of progress 
     // For more details see https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/mpi.html#mpi-progress
@@ -116,6 +117,7 @@ public:
     double calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount);
     double calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats);
     double calculateFirstBandwidth(std::vector<PerformanceStatistic> &bandwidthStats);
+    std::vector<double> calculateVectorBandwidth(std::vector<double> &results);
     void synchronizeProcess();
     CUresult streamSynchronizeWrapper(CUstream stream) const;
 
@@ -163,7 +165,8 @@ public:
     enum BandwidthValue { 
             USE_FIRST_BW,      // Use the bandwidth of the first copy in the simultaneous copy list
             SUM_BW,            // Use the sum of all bandwidths from the simultaneous copy list
-            TOTAL_BW           // Use the total bandwidth of all copies, based on total time and total bytes copied
+            TOTAL_BW,           // Use the total bandwidth of all copies, based on total time and total bytes copied
+            VECTOR_BW,         // Return bandwidths of each copy separately
     };
 
     ContextPreference ctxPreference;
@@ -185,7 +188,8 @@ public:
 
     // Lists of paired nodes will be executed sumultaneously
     // context of srcBuffers is preferred (if not host) unless otherwise specified
-    double doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, const std::vector<CUcontext> &contexts);
+    std::vector<double> doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, const std::vector<CUcontext> &contexts);
+    std::vector<double> doMemcpyVector(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers);
     double doMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers);
     double doMemcpy(const MemcpyBuffer &srcBuffer, const MemcpyBuffer &dstBuffer);
 };
