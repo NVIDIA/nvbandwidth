@@ -20,11 +20,13 @@
 
 #include <cuda.h>
 #include "common.h"
+#include "inline_common.h"
 
 const unsigned long long DEFAULT_SPIN_KERNEL_TIMEOUT_MS = 10000ULL;   // 10 seconds
 
 size_t copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUstream stream, unsigned long long loopCount);
 CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long timeoutMs = DEFAULT_SPIN_KERNEL_TIMEOUT_MS);
 void preloadKernels(int deviceCount);
+double latencyPtrChaseKernel(const int srcId, void* data, size_t size, unsigned long long loopCount);
 
 #endif //NVBANDWIDTH__KERNELS_CUH
