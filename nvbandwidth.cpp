@@ -212,7 +212,6 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    output->printInfo();
 
     CU_ASSERT(cuInit(0));
     NVML_ASSERT(nvmlInit());
@@ -257,9 +256,8 @@ int main(int argc, char **argv) {
         }
     }
 
-    output->print();
-
     for (auto testcase : testcases) { delete testcase; }
 
+    output->printInfo();
     return 0;
 }
