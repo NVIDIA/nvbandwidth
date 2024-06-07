@@ -8,6 +8,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
+set(supported_archs "52" "70" "75" "80" "86" "89" "90")
+
+message(STATUS "Detecting underlying CUDA Arch to set CMAKE_CUDA_ARCHITECTURES")
+include(detect_cuda_arch.cmake)
+# Set CMAKE_CUDA_ARCHITECURES based on the underlying device
+cuda_detect_architectures(supported_archs CMAKE_CUDA_ARCHITECTURES)
+
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
 endif()
@@ -30,6 +37,9 @@ set(src
     kernels.cu
     memcpy.cpp
     nvbandwidth.cpp
+    output.cpp
+    json_output.cpp
+    json/jsoncpp.cpp
 )
 
 execute_process(
@@ -49,3 +59,4 @@ endif()
 add_executable(nvbandwidth ${src})
 target_include_directories(nvbandwidth PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES} .)
 target_link_libraries(nvbandwidth Boost::program_options ${NVML_LIB_NAME} cuda)
+

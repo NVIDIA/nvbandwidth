@@ -21,9 +21,12 @@
 #include <nvml.h>
 #include <iostream>
 
+#include "json_output.h"
 #include "kernels.cuh"
+#include "output.h"
 #include "testcase.h"
 #include "version.h"
+#include "inline_common.h"
 
 namespace opt = boost::program_options;
 
@@ -32,10 +35,16 @@ unsigned int averageLoopCount;
 unsigned long long bufferSize;
 unsigned long long loopCount;
 bool verbose;
+bool shouldOutput = true;
 bool disableAffinity;
 bool skipVerification;
 bool useMean;
-Verbosity VERBOSE;
+
+Verbosity VERBOSE(verbose);
+Verbosity OUTPUT(shouldOutput);
+
+bool jsonOutput;
+Output *output;
 
 // Define testcases here
 std::vector<Testcase*> createTestcases() {
@@ -69,7 +78,9 @@ std::vector<Testcase*> createTestcases() {
         new AllToOneWriteSM(),
         new AllToOneReadSM(),
         new OneToAllWriteSM(),
-        new OneToAllReadSM()
+        new OneToAllReadSM(),
+        new HostDeviceLatencySM(),
+        new DeviceToDeviceLatencySM(),
     };
 }
 
@@ -87,21 +98,39 @@ Testcase* findTestcase(std::vector<Testcase*> &testcases, std::string id) {
         }
     } else {
         // ID is index
-        if (index >= testcases.size()) throw "Testcase index " + id + " out of bound!";
+        if (index < 0 || index >= static_cast<long>(testcases.size())) throw "Testcase index " + id + " out of bound!";
         return testcases.at(index);
     }
 }
 
+std::vector<std::string> expandTestcases(std::vector<Testcase*> &testcases, std::vector<std::string> prefixes) {
+    std::vector<std::string> testcasesToRun;
+    for (auto testcase: testcases){ 
+         auto it = find_if(prefixes.begin(), prefixes.end(), [&testcase](std::string prefix) {return testcase->testKey().compare(0, prefix.size(), prefix) == 0;});
+            if (it != prefixes.end()) {
+                testcasesToRun.push_back(testcase->testKey());
+            }
+    }
+    return testcasesToRun;  
+}
+
 void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseID) {
     CUcontext testCtx;
+    Testcase* test{nullptr};
+    try {
+        test = findTestcase(testcases, testcaseID);
+    } catch (std::string &s) {
+        output->addTestcase(testcaseID, "ERROR", s);
+        return;
+    }
 
     try {
-        Testcase* test = findTestcase(testcases, testcaseID);
         if (!test->filter()) {
-            std::cout << "Waiving " << test->testKey() << "." << std::endl << std::endl;
+            output->addTestcase(test->testKey(), NVB_WAIVED);
             return;
         }
-        std::cout << "Running " << test->testKey() << ".\n";
+
+        output->addTestcase(test->testKey(), NVB_RUNNING);
 
         CU_ASSERT(cuCtxCreate(&testCtx, 0, 0));
         CU_ASSERT(cuCtxSetCurrent(testCtx));
@@ -109,16 +138,15 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
         test->run(bufferSize * _MiB, loopCount);
         CU_ASSERT(cuCtxDestroy(testCtx));
     } catch (std::string &s) {
-        std::cout << "ERROR: " << s << std::endl;
+        output->setTestcaseStatusAndAddIfNeeded(test->testKey(), NVB_ERROR_STATUS, s);
     }
 }
 
 int main(int argc, char **argv) {
-    std::cout << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
-    std::cout << "Built from Git version: " << GIT_VERSION << std::endl << std::endl;
-    
     std::vector<Testcase*> testcases = createTestcases();
     std::vector<std::string> testcasesToRun;
+    std::vector<std::string> testcasePrefixes;
+    output = new Output();
 
     // Args parsing
     opt::options_description visible_opts("nvbandwidth CLI");
@@ -127,11 +155,13 @@ int main(int argc, char **argv) {
         ("bufferSize,b", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size in MiB")
         ("list,l", "List available testcases")
         ("testcase,t", opt::value<std::vector<std::string>>(&testcasesToRun)->multitoken(), "Testcase(s) to run (by name or index)")
+        ("testcasePrefixes,p", opt::value<std::vector<std::string>>(&testcasePrefixes)->multitoken(), "Testcase(s) to run (by prefix))")
         ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output")
         ("skipVerification,s", opt::bool_switch(&skipVerification)->default_value(false), "Skips data verification after copy")
         ("disableAffinity,d", opt::bool_switch(&disableAffinity)->default_value(false), "Disable automatic CPU affinity control")
         ("testSamples,i", opt::value<unsigned int>(&averageLoopCount)->default_value(defaultAverageLoopCount), "Iterations of the benchmark")
-        ("useMean,m", opt::bool_switch(&useMean)->default_value(false), "Use mean instead of median for results");
+        ("useMean,m", opt::bool_switch(&useMean)->default_value(false), "Use mean instead of median for results")
+        ("json,j", opt::bool_switch(&jsonOutput)->default_value(false), "Print output in json format instead of plain text.");
 
     opt::options_description all_opts("");
     all_opts.add(visible_opts);
@@ -142,63 +172,74 @@ int main(int argc, char **argv) {
     try {
         opt::store(opt::parse_command_line(argc, argv, all_opts), vm);
         opt::notify(vm);
+    
     } catch (...) {
-        std::cout << "ERROR: Invalid Arguments " << std::endl;
+        output->addVersionInfo();
+
+        std::stringstream errmsg;
+        errmsg << "ERROR: Invalid Arguments " << std::endl;
         for (int i = 0; i < argc; i++) {
-            std::cout << argv[i] << " ";
+            errmsg << argv[i] << " ";
         }
-        std::cout << std::endl << std::endl;
-        std::cout << visible_opts << "\n";
+        std::vector<std::string> messageParts;
+        std::stringstream buf;
+        buf << visible_opts;
+        messageParts.emplace_back(errmsg.str());
+        messageParts.emplace_back(buf.str());
+        output->recordError(messageParts);
         return 1;
     }
 
+    if (jsonOutput) {
+        delete output;
+        output = new JsonOutput();
+    }
+    
+    output->addVersionInfo();
+
     if (vm.count("help")) {
-        std::cout << visible_opts << "\n";
+        OUTPUT << visible_opts << "\n";
         return 0;
     }
 
     if (vm.count("list")) {
-        size_t numTestcases = testcases.size();
-        std::cout << "Index, Name:\n\tDescription\n";
-        std::cout << "=======================\n";
-        for (unsigned int i = 0; i < numTestcases; i++) {
-            std::cout << i << ", " << testcases.at(i)->testKey() << ":\n" << testcases.at(i)->testDesc() << "\n\n";
-        }
+        output->listTestcases(testcases);
         return 0;
     }
 
-    std::cout << "NOTE: This tool reports current measured bandwidth on your system." << std::endl 
-              << "Additional system-specific tuning may be required to achieve maximal peak bandwidth." << std::endl << std::endl;
+    if (testcasePrefixes.size() != 0 && testcasesToRun.size() != 0) {
+        output->recordError("You cannot specify both testcase and testcasePrefix options at the same time");
+        return 1;
+    }
 
-    cuInit(0);
-    nvmlInit();
+    output->printInfo();
+
+    CU_ASSERT(cuInit(0));
+    NVML_ASSERT(nvmlInit());
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
     if (bufferSize < defaultBufferSize) {
-        std::cout << "NOTE: You have chosen a buffer size that is smaller than the default buffer size. " << std::endl
-        << "It is suggested to use the default buffer size (64MB) to achieve maximal peak bandwidth." << std::endl << std::endl;
+        output->recordWarning("NOTE: You have chosen a buffer size that is smaller than the default buffer size. It is suggested to use the default buffer size (64MB) to achieve maximal peak bandwidth.");
     }
 
     int cudaVersion;
     cudaRuntimeGetVersion(&cudaVersion);
-    std::cout << "CUDA Runtime Version: " << cudaVersion << std::endl;
 
     CU_ASSERT(cuDriverGetVersion(&cudaVersion));
-    std::cout << "CUDA Driver Version: " << cudaVersion << std::endl;
 
     char driverVersion[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE];
     NVML_ASSERT(nvmlSystemGetDriverVersion(driverVersion, NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE));
-    std::cout << "Driver Version: " << driverVersion << std::endl << std::endl;
 
-    for (int iDev = 0; iDev < deviceCount; iDev++) {
-        CUdevice dev;
-        char name[256];
+    output->addCudaAndDriverInfo(cudaVersion, driverVersion);
 
-        CU_ASSERT(cuDeviceGet(&dev, iDev));
-        CU_ASSERT(cuDeviceGetName(name, 256, dev));
+    output->recordDevices(deviceCount);
 
-        std::cout << "Device " << iDev << ": " << name << std::endl;
+    if (testcasePrefixes.size() > 0) {
+        testcasesToRun = expandTestcases(testcases, testcasePrefixes);
+        if (testcasesToRun.size() == 0) {
+            output->recordError("Specified list of testcase prefixes did not match any testcases");
+            return 1;
+        }
     }
-    std::cout << std::endl;
 
     // This triggers the loading of all kernels on all devices, even with lazy loading enabled.
     // Some tests can create complex dependencies between devices and function loading requires a
@@ -215,6 +256,8 @@ int main(int argc, char **argv) {
             runTestcase(testcases, testcaseIndex);
         }
     }
+
+    output->print();
 
     for (auto testcase : testcases) { delete testcase; }
 
