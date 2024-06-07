@@ -19,6 +19,7 @@
 #define BENCHMARK_H
 
 #include "common.h"
+#include "inline_common.h"
 #include "memcpy.h"
 
 class Testcase {
@@ -33,6 +34,7 @@ protected:
     void oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead);
     void allHostHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost);
     void allHostBidirHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost);
+    void latencyHelper(const MemcpyBuffer &dataBuffer, bool measureDeviceToDeviceLatency);
 
 public:
     Testcase(std::string key, std::string desc);
@@ -86,6 +88,26 @@ public:
             "\tA device to host copy is measured while a host to device copy is run simultaneously.\n"
             "\tOnly the device to host copy bandwidth is reported.") {}
     virtual ~DeviceToHostBidirCE() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
+// Host to device bidirectional SM memcpy
+class HostToDeviceBidirSM: public Testcase {
+public:
+    HostToDeviceBidirSM() : Testcase("host_to_device_bidirectional_memcpy_sm",
+            "\tA host to device copy is measured while a device to host copy is run simultaneously.\n"
+            "\tOnly the host to device copy bandwidth is reported.") {}
+    virtual ~HostToDeviceBidirSM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
+// Device to host bidirectional SM memcpy
+class DeviceToHostBidirSM: public Testcase {
+public:
+    DeviceToHostBidirSM() : Testcase("device_to_host_bidirectional_memcpy_sm",
+            "\tA device to host copy is measured while a host to device copy is run simultaneously.\n"
+            "\tOnly the device to host copy bandwidth is reported.") {}
+    virtual ~DeviceToHostBidirSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
 
@@ -227,6 +249,14 @@ public:
 };
 
 // SM Testcase classes
+// Host to device SM latency using a ptr chase kernel
+class HostDeviceLatencySM: public Testcase {
+public:
+    HostDeviceLatencySM() : Testcase("host_device_latency_sm", 
+            "\tHost - device SM copy latency using a ptr chase kernel") {}
+    virtual ~HostDeviceLatencySM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
 
 // Host to device SM memcpy using a copy kernel
 class HostToDeviceSM: public Testcase {
@@ -253,6 +283,17 @@ public:
             "\tMeasures bandwidth of a copy kernel between each pair of accessible peers.\n"
             "\tRead tests launch a copy from the peer device to the target using the target's context.") {}
     virtual ~DeviceToDeviceReadSM() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+    bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
+};
+
+// Device to Device SM Latency ptr chase kernel
+class DeviceToDeviceLatencySM: public Testcase {
+public:
+    DeviceToDeviceLatencySM() : Testcase("device_to_device_latency_sm",
+            "\tMeasures latency of a pointer derefernce operation between each pair of accessible peers.\n"
+            "\tMemory is allocated on a GPU and is accessed by the peer GPU to determine latency.") {}
+    virtual ~DeviceToDeviceLatencySM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };

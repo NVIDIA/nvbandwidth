@@ -23,7 +23,7 @@ __global__ void simpleCopyKernel(unsigned long long loopCount, uint4 *dst, uint4
         size_t offset = idx * sizeof(uint4);
         uint4* dst_uint4 = reinterpret_cast<uint4*>((char*)dst + offset);
         uint4* src_uint4 = reinterpret_cast<uint4*>((char*)src + offset);
-	__stcg(dst_uint4, __ldcg(src_uint4));
+        __stcg(dst_uint4, __ldcg(src_uint4));
     }
 }
 __global__ void stridingMemcpyKernel(unsigned int totalThreadCount, unsigned long long loopCount, uint4* dst, uint4* src, size_t chunkSizeInElement) {
@@ -71,7 +71,47 @@ __global__ void stridingMemcpyKernel(unsigned int totalThreadCount, unsigned lon
         }
     }
 }
+__global__ void ptrChasingKernel(struct LatencyNode *data, size_t size, unsigned int accesses, unsigned long long* time) {
+    struct LatencyNode *p = data;
+    auto start = clock64();
+    for (auto i = 0; i < accesses; ++i) {
+        p = p->next;
+    }
 
+    auto interval = static_cast<unsigned long long>(clock64() - start);
+    atomicAdd(time, interval);
+
+    // avoid compiler optimization
+    if (p == nullptr) {
+        __trap();
+    }
+}
+
+double latencyPtrChaseKernel(const int srcId, void* data, size_t size, unsigned long long loopCount) {
+    unsigned long long *hTime;
+    CUstream stream;
+    int device, clock_rate_khz;
+    double latencySum = 0.0f, finalLatencyPerAccessNs = 0.0;
+    CUcontext srcCtx;
+    CU_ASSERT(cuDevicePrimaryCtxRetain(&srcCtx, srcId));
+    CU_ASSERT(cuCtxSetCurrent(srcCtx));
+    
+    CU_ASSERT(cuStreamCreate(&stream, CU_STREAM_DEFAULT));
+    CU_ASSERT(cuMemAllocManaged((CUdeviceptr*) &hTime, sizeof(unsigned long long), CU_MEM_ATTACH_GLOBAL));
+    CU_ASSERT(cuCtxGetDevice(&device));
+    CU_ASSERT(cuDeviceGetAttribute(&clock_rate_khz, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device));
+
+    for ( int i = 0; i < loopCount; i++) {
+        memset((void*)hTime, 0, sizeof(unsigned long long));
+        ptrChasingKernel <<< 1, 1, 0, stream>>> ((struct LatencyNode*) data, size, latencyMemAccessCnt, hTime);
+        CUDA_ASSERT(cudaGetLastError());
+        CU_ASSERT(cuStreamSynchronize(stream));
+        latencySum += static_cast<double>(hTime[0]) / (1.0E3 /* khz -> hz */ * static_cast<double>(clock_rate_khz));
+    }
+    finalLatencyPerAccessNs = (latencySum * 1.0E9) / (loopCount * latencyMemAccessCnt);
+    return finalLatencyPerAccessNs;
+
+}
 size_t copyKernel(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUstream stream, unsigned long long loopCount) {
     CUdevice dev;
     CUcontext ctx;
@@ -151,3 +191,4 @@ void preloadKernels(int deviceCount)
         cudaFuncGetAttributes(&unused, &simpleCopyKernel);
     }
 }
+

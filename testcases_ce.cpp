@@ -17,81 +17,80 @@
 
 #include <cuda.h>
 
+#include "common.h"
+#include "output.h"
 #include "testcase.h"
 #include "memcpy.h"
+#include "common.h"
 
 void HostToDeviceCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE());
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        HostNode hostNode(size, deviceId);
-        DeviceNode deviceNode(size, deviceId);
+        HostBuffer hostBuffer(size, deviceId);
+        DeviceBuffer deviceBuffer(size, deviceId);
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostNode, deviceNode);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostBuffer, deviceBuffer);
     }
 
-    std::cout << "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)");
 }
 
 void DeviceToHostCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE());
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        HostNode hostNode(size, deviceId);
-        DeviceNode deviceNode(size, deviceId);
+        HostBuffer hostBuffer(size, deviceId);
+        DeviceBuffer deviceBuffer(size, deviceId);
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceNode, hostNode);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceBuffer, hostBuffer);
     }
 
-    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
 }
 
 void HostToDeviceBidirCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE());
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         // Double the size of the interference copy to ensure it interferes correctly
-        HostNode host1(size, deviceId), host2(size * 2, deviceId);
-        DeviceNode dev1(size, deviceId), dev2(size * 2, deviceId);
+        HostBuffer host1(size, deviceId), host2(size * 2, deviceId);
+        DeviceBuffer dev1(size, deviceId), dev2(size * 2, deviceId);
 
-        std::vector<const MemcpyNode*> srcNodes = {&host1, &dev2};
-        std::vector<const MemcpyNode*> dstNodes = {&dev1, &host2};
+        std::vector<const MemcpyBuffer*> srcBuffers = {&host1, &dev2};
+        std::vector<const MemcpyBuffer*> dstBuffers = {&dev1, &host2};
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
     }
 
-    std::cout << "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
 
 void DeviceToHostBidirCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE());
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         // Double the size of the interference copy to ensure it interferes correctly
-        HostNode host1(size, deviceId), host2(size * 2, deviceId);
-        DeviceNode dev1(size, deviceId), dev2(size * 2, deviceId);
+        HostBuffer host1(size, deviceId), host2(size * 2, deviceId);
+        DeviceBuffer dev1(size, deviceId), dev2(size * 2, deviceId);
 
-        std::vector<const MemcpyNode*> srcNodes = {&dev1, &host2};
-        std::vector<const MemcpyNode*> dstNodes = {&host1, &dev2};
+        std::vector<const MemcpyBuffer*> srcBuffers = {&dev1, &host2};
+        std::vector<const MemcpyBuffer*> dstBuffers = {&host1, &dev2};
 
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcNodes, dstNodes);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
     }
 
-    std::cout << "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
 
 // DtoD Read test - copy from dst to src (backwards) using src contxt
 void DeviceToDeviceReadCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), PREFER_DST_CONTEXT);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
@@ -99,26 +98,25 @@ void DeviceToDeviceReadCE::run(unsigned long long size, unsigned long long loopC
                 continue;
             }
 
-            DeviceNode srcNode(size, srcDeviceId);
-            DeviceNode peerNode(size, peerDeviceId);
+            DeviceBuffer srcBuffer(size, srcDeviceId);
+            DeviceBuffer peerBuffer(size, peerDeviceId);
 
-            if (!srcNode.enablePeerAcess(peerNode)) {
+            if (!srcBuffer.enablePeerAcess(peerBuffer)) {
                 continue;
             }
 
-            // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(peerNode, srcNode);
+            // swap src and peer nodes, but use srcBuffers (the copy's destination) context
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(peerBuffer, srcBuffer);
         }
     }
 
-    std::cout << "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)");
 }
 
 // DtoD Write test - copy from src to dst using src context
 void DeviceToDeviceWriteCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE());
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
@@ -126,25 +124,24 @@ void DeviceToDeviceWriteCE::run(unsigned long long size, unsigned long long loop
                 continue;
             }
 
-            DeviceNode srcNode(size, srcDeviceId);
-            DeviceNode peerNode(size, peerDeviceId);
+            DeviceBuffer srcBuffer(size, srcDeviceId);
+            DeviceBuffer peerBuffer(size, peerDeviceId);
 
-            if (!srcNode.enablePeerAcess(peerNode)) {
+            if (!srcBuffer.enablePeerAcess(peerBuffer)) {
                 continue;
             }
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNode, peerNode);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcBuffer, peerBuffer);
         }
     }
 
-    std::cout << "memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)");
 }
 
 // DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
 void DeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), PREFER_DST_CONTEXT);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
@@ -153,29 +150,28 @@ void DeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned long long 
             }
 
             // Double the size of the interference copy to ensure it interferes correctly
-            DeviceNode src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
-            DeviceNode peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
+            DeviceBuffer src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
+            DeviceBuffer peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
 
             if (!src1.enablePeerAcess(peer1)) {
                 continue;
             }
 
-            // swap src and peer nodes, but use srcNodes (the copy's destination) context
-            std::vector<const MemcpyNode*> srcNodes = {&peer1, &src2};
-            std::vector<const MemcpyNode*> peerNodes = {&src1, &peer2};
+            // swap src and peer nodes, but use srcBuffers (the copy's destination) context
+            std::vector<const MemcpyBuffer*> srcBuffers = {&peer1, &src2};
+            std::vector<const MemcpyBuffer*> peerBuffers = {&src1, &peer2};
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcBuffers, peerBuffers);
         }
     }
 
-    std::cout << "memcpy CE GPU(row) <-> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
 
 // DtoD Bidir Write test - copy from src to dst using src context
 void DeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(deviceCount, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE());
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
@@ -184,100 +180,91 @@ void DeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned long long
             }
 
             // Double the size of the interference copy to ensure it interferes correctly
-            DeviceNode src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
-            DeviceNode peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
+            DeviceBuffer src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
+            DeviceBuffer peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
 
             if (!src1.enablePeerAcess(peer1)) {
                 continue;
             }
 
-            std::vector<const MemcpyNode*> srcNodes = {&src1, &peer2};
-            std::vector<const MemcpyNode*> peerNodes = {&peer1, &src2};
+            std::vector<const MemcpyBuffer*> srcBuffers = {&src1, &peer2};
+            std::vector<const MemcpyBuffer*> peerBuffers = {&peer1, &src2};
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
+            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcBuffers, peerBuffers);
         }
     }
 
-    std::cout << "memcpy CE GPU(row) <-> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
 
 void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE());
 
     allHostHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)");
 }
 
 void AllToHostBidirCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE());
 
     allHostBidirHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
 
 void HostToAllCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE());
 
     allHostHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) -> GPU(column) bandwidth (GB/s)");
 }
 
 void HostToAllBidirCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE());
 
     allHostBidirHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy CE CPU(row) <- GPU(column) bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
 
 // Write test - copy from src to dst using src context
 void AllToOneWriteCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
     allToOneHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy CE All Gpus -> GPU(column) total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)");
 }
 
 // Read test - copy from dst to src (backwards) using src contxt
 void AllToOneReadCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::TOTAL_BW);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), PREFER_DST_CONTEXT, MemcpyOperation::TOTAL_BW);
     allToOneHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy CE All Gpus <- GPU(column) total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)");
 }
 
 // Write test - copy from src to dst using src context
 void OneToAllWriteCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
     oneToAllHelper(size, memcpyInstance, bandwidthValues, false);
 
-    std::cout << "memcpy CE GPU(column) -> All GPUs total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)");
 }
 
 // Read test - copy from dst to src (backwards) using src contxt
 void OneToAllReadCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperationCE memcpyInstance(loopCount, MemcpyOperation::PREFER_DST_CONTEXT, MemcpyOperation::TOTAL_BW);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), PREFER_DST_CONTEXT, MemcpyOperation::TOTAL_BW);
     oneToAllHelper(size, memcpyInstance, bandwidthValues, true);
 
-    std::cout << "memcpy CE GPU(column) <- All GPUs total bandwidth (GB/s)" << std::endl;
-    std::cout << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)");
 }
