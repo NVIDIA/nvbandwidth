@@ -69,14 +69,15 @@ static void printGPUs() {
 
         CU_ASSERT(cuDeviceGet(&dev, iDev));
         CU_ASSERT(cuDeviceGetName(name, STRING_LENGTH, dev));
+        CU_ASSERT(cuDeviceGetAttribute(&domainId, CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID, dev));
         CU_ASSERT(cuDeviceGetAttribute(&busId, CU_DEVICE_ATTRIBUTE_PCI_BUS_ID, dev));
         CU_ASSERT(cuDeviceGetAttribute(&deviceId, CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID, dev));
-        CU_ASSERT(cuDeviceGetAttribute(&domainId, CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID, dev));
         OUTPUT << "Device " << iDev << ": "
                << name << " (" <<
-               std::hex << busId << ":" <<
-               std::hex << deviceId << ":" <<
-               std::hex << domainId << ")" << std::endl;
+               std::hex << std::setw(8) << std::setfill('0') << domainId << ":" <<
+               std::hex << std::setw(2) << std::setfill('0') << busId << ":" <<
+               std::hex << std::setw(2) << std::setfill('0') << deviceId << ")" <<
+               std::dec << std::setfill(' ') << std::setw(0) << std::endl;  // reset formatting
     }
     OUTPUT << std::endl;
 }
