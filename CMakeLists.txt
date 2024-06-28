@@ -10,10 +10,12 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 set(supported_archs "52" "70" "75" "80" "86" "89" "90")
 
-message(STATUS "Detecting underlying CUDA Arch to set CMAKE_CUDA_ARCHITECTURES")
-include(detect_cuda_arch.cmake)
-# Set CMAKE_CUDA_ARCHITECURES based on the underlying device
-cuda_detect_architectures(supported_archs CMAKE_CUDA_ARCHITECTURES)
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    message(STATUS "Detecting underlying CUDA Arch to set CMAKE_CUDA_ARCHITECTURES")
+    include(detect_cuda_arch.cmake)
+    # Set CMAKE_CUDA_ARCHITECURES based on the underlying device
+    cuda_detect_architectures(supported_archs CMAKE_CUDA_ARCHITECTURES)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
