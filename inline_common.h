@@ -25,6 +25,8 @@ template <class T> struct PeerValueMatrix {
     std::vector<std::optional <T>> m_matrix;
     int m_rows, m_columns;
     std::string key;
+    std::vector<std::string> column_labels;
+    std::vector<std::string> row_labels;
 
     PeerValueMatrix(int rows, int columns, std::string key = ""): m_matrix(rows * columns), m_rows(rows), m_columns(columns), key(key) {}
 
@@ -38,6 +40,14 @@ template <class T> struct PeerValueMatrix {
         ASSERT(dst >= 0 && dst < m_columns);
         return m_matrix[src * m_columns + dst];
     }
+
+    void setRowLabels(std::vector<std::string> _row_labels) {
+        row_labels = _row_labels;
+    }
+
+    void setColumnLabels(std::vector<std::string> _column_labels) {
+        column_labels = _column_labels;
+    }
 };
 
 template <class T>
@@ -48,13 +58,32 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
     T sum = 0;
     int count = 0;
 
-    o << "  ";
+    // First square of the table should be blank, calculate and print appropriately many spaces
+    int columnIdWidth = 2;
+    for (auto s : matrix.row_labels) {
+        columnIdWidth = std::max(columnIdWidth, (int) s.size());
+    }
+
+    for (int i = 0; i < columnIdWidth; i++) {
+        o << " ";
+    }
+
     for (int currentDevice = 0; currentDevice < matrix.m_columns; currentDevice++) {
-        o << std::setw(10) << currentDevice;
+        if (matrix.column_labels.size() > 0) {
+            o << std::setw(10) << matrix.column_labels[currentDevice];
+        } else {
+            o << std::setw(10) << currentDevice;
+        }
     }
     o << std::endl;
+
     for (int currentDevice = 0; currentDevice < matrix.m_rows; currentDevice++) {
-        o << std::setw(2) << currentDevice;
+        if (matrix.row_labels.size() > 0) {
+            o << std::setw(columnIdWidth) << matrix.row_labels[currentDevice];
+        } else {
+            o << std::setw(2) << currentDevice;
+        }
+
         for (int peer = 0; peer < matrix.m_columns; peer++) {
             std::optional <T> val = matrix.value(currentDevice, peer);
             if (val) {

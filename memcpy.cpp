@@ -21,6 +21,10 @@
 #include "output.h"
 #include "kernels.cuh"
 #include "vector_types.h"
+#ifdef MULTINODE
+#include <mpi.h>
+#include "multinode_memcpy.h"
+#endif
 
 #define WARMUP_COUNT 4
 
@@ -125,6 +129,12 @@ void MemcpyBuffer::xorshift2MBPattern(unsigned int* buffer, unsigned int seed) c
     }
 }
 
+// Non-multinode MemcpyBuffers will always return Rank 0
+// Semantically, we can assume that non-MPI runs will have world rank = 0 and world size = 1
+int MemcpyBuffer::getMPIRank() const {
+    return 0;
+}
+
 CUresult MemcpyBuffer::streamSynchronizeWrapper(CUstream stream) const {
     return cuStreamSynchronize(stream);
 }
@@ -226,8 +236,8 @@ double MemcpyOperation::doMemcpy(const MemcpyBuffer &srcBuffer, const MemcpyBuff
     return doMemcpy(srcBuffers, dstBuffers);
 }
 
-MemcpyDispatchInfo::MemcpyDispatchInfo(std::vector<const MemcpyBuffer*> srcBuffers, std::vector<const MemcpyBuffer*> dstBuffers, std::vector<CUcontext> contexts) :
-    srcBuffers(srcBuffers), dstBuffers(dstBuffers), contexts(contexts) {
+MemcpyDispatchInfo::MemcpyDispatchInfo(std::vector<const MemcpyBuffer*> srcBuffers, std::vector<const MemcpyBuffer*> dstBuffers, std::vector<CUcontext> contexts, std::vector<int> originalRanks) :
+    srcBuffers(srcBuffers), dstBuffers(dstBuffers), contexts(contexts), originalRanks(originalRanks) {
 }
 
 NodeHelperSingle::NodeHelperSingle() {
@@ -269,6 +279,10 @@ double NodeHelperSingle::calculateFirstBandwidth(std::vector<PerformanceStatisti
     return bandwidthStats[0].returnAppropriateMetric() * 1e-9;
 }
 
+std::vector<double> NodeHelperSingle::calculateVectorBandwidth(std::vector<double> &results, std::vector<int> originalRanks) {
+    return results;
+}
+
 void NodeHelperSingle::synchronizeProcess() {
     // NOOP
 }
@@ -292,10 +306,18 @@ void NodeHelperSingle::streamBlockerBlock(CUstream stream) {
 
 double MemcpyOperation::doMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers) {
     MemcpyDispatchInfo dispatchInfo = nodeHelper->dispatchMemcpy(srcBuffers, dstBuffers, ctxPreference);
-    return doMemcpyCore(dispatchInfo.srcBuffers, dispatchInfo.dstBuffers, dispatchInfo.contexts);
+    auto result = doMemcpyCore(dispatchInfo.srcBuffers, dispatchInfo.dstBuffers, dispatchInfo.contexts);
+    return result[0];
 }
 
-double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, const std::vector<CUcontext> &contexts) {
+std::vector<double> MemcpyOperation::doMemcpyVector(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers) {
+    MemcpyDispatchInfo dispatchInfo = nodeHelper->dispatchMemcpy(srcBuffers, dstBuffers, ctxPreference);
+    auto results = doMemcpyCore(dispatchInfo.srcBuffers, dispatchInfo.dstBuffers, dispatchInfo.contexts);
+
+    return nodeHelper->calculateVectorBandwidth(results, dispatchInfo.originalRanks);
+}
+
+std::vector<double> MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, const std::vector<CUcontext> &contexts) {
     std::vector<CUstream> streams(srcBuffers.size());
     std::vector<CUevent> startEvents(srcBuffers.size());
     std::vector<CUevent> endEvents(srcBuffers.size());
@@ -429,11 +451,17 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
     }
 
     if (bandwidthValue == BandwidthValue::SUM_BW) {
-        return nodeHelper->calculateSumBandwidth(bandwidthStats);
+        return {nodeHelper->calculateSumBandwidth(bandwidthStats)};
     } else if (bandwidthValue == BandwidthValue::TOTAL_BW) {
-        return totalBandwidth.returnAppropriateMetric() * 1e-9;
+        return {totalBandwidth.returnAppropriateMetric() * 1e-9};
+    } else if (bandwidthValue == BandwidthValue::VECTOR_BW) {
+        std::vector<double> ret;
+        for (auto stat : bandwidthStats) {
+            ret.push_back(stat.returnAppropriateMetric() * 1e-9);
+        }
+        return ret;
     } else {
-        return nodeHelper->calculateFirstBandwidth(bandwidthStats);
+        return {nodeHelper->calculateFirstBandwidth(bandwidthStats)};
     }
 }
 

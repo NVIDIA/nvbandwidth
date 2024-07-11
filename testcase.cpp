@@ -49,6 +49,31 @@ bool Testcase::filterHasAccessiblePeerPairs() {
     return false;
 }
 
+bool Testcase::filterSupportsMulticast() {
+    int deviceCount = 0;
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
+
+    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        CUdevice dev;
+        CU_ASSERT(cuDeviceGet(&dev, currentDevice));
+        int supportsMulticast = 0;
+
+        CU_ASSERT(cuDeviceGetAttribute(&supportsMulticast, CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED, dev));
+        if (!supportsMulticast) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+#ifdef MULTINODE
+// Each MPI rank handles one GPU, so we simply have to check if we have more than 1 process
+bool Testcase::filterHasMultipleGPUsMultinode() {
+    return worldSize > 1;
+}
+#endif
+
 void Testcase::latencyHelper(const MemcpyBuffer &dataBuffer, bool measureDeviceToDeviceLatency) {
     uint64_t n_ptrs = dataBuffer.getBufferSize() / sizeof(struct LatencyNode);
     struct LatencyNode *mem;
