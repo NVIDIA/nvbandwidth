@@ -179,12 +179,59 @@ CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long tim
     return CUDA_SUCCESS;
 }
 
+__global__ void spinKernelDeviceMultistage(volatile int *latch1, volatile int *latch2, const unsigned long long timeoutClocks) {
+    if (latch1) {
+        register unsigned long long endTime = clock64() + timeoutClocks;
+        while (!*latch1) {
+            if (timeoutClocks != ~0ULL && clock64() > endTime) {
+                return;
+            }
+        }
+
+        *latch2 = 1;
+    }
+
+    register unsigned long long endTime = clock64() + timeoutClocks;
+    while (!*latch2) {
+        if (timeoutClocks != ~0ULL && clock64() > endTime) {
+            break;
+        }
+    }
+}
+
+// Implement a 2-stage spin kernel for multi-node synchronization.
+// One of the host nodes releases the first latch. Subsequently,
+// the second latch is released, that is polled by all other devices
+// latch1 argument is optional. If defined, kernel will spin on it until released, and then will release latch2.
+// latch2 argument is mandatory. Kernel will spin on it until released.
+// timeoutMs argument applies to each stage separately.
+// However, since each kernel will spin on only one stage, total runtime is still limited by timeoutMs
+CUresult spinKernelMultistage(volatile int *latch1, volatile int *latch2, CUstream stream, unsigned long long timeoutMs) {
+    int clocksPerMs = 0;
+    CUcontext ctx;
+    CUdevice dev;
+
+    ASSERT(latch2 != nullptr);
+
+    CU_ASSERT(cuStreamGetCtx(stream, &ctx));
+    CU_ASSERT(cuCtxGetDevice(&dev));
+
+    CU_ASSERT(cuDeviceGetAttribute(&clocksPerMs, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, dev));
+
+    unsigned long long timeoutClocks = clocksPerMs * timeoutMs;
+
+    spinKernelDeviceMultistage<<<1, 1, 0, stream>>>(latch1, latch2, timeoutClocks);
+
+    return CUDA_SUCCESS;
+}
+
 void preloadKernels(int deviceCount) {
     cudaFuncAttributes unused;
     for (int iDev = 0; iDev < deviceCount; iDev++) {
         cudaSetDevice(iDev);
         cudaFuncGetAttributes(&unused, &stridingMemcpyKernel);
         cudaFuncGetAttributes(&unused, &spinKernelDevice);
+        cudaFuncGetAttributes(&unused, &spinKernelDeviceMultistage);
         cudaFuncGetAttributes(&unused, &simpleCopyKernel);
     }
 }

@@ -19,6 +19,17 @@ build-job:       # This job runs in the build stage, which runs first.
     - cmake .
     - make -j
 
+build-job-multinode:       # This job runs in the build stage, which runs first.
+  stage: build
+  tags: [ nvbandwidth, gpu ]
+  before_script:
+    - apt update
+    - apt install -y openmpi-bin libopenmpi-dev
+  script:
+    - ./debian_install.sh
+    - cmake -DMULTINODE=1 .
+    - make -j
+
 test-job:   # This job runs in the test stage.
   stage: test    # It only starts when the job in the build stage completes successfully.
   tags: [ nvbandwidth, gpu ]

@@ -86,6 +86,40 @@ memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)
 
 Set number of iterations and the buffer size for copies with --testSamples and --bufferSize
 
+## Multinode benchmarks
+
+In order to build multinode version of nvbandwidth, execute
+
+```
+cmake -DMULTINODE=1 .
+make
+```
+
+Multinode nvbandwidth requires MPI. Cmake will find local installation of MPI to build and link against.
+
+### Local testing
+
+You can test it on a single-node machine (Ampere+ GPU required):
+
+```
+mpirun -n 4 ./nvbandwidth -p multinode
+```
+This command will spawn 4 processes, and run all tests with "multinode" prefix.
+
+### Running it on a cluster
+
+To run it on a cluster, submit a job to a workload scheduler that has MPI integration. Run one process per GPU.
+
+Running less processes than GPU count is valid, processes will take consecutive GPUs, starting from GPU 0.
+
+Running more processes than GPU count is not valid. 
+
+All ranks in the MPI batch must be part of one multinode clique. Run one instance of nvbandwidth per node/GPU.
+
+When running under MPI, only MPI rank 0 will output stdout to the console. Stderr, if needed, will be output by all processes.
+
+It is recommended to only run "multinode*" testcases under MPI. While any testcase will succeed, results for non multinode testcases will only come from MPI rank 0. 
+
 ## Test Details
 There are two types of copies implemented, Copy Engine (CE) or Steaming Multiprocessor (SM)
 

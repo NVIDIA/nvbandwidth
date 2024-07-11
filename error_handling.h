@@ -20,12 +20,18 @@
 
 void RecordError(const std::stringstream &errmsg);
 
+#ifdef MULTINODE
+#define HOST_INFO " on " << localHostname << ", rank = " << worldRank
+#else
+#define HOST_INFO ""
+#endif
+
 // CUDA Error handling
 #define CUDA_ASSERT(x) do { \
     cudaError_t cudaErr = (x); \
     if ((cudaErr) != cudaSuccess) { \
         std::stringstream errmsg; \
-        errmsg << "[" << cudaGetErrorName(cudaErr) << "] " << cudaGetErrorString(cudaErr) << " in expression " << #x << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ << std::endl; \
+        errmsg << "[" << cudaGetErrorName(cudaErr) << "] " << cudaGetErrorString(cudaErr) << " in expression " << #x << HOST_INFO << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ << std::endl; \
         RecordError(errmsg); \
         std::exit(1); \
     }  \
@@ -38,7 +44,7 @@ void RecordError(const std::stringstream &errmsg);
         cuGetErrorString(cuResult, &errDescStr); \
         cuGetErrorName(cuResult, &errNameStr); \
         std::stringstream errmsg; \
-        errmsg << "[" << errNameStr << "] " << errDescStr << " in expression " << #x << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ << std::endl; \
+        errmsg << "[" << errNameStr << "] " << errDescStr << " in expression " << #x << HOST_INFO << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ << std::endl; \
         RecordError(errmsg); \
         std::exit(1); \
     }  \
@@ -49,7 +55,7 @@ void RecordError(const std::stringstream &errmsg);
     nvmlReturn_t nvmlResult = (x); \
     if ((nvmlResult) != NVML_SUCCESS) { \
         std::stringstream errmsg; \
-        errmsg << "NVML_ERROR: [" << nvmlErrorString(nvmlResult) << "] in expression " << #x << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ << std::endl; \
+        errmsg << "NVML_ERROR: [" << nvmlErrorString(nvmlResult) << "] in expression " << #x << HOST_INFO << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ << std::endl; \
         RecordError(errmsg); \
         std::exit(1); \
     }  \
@@ -59,7 +65,7 @@ void RecordError(const std::stringstream &errmsg);
 #define ASSERT(x) do { \
     if (!(x)) { \
         std::stringstream errmsg; \
-        errmsg << "ASSERT in expression " << #x << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__  << std::endl; \
+        errmsg << "ASSERT in expression " << #x << HOST_INFO << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__  << std::endl; \
         RecordError(errmsg); \
         std::exit(1); \
     }  \

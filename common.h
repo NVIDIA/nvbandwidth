@@ -54,6 +54,14 @@ extern bool jsonOutput;
 // Verbosity
 extern bool verbose;
 
+#ifdef MULTINODE
+extern int localDevice;
+extern int localRank;
+extern int worldRank;
+extern int worldSize;
+extern char localHostname[STRING_LENGTH];
+#endif
+
 class Verbosity {
  public:
     bool &controlVariable;
@@ -194,6 +202,16 @@ class PerformanceStatistic {
         }
     }
 };
+
+#ifdef MULTINODE
+inline std::string getPaddedProcessId(int id) {
+    // max printed number will be worldSize - 1
+    int paddingSize = (int) log10(worldSize - 1) + 1;
+    std::stringstream s;
+    s << std::setfill(' ') << std::setw(paddingSize) << id;
+    return s.str();
+}
+#endif
 
 struct LatencyNode {
     struct LatencyNode *next;

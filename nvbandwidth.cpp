@@ -21,6 +21,10 @@
 #include <nvml.h>
 #include <iostream>
 
+#ifdef MULTINODE
+#include <mpi.h>
+#endif
+
 #include "json_output.h"
 #include "kernels.cuh"
 #include "output.h"
@@ -43,6 +47,15 @@ bool useMean;
 Verbosity VERBOSE(verbose);
 Verbosity OUTPUT(shouldOutput);
 
+#ifdef MULTINODE
+// Device ordinal of the GPU owned by the process
+int localRank;
+// Process rank within one OS
+int localDevice;
+int worldRank;
+int worldSize;
+char localHostname[STRING_LENGTH];
+#endif
 bool jsonOutput;
 Output *output;
 
@@ -83,6 +96,21 @@ std::vector<Testcase*> createTestcases() {
         new OneToAllReadSM(),
         new HostDeviceLatencySM(),
         new DeviceToDeviceLatencySM(),
+#ifdef MULTINODE
+        new MultinodeDeviceToDeviceReadCE(),
+        new MultinodeDeviceToDeviceWriteCE(),
+        new MultinodeDeviceToDeviceBidirReadCE(),
+        new MultinodeDeviceToDeviceBidirWriteCE(),
+        new MultinodeDeviceToDeviceReadSM(),
+        new MultinodeDeviceToDeviceWriteSM(),
+        new MultinodeDeviceToDeviceBidirReadSM(),
+        new MultinodeDeviceToDeviceBidirWriteSM(),
+        new MultinodeAllToOneWriteSM(),
+        new MultinodeAllFromOneReadSM(),
+        new MultinodeBroadcastOneToAllSM(),
+        new MultinodeBroadcastAllToAllSM(),
+        new MultinodeBisectWriteCE(),
+#endif
     };
 }
 
@@ -140,11 +168,35 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
     }
 }
 
+#ifdef MULTINODE
+void mpiFinalizeWrapper() {
+    MPI_Finalize();
+}
+#endif
+
 int main(int argc, char **argv) {
     std::vector<Testcase*> testcases = createTestcases();
     std::vector<std::string> testcasesToRun;
     std::vector<std::string> testcasePrefixes;
     output = new Output();
+
+#ifdef MULTINODE
+    ASSERT(0 == gethostname(localHostname, STRING_LENGTH - 1));
+
+    // Set up MPI
+    MPI_Init(NULL, NULL);
+    MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
+    MPI_Comm_rank(MPI_COMM_WORLD, &worldRank);
+
+    // Avoid excessive output by limit output to rank 0
+    shouldOutput = (worldRank == 0);
+
+    int ret = std::atexit(mpiFinalizeWrapper);
+    if (ret) {
+        std::cerr << "Failed to register exit handler" << std::endl;
+        return 1;
+    }
+#endif
 
     // Args parsing
     opt::options_description visible_opts("nvbandwidth CLI");
