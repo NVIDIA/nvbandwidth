@@ -22,10 +22,6 @@
 #include "kernels.cuh"
 #include "multinode_memcpy.h"
 
-int roundUp(size_t number, size_t multiple) {
-    return ((number + multiple - 1) / multiple) * multiple;
-}
-
 MultinodeMemoryAllocation::MultinodeMemoryAllocation(size_t bufferSize, int MPI_rank): bufferSize(bufferSize), MPI_rank(MPI_rank) {
     cudaSetDevice(localDevice);
 }
@@ -54,7 +50,7 @@ MultinodeMemoryAllocationUnicast::MultinodeMemoryAllocationUnicast(size_t buffer
     size_t granularity = 0;
     CU_ASSERT(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
 
-    roundedUpAllocationSize = roundUp(bufferSize, granularity);
+    roundedUpAllocationSize = ROUND_UP(bufferSize, granularity);
 
     if (MPI_rank == worldRank) {
         // Allocate the memory
@@ -98,7 +94,7 @@ MultinodeMemoryAllocationMulticast::MultinodeMemoryAllocationMulticast(size_t bu
     multicastProp.handleTypes = handleType;
     size_t gran;
     CU_ASSERT(cuMulticastGetGranularity(&gran, &multicastProp, CU_MULTICAST_GRANULARITY_RECOMMENDED));
-    roundedUpAllocationSize = roundUp(bufferSize, gran);
+    roundedUpAllocationSize = ROUND_UP(bufferSize, gran);
     multicastProp.size = roundedUpAllocationSize;
 
     if (MPI_rank == worldRank) {
