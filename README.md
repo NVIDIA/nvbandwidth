@@ -50,15 +50,18 @@ You may need to set the BOOST_ROOT environment variable on Windows to tell CMake
 ./nvbandwidth -h
 
 nvbandwidth CLI:
-  -h [ --help ]                 Produce help message
-  -b [ --bufferSize ] arg (=64) Memcpy buffer size in MiB
-  -l [ --list ]                 List available testcases
-  -t [ --testcase ] arg         Testcase(s) to run (by name or index)
-  -v [ --verbose ]              Verbose output
-  -s [ --skipVerification ]     Skips data verification after copy
-  -d [ --disableAffinity ]      Disable automatic CPU affinity control
-  -i [ --testSamples ] arg (=3) Iterations of the benchmark
-  -m [ --useMean ]              Use mean instead of median for results
+  -h [ --help ]                  Produce help message
+  -b [ --bufferSize ] arg (=512) Memcpy buffer size in MiB
+  -l [ --list ]                  List available testcases
+  -t [ --testcase ] arg          Testcase(s) to run (by name or index)
+  -p [ --testcasePrefixes ] arg  Testcase(s) to run (by prefix))
+  -v [ --verbose ]               Verbose output
+  -s [ --skipVerification ]      Skips data verification after copy
+  -d [ --disableAffinity ]       Disable automatic CPU affinity control
+  -i [ --testSamples ] arg (=3)  Iterations of the benchmark
+  -m [ --useMean ]               Use mean instead of median for results
+  -j [ --json ]                  Print output in json format instead of plain
+                                 text.
 ```
 To run all testcases:
 ```
@@ -112,13 +115,13 @@ To run it on a cluster, submit a job to a workload scheduler that has MPI integr
 
 Running less processes than GPU count is valid, processes will take consecutive GPUs, starting from GPU 0.
 
-Running more processes than GPU count is not valid. 
+Running more processes than GPU count is not valid.
 
 All ranks in the MPI batch must be part of one multinode clique. Run one instance of nvbandwidth per node/GPU.
 
 When running under MPI, only MPI rank 0 will output stdout to the console. Stderr, if needed, will be output by all processes.
 
-It is recommended to only run "multinode*" testcases under MPI. While any testcase will succeed, results for non multinode testcases will only come from MPI rank 0. 
+It is recommended to only run "multinode*" testcases under MPI. While any testcase will succeed, results for non multinode testcases will only come from MPI rank 0.
 
 ## Test Details
 There are two types of copies implemented, Copy Engine (CE) or Steaming Multiprocessor (SM)
