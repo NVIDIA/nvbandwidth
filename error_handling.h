@@ -26,6 +26,13 @@ void RecordError(const std::stringstream &errmsg);
 #define HOST_INFO ""
 #endif
 
+#ifdef MULTINODE
+#include <mpi.h>
+#define MPI_ABORT MPI_Abort(MPI_COMM_WORLD, 1)
+#else
+#define MPI_ABORT
+#endif
+
 // CUDA Error handling
 #define CUDA_ASSERT(x) do { \
     cudaError_t cudaErr = (x); \
@@ -33,6 +40,7 @@ void RecordError(const std::stringstream &errmsg);
         std::stringstream errmsg; \
         errmsg << "[" << cudaGetErrorName(cudaErr) << "] " << cudaGetErrorString(cudaErr) << " in expression " << #x << HOST_INFO << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ << std::endl; \
         RecordError(errmsg); \
+        MPI_ABORT; \
         std::exit(1); \
     }  \
 } while ( 0 )
@@ -46,6 +54,7 @@ void RecordError(const std::stringstream &errmsg);
         std::stringstream errmsg; \
         errmsg << "[" << errNameStr << "] " << errDescStr << " in expression " << #x << HOST_INFO << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ << std::endl; \
         RecordError(errmsg); \
+        MPI_ABORT; \
         std::exit(1); \
     }  \
 } while ( 0 )
@@ -57,6 +66,7 @@ void RecordError(const std::stringstream &errmsg);
         std::stringstream errmsg; \
         errmsg << "NVML_ERROR: [" << nvmlErrorString(nvmlResult) << "] in expression " << #x << HOST_INFO << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__ << std::endl; \
         RecordError(errmsg); \
+        MPI_ABORT; \
         std::exit(1); \
     }  \
 } while ( 0 )
@@ -67,6 +77,7 @@ void RecordError(const std::stringstream &errmsg);
         std::stringstream errmsg; \
         errmsg << "ASSERT in expression " << #x << HOST_INFO << " in " << __PRETTY_FUNCTION__ << "() : " << __FILE__ << ":" <<  __LINE__  << std::endl; \
         RecordError(errmsg); \
+        MPI_ABORT; \
         std::exit(1); \
     }  \
 } while ( 0 )
