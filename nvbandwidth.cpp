@@ -168,12 +168,6 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
     }
 }
 
-#ifdef MULTINODE
-void mpiFinalizeWrapper() {
-    MPI_Finalize();
-}
-#endif
-
 int main(int argc, char **argv) {
     std::vector<Testcase*> testcases = createTestcases();
     std::vector<std::string> testcasesToRun;
@@ -190,12 +184,6 @@ int main(int argc, char **argv) {
 
     // Avoid excessive output by limit output to rank 0
     shouldOutput = (worldRank == 0);
-
-    int ret = std::atexit(mpiFinalizeWrapper);
-    if (ret) {
-        std::cerr << "Failed to register exit handler" << std::endl;
-        return 1;
-    }
 #endif
 
     // Args parsing
@@ -309,6 +297,10 @@ int main(int argc, char **argv) {
     output->print();
 
     for (auto testcase : testcases) { delete testcase; }
+
+#ifdef MULTINODE
+    MPI_Finalize();
+#endif
 
     return 0;
 }
