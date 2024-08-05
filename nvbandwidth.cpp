@@ -229,7 +229,7 @@ int main(int argc, char **argv) {
 
     if (jsonOutput) {
         delete output;
-        output = new JsonOutput();
+        output = new JsonOutput(shouldOutput);
     }
 
     output->addVersionInfo();
