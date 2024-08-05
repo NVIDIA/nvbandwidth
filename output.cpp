@@ -116,12 +116,22 @@ static void printGPUsMultinode(int deviceCount) {
         }
     }
 
-    // It's not recommended to run more ranks per node than GPU count, but we want to make sure we handle it gracefully
+    std::vector<int> deviceCountExchange(worldSize);
+    MPI_Allgather(&deviceCount, 1, MPI_INT, &deviceCountExchange[0], 1, MPI_INT, MPI_COMM_WORLD);
+
     localDevice = localRank % deviceCount;
 
-    // Unconditionally emitting a warning, once per node
-    if (localRank == deviceCount) {
-        std::cout << "Warning: there are more processes than GPUs on " << localHostname << ". Please reduce number of processes to match GPU count." << std::endl;
+    // It's not recommended to run more ranks per node than GPU count, but we want to make sure we handle it gracefully
+    std::map<std::string, int> gpuCounts;
+    for (int i = 0; i < worldSize; i++) {
+        std::string host(&hostnameExchange[i * STRING_LENGTH]);
+        gpuCounts[host]++;
+        if (gpuCounts[host] == deviceCountExchange[i]) {
+            // Unconditionally emitting a warning, once per node
+            std::stringstream warning;
+            warning << "Warning: there are more processes than GPUs on " << host << ". Please reduce number of processes to match GPU count.";
+            output->recordWarning(warning.str());
+        }
     }
 
     // Exchange device names
@@ -187,7 +197,7 @@ void Output::recordErrorCurrentTest(const std::string &errorLine1, const std::st
 }
 
 void Output::recordWarning(const std::string &warning) {
-    recordError(warning);
+    OUTPUT << warning << std::endl;
 }
 
 void RecordError(const std::stringstream &errmsg) {

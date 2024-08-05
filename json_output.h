@@ -26,6 +26,8 @@
 
 class JsonOutput : public Output {
  public:
+    JsonOutput(bool shouldOutput);
+
     void addTestcase(const std::string &name, const std::string &status, const std::string &msg = "");
 
     void setTestcaseStatusAndAddIfNeeded(const std::string &name, const std::string &status, const std::string &msg = "");
@@ -49,6 +51,7 @@ class JsonOutput : public Output {
     void printInfo();
 
  private:
+    bool shouldOutput;
     Json::Value m_root;
 };
 
