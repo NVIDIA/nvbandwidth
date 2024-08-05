@@ -425,7 +425,9 @@ std::vector<double> MemcpyOperation::doMemcpyCore(const std::vector<const Memcpy
 
         if (bandwidthValue == BandwidthValue::TOTAL_BW) {
             float totalTime = 0.0f;
-            CU_ASSERT(cuEventElapsedTime(&totalTime, startEvents[0], totalEnd));
+            if (startEvents.size() > 0) {
+                CU_ASSERT(cuEventElapsedTime(&totalTime, startEvents[0], totalEnd));
+            }
             double elapsedTotalInUs = ((double) totalTime * 1000.0);
 
             // get total bytes copied
