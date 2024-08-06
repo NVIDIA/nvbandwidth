@@ -126,7 +126,7 @@ static void printGPUsMultinode(int deviceCount) {
     for (int i = 0; i < worldSize; i++) {
         std::string host(&hostnameExchange[i * STRING_LENGTH]);
         gpuCounts[host]++;
-        if (gpuCounts[host] == deviceCountExchange[i]) {
+        if (gpuCounts[host] == deviceCountExchange[i] + 1) {
             // Unconditionally emitting a warning, once per node
             std::stringstream warning;
             warning << "Warning: there are more processes than GPUs on " << host << ". Please reduce number of processes to match GPU count.";
