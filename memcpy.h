@@ -34,8 +34,8 @@ class MemcpyBuffer {
     virtual int getBufferIdx() const = 0;
     virtual CUcontext getPrimaryCtx() const = 0;
     virtual std::string getBufferString() const = 0;
-    void memsetPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const;
-    void memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const;
+    void memsetPattern(CUstream stream, CUdeviceptr buffer, unsigned long long size, unsigned int seed) const;
+    void memcmpPattern(CUstream stream, CUdeviceptr buffer, unsigned long long size, unsigned int seed) const;
     void xorshift2MBPattern(unsigned int* buffer, unsigned int seed) const;
     // In MPI configuration we want to avoid using blocking functions such as cuStreamSynchronize to adhere to MPI notion of progress
     // For more details see https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/mpi.html#mpi-progress

@@ -42,6 +42,7 @@ const unsigned long long defaultLoopCount = 16;
 const unsigned long long defaultBufferSize = 512;  // 512 MiB
 const unsigned int defaultAverageLoopCount = 3;
 const unsigned int _MiB = 1024 * 1024;
+const unsigned int _2MiB = 2 * _MiB;
 const unsigned int numThreadPerBlock = 512;
 const unsigned int strideLen = 16; /* cacheLine size 128 Bytes, 16 words */
 const unsigned int latencyMemAccessCnt = 100000; /* 100k  read accesses to gauge latency */

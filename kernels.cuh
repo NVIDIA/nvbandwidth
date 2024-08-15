@@ -29,5 +29,6 @@ CUresult spinKernel(volatile int *latch, CUstream stream, unsigned long long tim
 CUresult spinKernelMultistage(volatile int *latch1, volatile int *latch2, CUstream stream, unsigned long long timeoutMs = DEFAULT_SPIN_KERNEL_TIMEOUT_MS);
 void preloadKernels(int deviceCount);
 double latencyPtrChaseKernel(const int srcId, void* data, size_t size, unsigned long long loopCount);
-
+CUresult memsetKernel(CUstream stream, CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements);
+CUresult memcmpKernel(CUstream stream, CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements, CUdeviceptr errorFlag);
 #endif  // KERNELS_CUH_
