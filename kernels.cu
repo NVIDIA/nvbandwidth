@@ -225,6 +225,51 @@ CUresult spinKernelMultistage(volatile int *latch1, volatile int *latch2, CUstre
     return CUDA_SUCCESS;
 }
 
+__global__ void memsetKernelDevice(CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int* buf = reinterpret_cast<unsigned int*>(buffer);
+    unsigned int* pat = reinterpret_cast<unsigned int*>(pattern);
+
+    if (idx < num_elements) {
+        buf[idx] = pat[idx % num_pattern_elements];
+    }
+}
+
+__global__ void memcmpKernelDevice(CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements, CUdeviceptr errorFlag) {
+    unsigned long long idx = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int* buf = reinterpret_cast<unsigned int*>(buffer);
+    unsigned int* pat = reinterpret_cast<unsigned int*>(pattern);
+
+    if (idx < num_elements) {
+        if (buf[idx] != pat[idx % num_pattern_elements]) {
+            if (atomicCAS((int*)errorFlag, 0, 1) == 0) {
+                // have the first thread that detects a mismatch print the error message
+                printf(" Invalid value when checking the pattern at %p\n", (void*)((char*)buffer));
+                printf(" Current offset : %lu \n", idx);
+                return;
+            }
+        }
+    }
+}
+
+CUresult memsetKernel(CUstream stream, CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements) {
+    unsigned threadsPerBlock = 1024;
+    unsigned blocks = (num_elements + threadsPerBlock - 1) / threadsPerBlock;
+
+    memsetKernelDevice<<<blocks, threadsPerBlock, 0, stream>>>(buffer, pattern, num_elements, num_pattern_elements);
+    CUDA_ASSERT(cudaGetLastError());
+    return CUDA_SUCCESS;
+}
+
+CUresult memcmpKernel(CUstream stream, CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements, CUdeviceptr errorFlag) {
+    unsigned threadsPerBlock = 1024;
+    unsigned blocks = (num_elements + threadsPerBlock - 1) / threadsPerBlock;
+
+    memcmpKernelDevice<<<blocks, threadsPerBlock, 0, stream>>>(buffer, pattern, num_elements, num_pattern_elements, errorFlag);
+    CUDA_ASSERT(cudaGetLastError());
+    return CUDA_SUCCESS;
+}
+
 void preloadKernels(int deviceCount) {
     cudaFuncAttributes unused;
     for (int iDev = 0; iDev < deviceCount; iDev++) {

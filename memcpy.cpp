@@ -25,8 +25,8 @@
 #include <mpi.h>
 #include "multinode_memcpy.h"
 #endif
-
 #define WARMUP_COUNT 4
+#include <cassert>
 
 MemcpyBuffer::MemcpyBuffer(size_t bufferSize): bufferSize(bufferSize), buffer(nullptr) {}
 
@@ -37,83 +37,57 @@ CUdeviceptr MemcpyBuffer::getBuffer() const {
 size_t MemcpyBuffer::getBufferSize() const {
     return bufferSize;
 }
-void MemcpyBuffer::memsetPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const {
-    unsigned int* pattern;
-    unsigned int n = 0;
-    void * _buffer = (void*) buffer;
-    unsigned long long _2MBchunkCount = size / (1024 * 1024 * 2);
-    unsigned long long remaining = size - (_2MBchunkCount * 1024 * 1024 * 2);
+
+void MemcpyBuffer::memsetPattern(CUstream stream, CUdeviceptr buffer, unsigned long long size, unsigned int seed) const {
+    unsigned int* h_pattern;
+    CUdeviceptr d_pattern;
+    unsigned long long num_elements = size / sizeof(unsigned int);
+    unsigned long long num_pattern_elements = _2MiB / sizeof(unsigned int);
 
     // Allocate 2MB of pattern
-    CU_ASSERT(cuMemHostAlloc((void**)&pattern, sizeof(char) * 1024 * 1024 * 2, CU_MEMHOSTALLOC_PORTABLE));
-    xorshift2MBPattern(pattern, seed);
+    CU_ASSERT(cuMemHostAlloc((void**)&h_pattern, sizeof(char) * _2MiB, CU_MEMHOSTALLOC_PORTABLE));
+    xorshift2MBPattern(h_pattern, seed);
 
-    for (n = 0; n < _2MBchunkCount; n++) {
-        CU_ASSERT(cuMemcpyAsync((CUdeviceptr)_buffer, (CUdeviceptr)pattern, 1024 * 1024 * 2, CU_STREAM_PER_THREAD));
-        _buffer = (char*)_buffer + (1024 * 1024 * 2);
-    }
-    if (remaining) {
-        CU_ASSERT(cuMemcpyAsync((CUdeviceptr)_buffer, (CUdeviceptr)pattern, (size_t)remaining, CU_STREAM_PER_THREAD));
-    }
+    // Copy the pattern to a device buffer
+    CU_ASSERT(cuMemAlloc(&d_pattern, sizeof(char) * _2MiB));
+    CU_ASSERT(cuMemcpyAsync(d_pattern, (CUdeviceptr)h_pattern, sizeof(char) * _2MiB, CU_STREAM_PER_THREAD));
 
+    // Launch the memset kernel
+    CU_ASSERT(memsetKernel(CU_STREAM_PER_THREAD, buffer, d_pattern, num_elements, num_pattern_elements));
     CU_ASSERT(streamSynchronizeWrapper(CU_STREAM_PER_THREAD));
-    CU_ASSERT(cuMemFreeHost((void*)pattern));
+
+    CU_ASSERT(cuMemFreeHost((void*)h_pattern));
+    CU_ASSERT(cuMemFree(d_pattern));
 }
 
-void MemcpyBuffer::memcmpPattern(CUdeviceptr buffer, unsigned long long size, unsigned int seed) const {
-     unsigned int* devicePattern;
-    unsigned int* pattern;
-    unsigned long long _2MBchunkCount = size / (1024 * 1024 * 2);
-    unsigned long long remaining = size - (_2MBchunkCount * 1024 * 1024 * 2);
-    unsigned int n = 0;
-    unsigned int x = 0;
-    void * _buffer = (void*) buffer;
+void MemcpyBuffer::memcmpPattern(CUstream stream, CUdeviceptr buffer, unsigned long long size, unsigned int seed) const {
+    unsigned int* h_pattern;
+    CUdeviceptr d_pattern;
+    int h_errorFlag = 0;
+    CUdeviceptr d_errorFlag;
+    unsigned long long num_elements = size / sizeof(unsigned int);
+    unsigned long long num_pattern_elements = _2MiB / sizeof(unsigned int);
 
     // Allocate 2MB of pattern
-    CU_ASSERT(cuMemHostAlloc((void**)&devicePattern, sizeof(char) * 1024 * 1024 * 2, CU_MEMHOSTALLOC_PORTABLE));
-    pattern = (unsigned int*)malloc(sizeof(char) * 1024 * 1024 * 2);
-    xorshift2MBPattern(pattern, seed);
+    CU_ASSERT(cuMemHostAlloc((void**)&h_pattern, sizeof(char) * _2MiB, CU_MEMHOSTALLOC_PORTABLE));
+    xorshift2MBPattern(h_pattern, seed);
+    CU_ASSERT(cuMemAlloc(&d_pattern, sizeof(char) * _2MiB));
+    CU_ASSERT(cuMemcpyAsync(d_pattern, (CUdeviceptr)h_pattern, sizeof(char) * _2MiB, CU_STREAM_PER_THREAD));
 
-    for (n = 0; n < _2MBchunkCount; n++) {
-        CU_ASSERT(cuMemcpyAsync((CUdeviceptr)devicePattern, (CUdeviceptr)_buffer, 1024 * 1024 * 2, CU_STREAM_PER_THREAD));
-        CU_ASSERT(streamSynchronizeWrapper(CU_STREAM_PER_THREAD));
+    // setup error flags
+    CU_ASSERT(cuMemAlloc(&d_errorFlag, sizeof(int)));
+    CU_ASSERT(cuMemcpyAsync(d_errorFlag, (CUdeviceptr)&h_errorFlag, sizeof(int), CU_STREAM_PER_THREAD));
 
-        if (memcmp(pattern, devicePattern, 1024 * 1024 * 2) != 0) {
-            for (x = 0; x < (1024 * 1024 * 2) / sizeof(unsigned int); x++) {
-                if (devicePattern[x] != pattern[x]) {
-                    std::stringstream errmsg1;
-                    std::stringstream errmsg2;
-                    errmsg1 << " Invalid value when checking the pattern at <" << (void*)((char*)_buffer + n * (1024 * 1024 * 2) + x * sizeof(unsigned int)) << ">";
-                    errmsg2 << " Current offset [ " << (unsigned long long)((char*)_buffer - (char*)buffer) + (unsigned long long)(x * sizeof(unsigned int)) << "/" << (size) << "]";
-                    output->recordErrorCurrentTest(errmsg1.str(), errmsg2.str());
-                    output->print();
-                    std::abort();
-                }
-            }
-        }
+    // launch kernel to compare
+    CU_ASSERT(memcmpKernel(CU_STREAM_PER_THREAD, buffer, d_pattern, num_elements, num_pattern_elements, d_errorFlag));
+    CU_ASSERT(streamSynchronizeWrapper(CU_STREAM_PER_THREAD));
+    CU_ASSERT(cuMemcpyAsync((CUdeviceptr)&h_errorFlag, d_errorFlag, sizeof(int), CU_STREAM_PER_THREAD));
 
-        _buffer = (char*)_buffer + (1024 * 1024 * 2);
-    }
-    if (remaining) {
-        CU_ASSERT(cuMemcpyAsync((CUdeviceptr)devicePattern, (CUdeviceptr)_buffer, (size_t)remaining, CU_STREAM_PER_THREAD));
-        CU_ASSERT(streamSynchronizeWrapper(CU_STREAM_PER_THREAD));
-        if (memcmp(pattern, devicePattern, (size_t)remaining) != 0) {
-            for (x = 0; x < remaining / sizeof(unsigned int); x++) {
-                if (devicePattern[x] != pattern[x]) {
-                    std::stringstream errmsg1;
-                    std::stringstream errmsg2;
-                    errmsg1 << " Invalid value when checking the pattern at <" << (void*)((char*)buffer + n * (1024 * 1024 * 2) + x * sizeof(unsigned int)) << ">";
-                    errmsg2 << " Current offset [ " << (unsigned long long)((char*)_buffer - (char*)buffer) + (unsigned long long)(x * sizeof(unsigned int)) << "/" << (size) << "]";
-                    output->recordErrorCurrentTest(errmsg1.str(), errmsg2.str());
-                    output->print();
-                    std::abort();
-                }
-            }
-        }
-    }
+    CU_ASSERT(cuMemFreeHost((void*)h_pattern));
+    CU_ASSERT(cuMemFree(d_errorFlag));
+    CU_ASSERT(cuMemFree(d_pattern));
 
-    CU_ASSERT(cuMemFreeHost((void*)devicePattern));
-    free(pattern);
+    ASSERT(h_errorFlag == 0);
 }
 
 void MemcpyBuffer::xorshift2MBPattern(unsigned int* buffer, unsigned int seed) const {
@@ -352,8 +326,9 @@ std::vector<double> MemcpyOperation::doMemcpyCore(const std::vector<const Memcpy
 
         // Set the memory patterns correctly before spin kernel launch etc.
         for (int i = 0; i < srcBuffers.size(); i++) {
-            dstBuffers[i]->memsetPattern(dstBuffers[i]->getBuffer(), finalCopySize[i], 0xCAFEBABE);
-            srcBuffers[i]->memsetPattern(srcBuffers[i]->getBuffer(), finalCopySize[i], 0xBAADF00D);
+            CU_ASSERT(cuCtxSetCurrent(contexts[i]));
+            dstBuffers[i]->memsetPattern(streams[i], dstBuffers[i]->getBuffer(), finalCopySize[i], 0xCAFEBABE);
+            srcBuffers[i]->memsetPattern(streams[i], srcBuffers[i]->getBuffer(), finalCopySize[i], 0xBAADF00D);
         }
         // block stream, and enqueue copy
         for (int i = 0; i < srcBuffers.size(); i++) {
@@ -405,7 +380,8 @@ std::vector<double> MemcpyOperation::doMemcpyCore(const std::vector<const Memcpy
 
         if (!skipVerification) {
             for (int i = 0; i < srcBuffers.size(); i++) {
-                dstBuffers[i]->memcmpPattern(dstBuffers[i]->getBuffer(), finalCopySize[i], 0xBAADF00D);
+                CU_ASSERT(cuCtxSetCurrent(contexts[i]));
+                dstBuffers[i]->memcmpPattern(streams[i], dstBuffers[i]->getBuffer(), finalCopySize[i], 0xBAADF00D);
             }
         }
 
