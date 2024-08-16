@@ -24,6 +24,7 @@
 #ifdef MULTINODE
 #include <unistd.h>
 #include <mpi.h>
+#include <map>
 #endif
 
 void Output::addVersionInfo() {
