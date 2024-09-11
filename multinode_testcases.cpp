@@ -71,7 +71,10 @@ void MultinodeDeviceToDeviceWriteCE::run(unsigned long long size, unsigned long 
 // DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
 void MultinodeDeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(worldSize, worldSize, key);
-    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), new NodeHelperMulti(), PREFER_DST_CONTEXT);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), new NodeHelperMulti(), PREFER_DST_CONTEXT, MemcpyOperation::VECTOR_BW);
+    PeerValueMatrix<double> bandwidthValuesRead1(deviceCount, deviceCount, key + "_read1");
+    PeerValueMatrix<double> bandwidthValuesRead2(deviceCount, deviceCount, key + "_read2");
+    PeerValueMatrix<double> bandwidthValuesTotal(deviceCount, deviceCount, key + "_total");
 
     for (int srcDeviceId = 0; srcDeviceId < worldSize; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < worldSize; peerDeviceId++) {
@@ -80,24 +83,32 @@ void MultinodeDeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned l
             }
 
             // Double the size of the interference copy to ensure it interferes correctly
-            MultinodeDeviceBufferUnicast src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
-            MultinodeDeviceBufferUnicast peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
+            MultinodeDeviceBufferUnicast src1(size, srcDeviceId), src2(size, srcDeviceId);
+            MultinodeDeviceBufferUnicast peer1(size, peerDeviceId), peer2(size, peerDeviceId);
 
             // swap src and peer nodes, but use srcNodes (the copy's destination) context
             std::vector<const MemcpyBuffer*> srcNodes = {&peer1, &src2};
             std::vector<const MemcpyBuffer*> peerNodes = {&src1, &peer2};
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
+            auto results = memcpyInstance.doMemcpyVector(srcNodes, peerNodes);
+            bandwidthValuesRead1.value(srcDeviceId, peerDeviceId) = results[0];
+            bandwidthValuesRead2.value(srcDeviceId, peerDeviceId) = results[1];
+            bandwidthValuesTotal.value(srcDeviceId, peerDeviceId) = results[0] + results[1];
         }
     }
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) <-> GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesRead1, "memcpy CE CPU(row) -> GPU(column) Read1 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesRead2, "memcpy CE CPU(row) -> GPU(column) Read2 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesTotal, "memcpy CE CPU(row) -> GPU(column) Total bandwidth (GB/s)");
 }
 
 // DtoD Bidir Write test - copy from src to dst using src context
 void MultinodeDeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(worldSize, worldSize, key);
-    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), new NodeHelperMulti());
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), new NodeHelperMulti(), PREFER_SRC_CONTEXT, MemcpyOperation::VECTOR_BW);
+    PeerValueMatrix<double> bandwidthValuesWrite1(deviceCount, deviceCount, key + "_write1");
+    PeerValueMatrix<double> bandwidthValuesWrite2(deviceCount, deviceCount, key + "_write2");
+    PeerValueMatrix<double> bandwidthValuesTotal(deviceCount, deviceCount, key + "_total");
 
     for (int srcDeviceId = 0; srcDeviceId < worldSize; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < worldSize; peerDeviceId++) {
@@ -106,17 +117,22 @@ void MultinodeDeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned 
             }
 
             // Double the size of the interference copy to ensure it interferes correctly
-            MultinodeDeviceBufferUnicast src1(size, srcDeviceId), src2(size * 2, srcDeviceId);
-            MultinodeDeviceBufferUnicast peer1(size, peerDeviceId), peer2(size * 2, peerDeviceId);
+            MultinodeDeviceBufferUnicast src1(size, srcDeviceId), src2(size, srcDeviceId);
+            MultinodeDeviceBufferUnicast peer1(size, peerDeviceId), peer2(size, peerDeviceId);
 
             std::vector<const MemcpyBuffer*> srcNodes = {&src1, &peer2};
             std::vector<const MemcpyBuffer*> peerNodes = {&peer1, &src2};
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
+            auto results = memcpyInstance.doMemcpyVector(srcNodes, peerNodes);
+            bandwidthValuesWrite1.value(srcDeviceId, peerDeviceId) = results[0];
+            bandwidthValuesWrite2.value(srcDeviceId, peerDeviceId) = results[1];
+            bandwidthValuesTotal.value(srcDeviceId, peerDeviceId) = results[0] + results[1];
         }
     }
 
-    output->addTestcaseResults(bandwidthValues, "memcpy CE GPU(row) <-> GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesWrite1, "memcpy CE CPU(row) -> GPU(column) Read1 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesWrite2, "memcpy CE CPU(row) -> GPU(column) Read2 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesTotal, "memcpy CE CPU(row) -> GPU(column) Total bandwidth (GB/s)");
 }
 
 
@@ -166,7 +182,10 @@ void MultinodeDeviceToDeviceWriteSM::run(unsigned long long size, unsigned long 
 // DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
 void MultinodeDeviceToDeviceBidirReadSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(worldSize, worldSize, key);
-    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), new NodeHelperMulti(), PREFER_DST_CONTEXT, MemcpyOperation::SUM_BW);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), new NodeHelperMulti(), PREFER_DST_CONTEXT, MemcpyOperation::VECTOR_BW);
+    PeerValueMatrix<double> bandwidthValuesRead1(deviceCount, deviceCount, key + "_read1");
+    PeerValueMatrix<double> bandwidthValuesRead2(deviceCount, deviceCount, key + "_read2");
+    PeerValueMatrix<double> bandwidthValuesTotal(deviceCount, deviceCount, key + "_total");
 
     for (int srcDeviceId = 0; srcDeviceId < worldSize; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < worldSize; peerDeviceId++) {
@@ -181,17 +200,25 @@ void MultinodeDeviceToDeviceBidirReadSM::run(unsigned long long size, unsigned l
             std::vector<const MemcpyBuffer*> srcNodes = {&peer1, &src2};
             std::vector<const MemcpyBuffer*> peerNodes = {&src1, &peer2};
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
+            auto results = memcpyInstance.doMemcpyVector(srcNodes, peerNodes);
+            bandwidthValuesRead1.value(srcDeviceId, peerDeviceId) = results[0];
+            bandwidthValuesRead2.value(srcDeviceId, peerDeviceId) = results[1];
+            bandwidthValuesTotal.value(srcDeviceId, peerDeviceId) = results[0] + results[1];
         }
     }
 
-    output->addTestcaseResults(bandwidthValues, "memcpy SM GPU(row) -> GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesRead1, "memcpy SM CPU(row) -> GPU(column) Read1 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesRead2, "memcpy SM CPU(row) -> GPU(column) Read2 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesTotal, "memcpy SM CPU(row) -> GPU(column) Total bandwidth (GB/s)");
 }
 
 // DtoD Bidir Write test - copy from src to dst using src context
 void MultinodeDeviceToDeviceBidirWriteSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(worldSize, worldSize, key);
-    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), new NodeHelperMulti(), PREFER_SRC_CONTEXT, MemcpyOperation::SUM_BW);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), new NodeHelperMulti(), PREFER_SRC_CONTEXT, MemcpyOperation::VECTOR_BW);
+    PeerValueMatrix<double> bandwidthValuesWrite1(deviceCount, deviceCount, key + "_write1");
+    PeerValueMatrix<double> bandwidthValuesWrite2(deviceCount, deviceCount, key + "_write2");
+    PeerValueMatrix<double> bandwidthValuesTotal(deviceCount, deviceCount, key + "_total");
 
     for (int srcDeviceId = 0; srcDeviceId < worldSize; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < worldSize; peerDeviceId++) {
@@ -205,11 +232,16 @@ void MultinodeDeviceToDeviceBidirWriteSM::run(unsigned long long size, unsigned 
             std::vector<const MemcpyBuffer*> srcNodes = {&src1, &peer2};
             std::vector<const MemcpyBuffer*> peerNodes = {&peer1, &src2};
 
-            bandwidthValues.value(srcDeviceId, peerDeviceId) = memcpyInstance.doMemcpy(srcNodes, peerNodes);
+            auto results = memcpyInstance.doMemcpyVector(srcNodes, peerNodes);
+            bandwidthValuesWrite1.value(srcDeviceId, peerDeviceId) = results[0];
+            bandwidthValuesWrite2.value(srcDeviceId, peerDeviceId) = results[1];
+            bandwidthValuesTotal.value(srcDeviceId, peerDeviceId) = results[0] + results[1];
         }
     }
 
-    output->addTestcaseResults(bandwidthValues, "memcpy SM GPU(row) <- GPU(column) bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesWrite1, "memcpy SM CPU(row) -> GPU(column) Write1 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesWrite2, "memcpy SM CPU(row) -> GPU(column) Write2 bandwidth (GB/s)");
+    output->addTestcaseResults(bandwidthValuesTotal, "memcpy SM CPU(row) -> GPU(column) Total bandwidth (GB/s)");
 }
 
 void MultinodeAllToOneWriteSM::run(unsigned long long size, unsigned long long loopCount) {
