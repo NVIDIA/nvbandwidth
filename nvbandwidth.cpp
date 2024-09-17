@@ -249,7 +249,6 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    output->printInfo();
 
     CU_ASSERT(cuInit(0));
     NVML_ASSERT(nvmlInit());
@@ -302,5 +301,6 @@ int main(int argc, char **argv) {
     MPI_Finalize();
 #endif
 
+    output->printInfo();
     return 0;
 }
