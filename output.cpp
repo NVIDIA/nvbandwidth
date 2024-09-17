@@ -41,8 +41,8 @@ void Output::addVersionInfo() {
 }
 
 void Output::printInfo() {
-    OUTPUT << "NOTE: This tool reports current measured bandwidth on your system." << std::endl
-              << "Additional system-specific tuning may be required to achieve maximal peak bandwidth." << std::endl << std::endl;
+    OUTPUT << "NOTE: The reported results may not reflect the full capabilities of the platform." << std::endl
+           << "Performance can vary with software drivers, hardware clocks, and system topology." << std::endl << std::endl;
 }
 
 void Output::addCudaAndDriverInfo(int cudaVersion, const std::string &driverVersion) {
