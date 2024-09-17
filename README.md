@@ -6,7 +6,7 @@ nvbandwidth reports current measured bandwidth on your system. Additional system
 
 ## Requirements
 nvbandwidth requires the installation of a CUDA toolkit and some additional Linux software components to be built and run. This section provides the relevant details
-Install a cuda toolkit (version 11.X or above). Multinode version requires 12.3 toolkit and r550 driver or above.
+Install a cuda toolkit (version 11.X or above). Multinode version requires 12.3 toolkit and 550 driver or above.
 
 Install a compiler package which supports c++17. GCC 7.x or above is a possible option.
 
