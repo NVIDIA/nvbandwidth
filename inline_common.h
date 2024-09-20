@@ -27,8 +27,10 @@ template <class T> struct PeerValueMatrix {
     std::string key;
     std::vector<std::string> column_labels;
     std::vector<std::string> row_labels;
+    bool pFormatter;
+    UnitType uType;
 
-    PeerValueMatrix(int rows, int columns, std::string key = ""): m_matrix(rows * columns), m_rows(rows), m_columns(columns), key(key) {}
+    PeerValueMatrix(int rows, int columns, std::string key = "", bool pFormatter = perfFormatter, UnitType uType = BANDWIDTH): m_matrix(rows * columns), m_rows(rows), m_columns(columns), key(key), pFormatter(perfFormatter), uType(uType) {}
 
     std::optional <T> &value(int src, int dst) {
         ASSERT(src >= 0 && src < m_rows);
@@ -99,7 +101,11 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
         o << std::endl;
     }
     o << std::endl;
-    o << "SUM " << matrix.key << " " << sum << std::endl;
+    if (matrix.pFormatter) {
+        o << "&&&& PERF " << matrix.key << " " << sum << getUnitString(matrix.uType) << std::endl;
+    } else {
+        o << "SUM " << matrix.key << " " << sum << std::endl;
+    }
 
     VERBOSE << "MIN " << matrix.key << " " << minVal << '\n';
     VERBOSE << "MAX " << matrix.key << " " << maxVal << '\n';

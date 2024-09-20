@@ -54,6 +54,7 @@ extern bool useMean;
 extern bool jsonOutput;
 // Verbosity
 extern bool verbose;
+extern bool perfFormatter;
 
 #ifdef MULTINODE
 extern int localDevice;
@@ -218,5 +219,20 @@ struct LatencyNode {
     struct LatencyNode *next;
 };
 
+enum UnitType {
+    BANDWIDTH,
+    LATENCY
+};
+
+inline std::string getUnitString(UnitType unitType) {
+    switch (unitType) {
+        case BANDWIDTH:
+            return " +GB/s";
+        case LATENCY:
+            return " -ns";
+        default:
+            return "";
+    }
+}
 
 #endif  // COMMON_H_

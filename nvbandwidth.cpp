@@ -43,6 +43,7 @@ bool shouldOutput = true;
 bool disableAffinity;
 bool skipVerification;
 bool useMean;
+bool perfFormatter;
 
 Verbosity VERBOSE(verbose);
 Verbosity OUTPUT(shouldOutput);
@@ -202,7 +203,8 @@ int main(int argc, char **argv) {
     opt::options_description all_opts("");
     all_opts.add(visible_opts);
     all_opts.add_options()
-        ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed within a test sample");
+        ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed within a test sample")
+        ("perfFormatter", opt::bool_switch(&perfFormatter)->default_value(false), "Use perf formatter prefix (&&&& PERF) in output");
 
     opt::variables_map vm;
     try {

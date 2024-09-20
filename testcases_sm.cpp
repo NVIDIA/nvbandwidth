@@ -22,7 +22,7 @@
 #include "output.h"
 
 void HostDeviceLatencySM::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> latencyValues(1, deviceCount, key);
+    PeerValueMatrix<double> latencyValues(1, deviceCount, key, perfFormatter, LATENCY);
     MemPtrChaseOperation ptrChaseOp(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -125,7 +125,7 @@ void DeviceToDeviceReadSM::run(unsigned long long size, unsigned long long loopC
 }
 
 void DeviceToDeviceLatencySM::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> latencyValues(deviceCount, deviceCount, key);
+    PeerValueMatrix<double> latencyValues(deviceCount, deviceCount, key, perfFormatter, LATENCY);
     MemPtrChaseOperation ptrChaseOp(loopCount);
 
     for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
