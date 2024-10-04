@@ -128,8 +128,11 @@ void DeviceToDeviceLatencySM::run(unsigned long long size, unsigned long long lo
     PeerValueMatrix<double> latencyValues(deviceCount, deviceCount, key, perfFormatter, LATENCY);
     MemPtrChaseOperation ptrChaseOp(loopCount);
 
-    for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
-        for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+    for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+        DeviceBuffer peerBuffer(size, peerDeviceId);
+        latencyHelper(peerBuffer, true);
+
+        for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
             if (peerDeviceId == srcDeviceId) {
                 continue;
             }
@@ -137,12 +140,9 @@ void DeviceToDeviceLatencySM::run(unsigned long long size, unsigned long long lo
             // Note: srcBuffer is not used in the pointer chase operation
             // It is simply used here to enable peer access
             DeviceBuffer srcBuffer(size, srcDeviceId);
-            DeviceBuffer peerBuffer(size, peerDeviceId);
-
             if (!srcBuffer.enablePeerAcess(peerBuffer)) {
                 continue;
             }
-            latencyHelper(peerBuffer, true);
             latencyValues.value(srcDeviceId, peerDeviceId) = ptrChaseOp.doPtrChase(srcDeviceId, peerBuffer);
         }
     }

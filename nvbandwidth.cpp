@@ -161,7 +161,12 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
         output->addTestcase(test->testKey(), NVB_RUNNING);
 
         // Run the testcase
-        test->run(bufferSize * _MiB, loopCount);
+        if (test->testKey() == "host_device_latency_sm" || test->testKey() == "device_to_device_latency_sm") {
+            // use fixd-size buffer for latency tests
+            test->run(2 * _MiB, loopCount);
+        } else {
+            test->run(bufferSize * _MiB, loopCount);
+        }
     } catch (std::string &s) {
         output->setTestcaseStatusAndAddIfNeeded(test->testKey(), NVB_ERROR_STATUS, s);
     }

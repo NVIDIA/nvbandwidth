@@ -258,7 +258,8 @@ class OneToAllReadCE: public Testcase {
 class HostDeviceLatencySM: public Testcase {
  public:
     HostDeviceLatencySM() : Testcase("host_device_latency_sm",
-            "\tHost - device SM copy latency using a ptr chase kernel") {}
+            "\tHost - device access latency using a pointer chase kernel\n"
+            "\tA 2MB buffer is allocated on the host and is accessed by the GPU") {}
     virtual ~HostDeviceLatencySM() {}
     void run(unsigned long long size, unsigned long long loopCount);
 };
@@ -297,7 +298,8 @@ class DeviceToDeviceLatencySM: public Testcase {
  public:
     DeviceToDeviceLatencySM() : Testcase("device_to_device_latency_sm",
             "\tMeasures latency of a pointer derefernce operation between each pair of accessible peers.\n"
-            "\tMemory is allocated on a GPU and is accessed by the peer GPU to determine latency.") {}
+            "\tA 2MB buffer is allocated on a GPU and is accessed by the peer GPU to determine latency.\n"
+            "\t--bufferSize flag is ignored") {}
     virtual ~DeviceToDeviceLatencySM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
