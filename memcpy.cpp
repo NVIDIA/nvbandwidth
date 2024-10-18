@@ -273,6 +273,10 @@ double NodeHelperSingle::calculateFirstBandwidth(std::vector<PerformanceStatisti
     return bandwidthStats[0].returnAppropriateMetric() * 1e-9;
 }
 
+std::vector<double> NodeHelperSingle::calculateVectorBandwidth(std::vector<double> &results) {
+    return results;
+}
+
 void NodeHelperSingle::synchronizeProcess() {
     // NOOP
 }
@@ -296,10 +300,18 @@ void NodeHelperSingle::streamBlockerBlock(CUstream stream) {
 
 double MemcpyOperation::doMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers) {
     MemcpyDispatchInfo dispatchInfo = nodeHelper->dispatchMemcpy(srcBuffers, dstBuffers, ctxPreference);
-    return doMemcpyCore(dispatchInfo.srcBuffers, dispatchInfo.dstBuffers, dispatchInfo.contexts);
+    return doMemcpyCore(dispatchInfo.srcBuffers, dispatchInfo.dstBuffers, dispatchInfo.contexts)[0];
 }
 
-double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, const std::vector<CUcontext> &contexts) {
+std::vector<double> MemcpyOperation::doMemcpyVector(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers) {
+    MemcpyDispatchInfo dispatchInfo = nodeHelper->dispatchMemcpy(srcBuffers, dstBuffers, ctxPreference);
+    auto results = doMemcpyCore(dispatchInfo.srcBuffers, dispatchInfo.dstBuffers, dispatchInfo.contexts);
+
+    return nodeHelper->calculateVectorBandwidth(results);
+}
+
+
+std::vector<double> MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, const std::vector<CUcontext> &contexts) {
     std::vector<CUstream> streams(srcBuffers.size());
     std::vector<CUevent> startEvents(srcBuffers.size());
     std::vector<CUevent> endEvents(srcBuffers.size());
@@ -433,11 +445,17 @@ double MemcpyOperation::doMemcpyCore(const std::vector<const MemcpyBuffer*> &src
     }
 
     if (bandwidthValue == BandwidthValue::SUM_BW) {
-        return nodeHelper->calculateSumBandwidth(bandwidthStats);
+        return {nodeHelper->calculateSumBandwidth(bandwidthStats)};
     } else if (bandwidthValue == BandwidthValue::TOTAL_BW) {
-        return totalBandwidth.returnAppropriateMetric() * 1e-9;
+        return {totalBandwidth.returnAppropriateMetric() * 1e-9};
+    } else if (bandwidthValue == BandwidthValue::VECTOR_BW) {
+        std::vector<double> ret;
+        for (auto stat : bandwidthStats) {
+            ret.push_back(stat.returnAppropriateMetric() * 1e-9);
+        }
+       return ret;
     } else {
-        return nodeHelper->calculateFirstBandwidth(bandwidthStats);
+        return {nodeHelper->calculateFirstBandwidth(bandwidthStats)};
     }
 }
 
