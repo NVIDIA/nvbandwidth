@@ -162,6 +162,15 @@ class DeviceToDeviceBidirWriteCE: public Testcase {
     bool filter() { return Testcase::filterHasAccessiblePeerPairs(); }
 };
 
+// Device local memcpy using cuMemcpyAsync
+class DeviceLocalCopy: public Testcase {
+ public:
+    DeviceLocalCopy() : Testcase("device_local_copy",
+            "\tMeasures bandwidth of cuMemcpyAsync between device buffers local to the GPU.\n") {}
+    virtual ~DeviceLocalCopy() {}
+    void run(unsigned long long size, unsigned long long loopCount);
+};
+
 // All to Host CE memcpy using cuMemcpyAsync
 class AllToHostCE: public Testcase {
  public:

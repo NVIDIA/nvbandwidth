@@ -81,6 +81,8 @@ std::vector<Testcase*> createTestcases() {
         new OneToAllReadCE(),
         new HostToDeviceSM(),
         new DeviceToHostSM(),
+        new HostToDeviceBidirSM(),
+        new DeviceToHostBidirSM(),
         new DeviceToDeviceReadSM(),
         new DeviceToDeviceWriteSM(),
         new DeviceToDeviceBidirReadSM(),
@@ -95,6 +97,7 @@ std::vector<Testcase*> createTestcases() {
         new OneToAllReadSM(),
         new HostDeviceLatencySM(),
         new DeviceToDeviceLatencySM(),
+        new DeviceLocalCopy(),
 #ifdef MULTINODE
         new MultinodeDeviceToDeviceReadCE(),
         new MultinodeDeviceToDeviceWriteCE(),
@@ -300,7 +303,9 @@ int main(int argc, char **argv) {
 
     output->print();
 
-    for (auto testcase : testcases) { delete testcase; }
+    for (auto testcase : testcases) {
+        delete testcase;
+    }
 
 #ifdef MULTINODE
     MPI_Finalize();

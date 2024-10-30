@@ -34,9 +34,6 @@ class MemcpyBuffer {
     virtual int getBufferIdx() const = 0;
     virtual CUcontext getPrimaryCtx() const = 0;
     virtual std::string getBufferString() const = 0;
-    void memsetPattern(CUstream stream, CUdeviceptr buffer, unsigned long long size, unsigned int seed) const;
-    void memcmpPattern(CUstream stream, CUdeviceptr buffer, unsigned long long size, unsigned int seed) const;
-    void xorshift2MBPattern(unsigned int* buffer, unsigned int seed) const;
     // In MPI configuration we want to avoid using blocking functions such as cuStreamSynchronize to adhere to MPI notion of progress
     // For more details see https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/mpi.html#mpi-progress
     virtual CUresult streamSynchronizeWrapper(CUstream stream) const;
@@ -80,20 +77,24 @@ enum ContextPreference {
 
 class MemcpyOperation;
 
+// forward declaration
+class NodeHelper;
+
 class MemcpyDispatchInfo {
  public:
     std::vector<CUcontext> contexts;
+    std::vector<CUstream> streams;
     std::vector<const MemcpyBuffer*> srcBuffers;
     std::vector<const MemcpyBuffer*> dstBuffers;
     std::vector<int> originalRanks;
-
+    std::vector<size_t> adjustedCopySizes;
+    std::shared_ptr<NodeHelper> nodeHelper;
     MemcpyDispatchInfo(std::vector<const MemcpyBuffer*> srcBuffers, std::vector<const MemcpyBuffer*> dstBuffers, std::vector<CUcontext> contexts, std::vector<int> originalRanks = {});
 };
 
 class NodeHelper {
  public:
     virtual MemcpyDispatchInfo dispatchMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, ContextPreference ctxPreference) = 0;
-
     virtual double calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount) = 0;
     virtual double calculateSumBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) = 0;
     virtual double calculateFirstBandwidth(std::vector<PerformanceStatistic> &bandwidthStats) = 0;
@@ -134,23 +135,65 @@ class MemcpyInitiator {
     // Pure virtual function for implementation of the actual memcpy function
     // return actual bytes copied
     // This can vary from copySize due to SM copies truncated the copy to achieve max bandwidth
-    virtual size_t memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount) = 0;
+    virtual size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor) = 0;
     // Calculate the truncated sizes used by copy kernels
     virtual size_t getAdjustedCopySize(size_t size, CUstream stream) = 0;
+    // Fill buffer with a pattern
+    virtual void memsetPattern(MemcpyDispatchInfo &info) const = 0;
+    // Compare buffer with a pattern
+    virtual void memcmpPattern(MemcpyDispatchInfo &info) const = 0;
+    // Adjust the bandwidth before final reporting
+    virtual unsigned long long getAdjustedBandwidth(unsigned long long bandwidth) = 0;
 };
 
 class MemcpyInitiatorSM : public MemcpyInitiator {
  public:
-    size_t memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor);
     // Calculate the truncated sizes used by copy kernels
     size_t getAdjustedCopySize(size_t size, CUstream stream);
+    // Fill buffer with a pattern
+    void memsetPattern(MemcpyDispatchInfo &info) const;
+    // Compare buffer with a pattern
+    void memcmpPattern(MemcpyDispatchInfo &info) const;
+    // Adjust the bandwidth before final reporting
+    unsigned long long getAdjustedBandwidth(unsigned long long bandwidth);
 };
 
 class MemcpyInitiatorCE : public MemcpyInitiator  {
  public:
-    size_t memcpyFunc(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor);
     // Calculate the truncated sizes used by copy kernels
     size_t getAdjustedCopySize(size_t size, CUstream stream);
+    // Fill buffer with a pattern
+    void memsetPattern(MemcpyDispatchInfo &info) const;
+    // Compare buffer with a pattern
+    void memcmpPattern(MemcpyDispatchInfo &info) const;
+    // Adjust the bandwidth before final reporting
+    unsigned long long getAdjustedBandwidth(unsigned long long bandwidth);
+};
+
+class MemcpyInitiatorMulticastWrite : public MemcpyInitiator {
+ public:
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor);
+    // Calculate the truncated sizes used by copy kernels
+    size_t getAdjustedCopySize(size_t size, CUstream stream);
+    // Fill buffer with a pattern
+    void memsetPattern(MemcpyDispatchInfo &info) const;
+    // Compare buffer with a pattern
+    void memcmpPattern(MemcpyDispatchInfo &info) const;
+    // Adjust the bandwidth before final reporting
+    unsigned long long getAdjustedBandwidth(unsigned long long bandwidth);
+};
+
+class MemcpyInitiatorSMSplitWarp : public MemcpyInitiatorSM {
+ public:
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor);
+    // Fill buffer with a pattern
+    void memsetPattern(MemcpyDispatchInfo &info) const;
+    // Compare buffer with a pattern
+    void memcmpPattern(MemcpyDispatchInfo &info) const;
+    // Adjust the bandwidth before final reporting
+    unsigned long long getAdjustedBandwidth(unsigned long long bandwidth);
 };
 
 // Abstraction of a memory Operation.
@@ -190,7 +233,7 @@ class MemcpyOperation : public MemoryOperation {
 
     // Lists of paired nodes will be executed sumultaneously
     // context of srcBuffers is preferred (if not host) unless otherwise specified
-    std::vector<double> doMemcpyCore(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers, const std::vector<CUcontext> &contexts);
+    std::vector<double> doMemcpyCore(MemcpyDispatchInfo &info);
     std::vector<double> doMemcpyVector(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers);
     double doMemcpy(const std::vector<const MemcpyBuffer*> &srcBuffers, const std::vector<const MemcpyBuffer*> &dstBuffers);
     double doMemcpy(const MemcpyBuffer &srcBuffer, const MemcpyBuffer &dstBuffer);

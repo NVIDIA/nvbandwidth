@@ -38,7 +38,7 @@ sudo dnf -y install boost-devel
 ```
 
 ## Build
-To build the `nvbandwidth` executable:
+To build the `nvbandwidth` executable for single-node:
 ```
 cmake .
 make
@@ -98,7 +98,13 @@ cmake -DMULTINODE=1 .
 make
 ```
 
-Multinode nvbandwidth requires MPI. Cmake will find local installation of MPI to build and link against.
+Multinode nvbandwidth requires MPI. Cmake will find a local installation of MPI to build and link against. Multinode also requires installing, setting up the imex service, and creating the imex channels. Imex service is the NVIDIA Internode Memory Exchange Service. Imex runs on each compute tray to support GPU memory export and import operations across OS domains in an NVLink multi-node deployment. To start the IMEX service, run the following command: 
+
+`sudo systemctl start nvidia-imex.service`
+Specify the IP addresses of the cluster nodes in /etc/nvidia-imex/nodes_config.cfg file.
+
+For example, to run multinode bandwidth on a system with 2 nodes and 4 GPUs per node run the command:
+`mpirun --allow-run-as-root --map-by ppr:4:node --bind-to core -np 8 --report-bindings -q -mca btl_tcp_if_include enP5p9s0 --hostfile /etc/nvidia-imex/nodes_config.cfg  ./nvbandwidth -p multinode`
 
 ### Local testing
 

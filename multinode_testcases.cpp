@@ -70,11 +70,10 @@ void MultinodeDeviceToDeviceWriteCE::run(unsigned long long size, unsigned long 
 
 // DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
 void MultinodeDeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(worldSize, worldSize, key);
     MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), new NodeHelperMulti(), PREFER_DST_CONTEXT, MemcpyOperation::VECTOR_BW);
-    PeerValueMatrix<double> bandwidthValuesRead1(deviceCount, deviceCount, key + "_read1");
-    PeerValueMatrix<double> bandwidthValuesRead2(deviceCount, deviceCount, key + "_read2");
-    PeerValueMatrix<double> bandwidthValuesTotal(deviceCount, deviceCount, key + "_total");
+    PeerValueMatrix<double> bandwidthValuesRead1(worldSize, worldSize, key + "_read1");
+    PeerValueMatrix<double> bandwidthValuesRead2(worldSize, worldSize, key + "_read2");
+    PeerValueMatrix<double> bandwidthValuesTotal(worldSize, worldSize, key + "_total");
 
     for (int srcDeviceId = 0; srcDeviceId < worldSize; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < worldSize; peerDeviceId++) {
@@ -104,11 +103,10 @@ void MultinodeDeviceToDeviceBidirReadCE::run(unsigned long long size, unsigned l
 
 // DtoD Bidir Write test - copy from src to dst using src context
 void MultinodeDeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(worldSize, worldSize, key);
     MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE(), new NodeHelperMulti(), PREFER_SRC_CONTEXT, MemcpyOperation::VECTOR_BW);
-    PeerValueMatrix<double> bandwidthValuesWrite1(deviceCount, deviceCount, key + "_write1");
-    PeerValueMatrix<double> bandwidthValuesWrite2(deviceCount, deviceCount, key + "_write2");
-    PeerValueMatrix<double> bandwidthValuesTotal(deviceCount, deviceCount, key + "_total");
+    PeerValueMatrix<double> bandwidthValuesWrite1(worldSize, worldSize, key + "_write1");
+    PeerValueMatrix<double> bandwidthValuesWrite2(worldSize, worldSize, key + "_write2");
+    PeerValueMatrix<double> bandwidthValuesTotal(worldSize, worldSize, key + "_total");
 
     for (int srcDeviceId = 0; srcDeviceId < worldSize; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < worldSize; peerDeviceId++) {
@@ -181,11 +179,10 @@ void MultinodeDeviceToDeviceWriteSM::run(unsigned long long size, unsigned long 
 
 // DtoD Bidir Read test - copy from dst to src (backwards) using src contxt
 void MultinodeDeviceToDeviceBidirReadSM::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(worldSize, worldSize, key);
     MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), new NodeHelperMulti(), PREFER_DST_CONTEXT, MemcpyOperation::VECTOR_BW);
-    PeerValueMatrix<double> bandwidthValuesRead1(deviceCount, deviceCount, key + "_read1");
-    PeerValueMatrix<double> bandwidthValuesRead2(deviceCount, deviceCount, key + "_read2");
-    PeerValueMatrix<double> bandwidthValuesTotal(deviceCount, deviceCount, key + "_total");
+    PeerValueMatrix<double> bandwidthValuesRead1(worldSize, worldSize, key + "_read1");
+    PeerValueMatrix<double> bandwidthValuesRead2(worldSize, worldSize, key + "_read2");
+    PeerValueMatrix<double> bandwidthValuesTotal(worldSize, worldSize, key + "_total");
 
     for (int srcDeviceId = 0; srcDeviceId < worldSize; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < worldSize; peerDeviceId++) {
@@ -214,11 +211,10 @@ void MultinodeDeviceToDeviceBidirReadSM::run(unsigned long long size, unsigned l
 
 // DtoD Bidir Write test - copy from src to dst using src context
 void MultinodeDeviceToDeviceBidirWriteSM::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> bandwidthValues(worldSize, worldSize, key);
     MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), new NodeHelperMulti(), PREFER_SRC_CONTEXT, MemcpyOperation::VECTOR_BW);
-    PeerValueMatrix<double> bandwidthValuesWrite1(deviceCount, deviceCount, key + "_write1");
-    PeerValueMatrix<double> bandwidthValuesWrite2(deviceCount, deviceCount, key + "_write2");
-    PeerValueMatrix<double> bandwidthValuesTotal(deviceCount, deviceCount, key + "_total");
+    PeerValueMatrix<double> bandwidthValuesWrite1(worldSize, worldSize, key + "_write1");
+    PeerValueMatrix<double> bandwidthValuesWrite2(worldSize, worldSize, key + "_write2");
+    PeerValueMatrix<double> bandwidthValuesTotal(worldSize, worldSize, key + "_total");
 
     for (int srcDeviceId = 0; srcDeviceId < worldSize; srcDeviceId++) {
         for (int peerDeviceId = 0; peerDeviceId < worldSize; peerDeviceId++) {
@@ -304,10 +300,9 @@ void MultinodeAllFromOneReadSM::run(unsigned long long size, unsigned long long 
     output->addTestcaseResults(bandwidthValues, "memcpy SM All Gpus <- GPU(column) total bandwidth (GB/s)");
 }
 
-
 void MultinodeBroadcastOneToAllSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, worldSize, key);
-    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), new NodeHelperMulti(), PREFER_DST_CONTEXT, MemcpyOperation::SUM_BW);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorMulticastWrite(), new NodeHelperMulti(), PREFER_DST_CONTEXT, MemcpyOperation::SUM_BW);
 
     for (int dstDeviceId = 0; dstDeviceId < worldSize; dstDeviceId++) {
         std::vector<const MemcpyBuffer*> srcNodes;
@@ -331,7 +326,7 @@ void MultinodeBroadcastOneToAllSM::run(unsigned long long size, unsigned long lo
 
 void MultinodeBroadcastAllToAllSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, 1, key);
-    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), new NodeHelperMulti(), PREFER_DST_CONTEXT, MemcpyOperation::SUM_BW);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorMulticastWrite(), new NodeHelperMulti(), PREFER_DST_CONTEXT, MemcpyOperation::SUM_BW);
     std::vector<const MemcpyBuffer*> srcNodes;
     std::vector<const MemcpyBuffer*> dstNodes;
 

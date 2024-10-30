@@ -70,7 +70,6 @@ class MultinodeMemoryAllocationMulticast : public MultinodeMemoryAllocation {
     CUmulticastObjectProp multicastProp = {};
     CUmemAccessDesc desc = {};
     size_t roundedUpAllocationSize;
-
  public:
     MultinodeMemoryAllocationMulticast(size_t bufferSize, int MPI_rank);
     ~MultinodeMemoryAllocationMulticast();

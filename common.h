@@ -235,4 +235,17 @@ inline std::string getUnitString(UnitType unitType) {
     }
 }
 
+// Describe attributes of a single memcpy operation
+class MemcpyDescriptor {
+ public:
+    CUdeviceptr dst;
+    CUdeviceptr src;
+    CUstream stream;
+    size_t copySize;
+    unsigned long long loopCount;
+
+    MemcpyDescriptor(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
+};
+
+
 #endif  // COMMON_H_
