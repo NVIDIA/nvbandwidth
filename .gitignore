@@ -1,0 +1,8 @@
+tags
+.vscode
+build
+*.o
+nvbandwidth
+.cache
+.idea
+vscode.mk

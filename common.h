@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef COMMON_H
-#define COMMON_H
+#ifndef COMMON_H_
+#define COMMON_H_
 
 #include <cmath>
 #include <cstdlib>
@@ -39,9 +39,10 @@
 
 // Default constants
 const unsigned long long defaultLoopCount = 16;
-const unsigned long long defaultBufferSize = 64; // 64MB
+const unsigned long long defaultBufferSize = 512;  // 512 MiB
 const unsigned int defaultAverageLoopCount = 3;
 const unsigned int _MiB = 1024 * 1024;
+const unsigned int _2MiB = 2 * _MiB;
 const unsigned int numThreadPerBlock = 512;
 const unsigned int strideLen = 16; /* cacheLine size 128 Bytes, 16 words */
 const unsigned int latencyMemAccessCnt = 100000; /* 100k  read accesses to gauge latency */
@@ -53,12 +54,21 @@ extern bool useMean;
 extern bool jsonOutput;
 // Verbosity
 extern bool verbose;
+extern bool perfFormatter;
+
+#ifdef MULTINODE
+extern int localDevice;
+extern int localRank;
+extern int worldRank;
+extern int worldSize;
+extern char localHostname[STRING_LENGTH];
+#endif
 
 class Verbosity {
-public:    
+ public:
     bool &controlVariable;
-    
-    Verbosity(bool &controlVariable): controlVariable(controlVariable) {};
+
+    Verbosity(bool &controlVariable): controlVariable(controlVariable) {}
 
     template<typename T>
     Verbosity& operator<<(T input) {
@@ -133,30 +143,30 @@ inline size_t getFirstEnabledCPU() {
 class PerformanceStatistic {
     std::vector<double> values;
 
-public:
+ public:
     void operator()(const double &sample) { recordSample(sample); }
-    
+
     void recordSample(const double &sample) {
         auto it = std::lower_bound(values.begin(), values.end(), sample);
         values.insert(it, sample);
     }
 
     void reset(void) { values.clear(); }
-    
-    double sum(void) const { 
+
+    double sum(void) const {
         double total = 0.0;
         for (double val : values) {
             total += val;
         }
         return total;
     }
-    
+
     size_t count(void) const { return values.size(); }
-    
-    double mean(void) const { 
+
+    double mean(void) const {
         return sum() / count();
     }
-    
+
     double variance(void) const {
         double calculated_mean = mean();
         double sum_diff_squared = 0.0;
@@ -166,13 +176,13 @@ public:
         }
         return (values.size() > 1 ? sum_diff_squared / (values.size() - 1) : 0.0);
     }
-    
+
     double stddev(void) const {
         return (variance() > 0.0 ? std::sqrt(variance()) : 0.0);
     }
-    
+
     double largest(void) const { return values.size() > 0 ? values[values.size() - 1] : 0.0; }
-    
+
     double smallest(void) const { return values.size() > 0 ? values[0] : 0.0; }
 
     double median(void) const {
@@ -195,9 +205,47 @@ public:
     }
 };
 
+#ifdef MULTINODE
+inline std::string getPaddedProcessId(int id) {
+    // max printed number will be worldSize - 1
+    int paddingSize = (int) log10(worldSize - 1) + 1;
+    std::stringstream s;
+    s << std::setfill(' ') << std::setw(paddingSize) << id;
+    return s.str();
+}
+#endif
+
 struct LatencyNode {
     struct LatencyNode *next;
 };
 
+enum UnitType {
+    BANDWIDTH,
+    LATENCY
+};
 
-#endif
+inline std::string getUnitString(UnitType unitType) {
+    switch (unitType) {
+        case BANDWIDTH:
+            return " +GB/s";
+        case LATENCY:
+            return " -ns";
+        default:
+            return "";
+    }
+}
+
+// Describe attributes of a single memcpy operation
+class MemcpyDescriptor {
+ public:
+    CUdeviceptr dst;
+    CUdeviceptr src;
+    CUstream stream;
+    size_t copySize;
+    unsigned long long loopCount;
+
+    MemcpyDescriptor(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
+};
+
+
+#endif  // COMMON_H_

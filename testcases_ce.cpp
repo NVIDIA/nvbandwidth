@@ -21,7 +21,6 @@
 #include "output.h"
 #include "testcase.h"
 #include "memcpy.h"
-#include "common.h"
 
 void HostToDeviceCE::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
@@ -210,6 +209,20 @@ void DeviceToDeviceBidirWriteCE::run(unsigned long long size, unsigned long long
     output->addTestcaseResults(bandwidthValuesWrite1, "memcpy CE GPU(row) <-> GPU(column) Write1 bandwidth (GB/s)");
     output->addTestcaseResults(bandwidthValuesWrite2, "memcpy CE GPU(row) <-> GPU(column) Write2 bandwidth (GB/s)");
     output->addTestcaseResults(bandwidthValuesTotal, "memcpy CE GPU(row) <-> GPU(column) Total bandwidth (GB/s)");
+}
+
+void DeviceLocalCopy::run(unsigned long long size, unsigned long long loopCount) {
+    PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorCE());
+
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        DeviceBuffer deviceBuffer1(size, deviceId);
+        DeviceBuffer deviceBuffer2(size, deviceId);
+
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(deviceBuffer2, deviceBuffer1);
+    }
+
+    output->addTestcaseResults(bandwidthValues, "memcpy local GPU(column) bandwidth (GB/s)");
 }
 
 void AllToHostCE::run(unsigned long long size, unsigned long long loopCount) {

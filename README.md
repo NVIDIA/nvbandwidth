@@ -6,7 +6,7 @@ nvbandwidth reports current measured bandwidth on your system. Additional system
 
 ## Requirements
 nvbandwidth requires the installation of a CUDA toolkit and some additional Linux software components to be built and run. This section provides the relevant details
-Install a cuda toolkit (version 11.X or above)
+Install a cuda toolkit (version 11.X or above). Multinode version requires 12.3 toolkit and 550 driver or above.
 
 Install a compiler package which supports c++17. GCC 7.x or above is a possible option.
 
@@ -38,7 +38,7 @@ sudo dnf -y install boost-devel
 ```
 
 ## Build
-To build the `nvbandwidth` executable:
+To build the `nvbandwidth` executable for single-node:
 ```
 cmake .
 make
@@ -50,15 +50,18 @@ You may need to set the BOOST_ROOT environment variable on Windows to tell CMake
 ./nvbandwidth -h
 
 nvbandwidth CLI:
-  -h [ --help ]                 Produce help message
-  -b [ --bufferSize ] arg (=64) Memcpy buffer size in MiB
-  -l [ --list ]                 List available testcases
-  -t [ --testcase ] arg         Testcase(s) to run (by name or index)
-  -v [ --verbose ]              Verbose output
-  -s [ --skipVerification ]     Skips data verification after copy
-  -d [ --disableAffinity ]      Disable automatic CPU affinity control
-  -i [ --testSamples ] arg (=3) Iterations of the benchmark
-  -m [ --useMean ]              Use mean instead of median for results
+  -h [ --help ]                  Produce help message
+  -b [ --bufferSize ] arg (=512) Memcpy buffer size in MiB
+  -l [ --list ]                  List available testcases
+  -t [ --testcase ] arg          Testcase(s) to run (by name or index)
+  -p [ --testcasePrefixes ] arg  Testcase(s) to run (by prefix))
+  -v [ --verbose ]               Verbose output
+  -s [ --skipVerification ]      Skips data verification after copy
+  -d [ --disableAffinity ]       Disable automatic CPU affinity control
+  -i [ --testSamples ] arg (=3)  Iterations of the benchmark
+  -m [ --useMean ]               Use mean instead of median for results
+  -j [ --json ]                  Print output in json format instead of plain
+                                 text.
 ```
 To run all testcases:
 ```
@@ -85,6 +88,46 @@ memcpy CE GPU(row) <- GPU(column) bandwidth (GB/s)
 ```
 
 Set number of iterations and the buffer size for copies with --testSamples and --bufferSize
+
+## Multinode benchmarks
+
+In order to build multinode version of nvbandwidth, execute
+
+```
+cmake -DMULTINODE=1 .
+make
+```
+
+Multinode nvbandwidth requires MPI. Cmake will find a local installation of MPI to build and link against. Multinode also requires installing, setting up the imex service, and creating the imex channels. Imex service is the NVIDIA Internode Memory Exchange Service. Imex runs on each compute tray to support GPU memory export and import operations across OS domains in an NVLink multi-node deployment. To start the IMEX service, run the following command: 
+
+`sudo systemctl start nvidia-imex.service`
+Specify the IP addresses of the cluster nodes in /etc/nvidia-imex/nodes_config.cfg file.
+
+For example, to run multinode bandwidth on a system with 2 nodes and 4 GPUs per node run the command:
+`mpirun --allow-run-as-root --map-by ppr:4:node --bind-to core -np 8 --report-bindings -q -mca btl_tcp_if_include enP5p9s0 --hostfile /etc/nvidia-imex/nodes_config.cfg  ./nvbandwidth -p multinode`
+
+### Local testing
+
+You can test it on a single-node machine (Ampere+ GPU required):
+
+```
+mpirun -n 4 ./nvbandwidth -p multinode
+```
+This command will spawn 4 processes, and run all tests with "multinode" prefix.
+
+### Running it on a cluster
+
+To run it on a cluster, submit a job to a workload scheduler that has MPI integration. Run one process per GPU.
+
+Running less processes than GPU count is valid, processes will take consecutive GPUs, starting from GPU 0.
+
+Running more processes than GPU count is not valid.
+
+All ranks in the MPI batch must be part of one multinode clique. Run one instance of nvbandwidth per node/GPU.
+
+When running under MPI, only MPI rank 0 will output stdout to the console. Stderr, if needed, will be output by all processes.
+
+It is recommended to only run "multinode*" testcases under MPI. While any testcase will succeed, results for non multinode testcases will only come from MPI rank 0.
 
 ## Test Details
 There are two types of copies implemented, Copy Engine (CE) or Steaming Multiprocessor (SM)
