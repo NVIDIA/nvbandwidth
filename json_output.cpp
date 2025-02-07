@@ -48,6 +48,10 @@ const std::string NVB_WAIVED("Waived");
 const std::string NVB_NOT_FOUND("Not Found");
 const std::string NVB_ERROR_STATUS("Error");
 
+JsonOutput::JsonOutput(bool _shouldOutput) {
+    shouldOutput = _shouldOutput;
+}
+
 void JsonOutput::addTestcaseResults(const PeerValueMatrix<double> &matrix, const std::string &description) {
     assert(m_root[NVB_TITLE][NVB_TESTCASES].isArray() && m_root[NVB_TITLE][NVB_TESTCASES].size() > 0);
 
@@ -67,8 +71,7 @@ void JsonOutput::addTestcaseResults(const PeerValueMatrix<double> &matrix, const
                 std::stringstream buf;
                 buf << val.value();
                 row.append(buf.str());
-            }
-            else {
+            } else {
                 row.append("N/A");
             }
             sum += val.value_or(0.0);
@@ -167,7 +170,9 @@ void JsonOutput::addCudaAndDriverInfo(int cudaVersion, const std::string &driver
 }
 
 void JsonOutput::print() {
-    std::cout << m_root.toStyledString() << std::endl;
+    if (shouldOutput) {
+        std::cout << m_root.toStyledString() << std::endl;
+    }
 }
 
 void JsonOutput::printInfo() {
