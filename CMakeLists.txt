@@ -8,12 +8,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-set(supported_archs "52" "70" "75" "80" "86" "89" "90")
+set(supported_archs "52" "70" "75" "80" "86" "89" "90" "100")
 
-message(STATUS "Detecting underlying CUDA Arch to set CMAKE_CUDA_ARCHITECTURES")
-include(detect_cuda_arch.cmake)
-# Set CMAKE_CUDA_ARCHITECURES based on the underlying device
-cuda_detect_architectures(supported_archs CMAKE_CUDA_ARCHITECTURES)
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    message(STATUS "Detecting underlying CUDA Arch to set CMAKE_CUDA_ARCHITECTURES")
+    include(detect_cuda_arch.cmake)
+    # Set CMAKE_CUDA_ARCHITECURES based on the underlying device
+    cuda_detect_architectures(supported_archs CMAKE_CUDA_ARCHITECTURES)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
@@ -37,6 +39,8 @@ set(src
     kernels.cu
     memcpy.cpp
     nvbandwidth.cpp
+    multinode_memcpy.cpp
+    multinode_testcases.cpp
     output.cpp
     json_output.cpp
     json/jsoncpp.cpp
@@ -60,3 +64,9 @@ add_executable(nvbandwidth ${src})
 target_include_directories(nvbandwidth PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES} .)
 target_link_libraries(nvbandwidth Boost::program_options ${NVML_LIB_NAME} cuda)
 
+if (MULTINODE)
+    find_package(MPI REQUIRED)
+    include_directories(SYSTEM ${MPI_INCLUDE_PATH})
+    target_link_libraries(nvbandwidth MPI::MPI_CXX)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMULTINODE")
+endif()

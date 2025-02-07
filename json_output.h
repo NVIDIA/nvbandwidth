@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef JSON_OUTPUT_H
-#define JSON_OUTPUT_H
+#ifndef JSON_OUTPUT_H_
+#define JSON_OUTPUT_H_
 
 #include <json/json.h>
 #include <string>
@@ -24,9 +24,10 @@
 #include "common.h"
 #include "output.h"
 
-class JsonOutput : public Output
-{
-public:
+class JsonOutput : public Output {
+ public:
+    JsonOutput(bool shouldOutput);
+
     void addTestcase(const std::string &name, const std::string &status, const std::string &msg = "");
 
     void setTestcaseStatusAndAddIfNeeded(const std::string &name, const std::string &status, const std::string &msg = "");
@@ -34,7 +35,7 @@ public:
     void print();
 
     void recordError(const std::string &error);
-    
+
     void recordError(const std::vector<std::string> &errorParts);
 
     void recordErrorCurrentTest(const std::string &errorPart1, const std::string &errorPart2);
@@ -49,8 +50,9 @@ public:
 
     void printInfo();
 
-private:
+ private:
+    bool shouldOutput;
     Json::Value m_root;
 };
 
-#endif
+#endif  // JSON_OUTPUT_H_
