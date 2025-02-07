@@ -21,6 +21,10 @@
 #include <nvml.h>
 #include <iostream>
 
+#ifdef MULTINODE
+#include <mpi.h>
+#endif
+
 #include "json_output.h"
 #include "kernels.cuh"
 #include "output.h"
@@ -39,10 +43,20 @@ bool shouldOutput = true;
 bool disableAffinity;
 bool skipVerification;
 bool useMean;
+bool perfFormatter;
 
 Verbosity VERBOSE(verbose);
 Verbosity OUTPUT(shouldOutput);
 
+#ifdef MULTINODE
+// Device ordinal of the GPU owned by the process
+int localRank;
+// Process rank within one OS
+int localDevice;
+int worldRank;
+int worldSize;
+char localHostname[STRING_LENGTH];
+#endif
 bool jsonOutput;
 Output *output;
 
@@ -67,6 +81,8 @@ std::vector<Testcase*> createTestcases() {
         new OneToAllReadCE(),
         new HostToDeviceSM(),
         new DeviceToHostSM(),
+        new HostToDeviceBidirSM(),
+        new DeviceToHostBidirSM(),
         new DeviceToDeviceReadSM(),
         new DeviceToDeviceWriteSM(),
         new DeviceToDeviceBidirReadSM(),
@@ -81,6 +97,22 @@ std::vector<Testcase*> createTestcases() {
         new OneToAllReadSM(),
         new HostDeviceLatencySM(),
         new DeviceToDeviceLatencySM(),
+        new DeviceLocalCopy(),
+#ifdef MULTINODE
+        new MultinodeDeviceToDeviceReadCE(),
+        new MultinodeDeviceToDeviceWriteCE(),
+        new MultinodeDeviceToDeviceBidirReadCE(),
+        new MultinodeDeviceToDeviceBidirWriteCE(),
+        new MultinodeDeviceToDeviceReadSM(),
+        new MultinodeDeviceToDeviceWriteSM(),
+        new MultinodeDeviceToDeviceBidirReadSM(),
+        new MultinodeDeviceToDeviceBidirWriteSM(),
+        new MultinodeAllToOneWriteSM(),
+        new MultinodeAllFromOneReadSM(),
+        new MultinodeBroadcastOneToAllSM(),
+        new MultinodeBroadcastAllToAllSM(),
+        new MultinodeBisectWriteCE(),
+#endif
     };
 }
 
@@ -105,17 +137,16 @@ Testcase* findTestcase(std::vector<Testcase*> &testcases, std::string id) {
 
 std::vector<std::string> expandTestcases(std::vector<Testcase*> &testcases, std::vector<std::string> prefixes) {
     std::vector<std::string> testcasesToRun;
-    for (auto testcase: testcases){ 
+    for (auto testcase : testcases) {
          auto it = find_if(prefixes.begin(), prefixes.end(), [&testcase](std::string prefix) {return testcase->testKey().compare(0, prefix.size(), prefix) == 0;});
             if (it != prefixes.end()) {
                 testcasesToRun.push_back(testcase->testKey());
             }
     }
-    return testcasesToRun;  
+    return testcasesToRun;
 }
 
 void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseID) {
-    CUcontext testCtx;
     Testcase* test{nullptr};
     try {
         test = findTestcase(testcases, testcaseID);
@@ -132,11 +163,13 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
 
         output->addTestcase(test->testKey(), NVB_RUNNING);
 
-        CU_ASSERT(cuCtxCreate(&testCtx, 0, 0));
-        CU_ASSERT(cuCtxSetCurrent(testCtx));
         // Run the testcase
-        test->run(bufferSize * _MiB, loopCount);
-        CU_ASSERT(cuCtxDestroy(testCtx));
+        if (test->testKey() == "host_device_latency_sm" || test->testKey() == "device_to_device_latency_sm") {
+            // use fixd-size buffer for latency tests
+            test->run(2 * _MiB, loopCount);
+        } else {
+            test->run(bufferSize * _MiB, loopCount);
+        }
     } catch (std::string &s) {
         output->setTestcaseStatusAndAddIfNeeded(test->testKey(), NVB_ERROR_STATUS, s);
     }
@@ -147,6 +180,18 @@ int main(int argc, char **argv) {
     std::vector<std::string> testcasesToRun;
     std::vector<std::string> testcasePrefixes;
     output = new Output();
+
+#ifdef MULTINODE
+    ASSERT(0 == gethostname(localHostname, STRING_LENGTH - 1));
+
+    // Set up MPI
+    MPI_Init(NULL, NULL);
+    MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
+    MPI_Comm_rank(MPI_COMM_WORLD, &worldRank);
+
+    // Avoid excessive output by limit output to rank 0
+    shouldOutput = (worldRank == 0);
+#endif
 
     // Args parsing
     opt::options_description visible_opts("nvbandwidth CLI");
@@ -166,13 +211,13 @@ int main(int argc, char **argv) {
     opt::options_description all_opts("");
     all_opts.add(visible_opts);
     all_opts.add_options()
-        ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed within a test sample");
+        ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed within a test sample")
+        ("perfFormatter", opt::bool_switch(&perfFormatter)->default_value(false), "Use perf formatter prefix (&&&& PERF) in output");
 
     opt::variables_map vm;
     try {
         opt::store(opt::parse_command_line(argc, argv, all_opts), vm);
         opt::notify(vm);
-    
     } catch (...) {
         output->addVersionInfo();
 
@@ -192,9 +237,9 @@ int main(int argc, char **argv) {
 
     if (jsonOutput) {
         delete output;
-        output = new JsonOutput();
+        output = new JsonOutput(shouldOutput);
     }
-    
+
     output->addVersionInfo();
 
     if (vm.count("help")) {
@@ -256,7 +301,15 @@ int main(int argc, char **argv) {
         }
     }
 
-    for (auto testcase : testcases) { delete testcase; }
+    output->print();
+
+    for (auto testcase : testcases) {
+        delete testcase;
+    }
+
+#ifdef MULTINODE
+    MPI_Finalize();
+#endif
 
     output->printInfo();
     return 0;

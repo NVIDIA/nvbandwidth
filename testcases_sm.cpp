@@ -22,7 +22,7 @@
 #include "output.h"
 
 void HostDeviceLatencySM::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> latencyValues(1, deviceCount, key);
+    PeerValueMatrix<double> latencyValues(1, deviceCount, key, perfFormatter, LATENCY);
     MemPtrChaseOperation ptrChaseOp(loopCount);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
@@ -64,17 +64,13 @@ void DeviceToHostSM::run(unsigned long long size, unsigned long long loopCount) 
 
 void HostToDeviceBidirSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM());
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSMSplitWarp());
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        // Double the size of the interference copy to ensure it interferes correctly
-        HostBuffer host1(size, deviceId), host2(size * 2, deviceId);
-        DeviceBuffer dev1(size, deviceId), dev2(size * 2, deviceId);
+        HostBuffer hostBuffer(size, deviceId);
+        DeviceBuffer deviceBuffer(size, deviceId);
 
-        std::vector<const MemcpyBuffer*> srcBuffers = {&host1, &dev2};
-        std::vector<const MemcpyBuffer*> dstBuffers = {&dev1, &host2};
-
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostBuffer, deviceBuffer);
     }
 
     output->addTestcaseResults(bandwidthValues, "memcpy SM CPU(row) <-> GPU(column) bandwidth (GB/s)");
@@ -82,17 +78,13 @@ void HostToDeviceBidirSM::run(unsigned long long size, unsigned long long loopCo
 
 void DeviceToHostBidirSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM());
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSMSplitWarp());
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        // Double the size of the interference copy to ensure it interferes correctly
-        HostBuffer host1(size, deviceId), host2(size * 2, deviceId);
-        DeviceBuffer dev1(size, deviceId), dev2(size * 2, deviceId);
+        HostBuffer hostBuffer(size, deviceId);
+        DeviceBuffer deviceBuffer(size, deviceId);
 
-        std::vector<const MemcpyBuffer*> srcBuffers = {&dev1, &host2};
-        std::vector<const MemcpyBuffer*> dstBuffers = {&host1, &dev2};
-
-        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(hostBuffer, deviceBuffer);
     }
 
     output->addTestcaseResults(bandwidthValues, "memcpy SM CPU(row) <-> GPU(column) bandwidth (GB/s)");
@@ -125,11 +117,14 @@ void DeviceToDeviceReadSM::run(unsigned long long size, unsigned long long loopC
 }
 
 void DeviceToDeviceLatencySM::run(unsigned long long size, unsigned long long loopCount) {
-    PeerValueMatrix<double> latencyValues(deviceCount, deviceCount, key);
+    PeerValueMatrix<double> latencyValues(deviceCount, deviceCount, key, perfFormatter, LATENCY);
     MemPtrChaseOperation ptrChaseOp(loopCount);
 
-    for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
-        for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+    for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
+        DeviceBuffer peerBuffer(size, peerDeviceId);
+        latencyHelper(peerBuffer, true);
+
+        for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
             if (peerDeviceId == srcDeviceId) {
                 continue;
             }
@@ -137,12 +132,9 @@ void DeviceToDeviceLatencySM::run(unsigned long long size, unsigned long long lo
             // Note: srcBuffer is not used in the pointer chase operation
             // It is simply used here to enable peer access
             DeviceBuffer srcBuffer(size, srcDeviceId);
-            DeviceBuffer peerBuffer(size, peerDeviceId);
-
             if (!srcBuffer.enablePeerAcess(peerBuffer)) {
                 continue;
             }
-            latencyHelper(peerBuffer, true);
             latencyValues.value(srcDeviceId, peerDeviceId) = ptrChaseOp.doPtrChase(srcDeviceId, peerBuffer);
         }
     }
@@ -259,9 +251,34 @@ void AllToHostSM::run(unsigned long long size, unsigned long long loopCount) {
 
 void AllToHostBidirSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), PREFER_SRC_CONTEXT, MemcpyOperation::USE_FIRST_BW);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSMSplitWarp(), PREFER_SRC_CONTEXT, MemcpyOperation::USE_FIRST_BW);
 
-    allHostBidirHelper(size, memcpyInstance, bandwidthValues, false);
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        std::vector<const MemcpyBuffer*> srcBuffers;
+        std::vector<const MemcpyBuffer*> dstBuffers;
+
+        srcBuffers.push_back(new DeviceBuffer(size, deviceId));
+        dstBuffers.push_back(new HostBuffer(size, deviceId));
+
+        for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
+            if (interferenceDeviceId == deviceId) {
+                continue;
+            }
+
+            srcBuffers.push_back(new DeviceBuffer(size, interferenceDeviceId));
+            dstBuffers.push_back(new HostBuffer(size, interferenceDeviceId));
+        }
+
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
+
+        for (auto node : srcBuffers) {
+            delete node;
+        }
+
+        for (auto node : dstBuffers) {
+            delete node;
+        }
+    }
 
     output->addTestcaseResults(bandwidthValues, "memcpy SM CPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
@@ -277,9 +294,34 @@ void HostToAllSM::run(unsigned long long size, unsigned long long loopCount) {
 
 void HostToAllBidirSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
-    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), PREFER_SRC_CONTEXT, MemcpyOperation::USE_FIRST_BW);
+    MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSMSplitWarp(), PREFER_SRC_CONTEXT, MemcpyOperation::USE_FIRST_BW);
 
-    allHostBidirHelper(size, memcpyInstance, bandwidthValues, true);
+    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
+        std::vector<const MemcpyBuffer*> srcBuffers;
+        std::vector<const MemcpyBuffer*> dstBuffers;
+
+        srcBuffers.push_back(new HostBuffer(size, deviceId));
+        dstBuffers.push_back(new DeviceBuffer(size, deviceId));
+
+        for (int interferenceDeviceId = 0; interferenceDeviceId < deviceCount; interferenceDeviceId++) {
+            if (interferenceDeviceId == deviceId) {
+                continue;
+            }
+
+            srcBuffers.push_back(new DeviceBuffer(size, interferenceDeviceId));
+            dstBuffers.push_back(new HostBuffer(size, interferenceDeviceId));
+        }
+
+        bandwidthValues.value(0, deviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
+
+        for (auto node : srcBuffers) {
+            delete node;
+        }
+
+        for (auto node : dstBuffers) {
+            delete node;
+        }
+    }
 
     output->addTestcaseResults(bandwidthValues, "memcpy SM CPU(row) <-> GPU(column) bandwidth (GB/s)");
 }
@@ -288,7 +330,7 @@ void HostToAllBidirSM::run(unsigned long long size, unsigned long long loopCount
 void AllToOneWriteSM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> bandwidthValues(1, deviceCount, key);
     MemcpyOperation memcpyInstance(loopCount, new MemcpyInitiatorSM(), PREFER_SRC_CONTEXT, MemcpyOperation::TOTAL_BW);
-    
+
     allToOneHelper(size, memcpyInstance, bandwidthValues, false);
 
     output->addTestcaseResults(bandwidthValues, "memcpy SM GPU(row) <- GPU(column) bandwidth (GB/s)");
