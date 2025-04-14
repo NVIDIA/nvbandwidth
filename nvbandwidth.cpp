@@ -55,8 +55,8 @@ int localRank;
 int localDevice;
 int worldRank;
 int worldSize;
-char localHostname[STRING_LENGTH];
 #endif
+char localHostname[STRING_LENGTH];
 bool jsonOutput;
 Output *output;
 
@@ -181,9 +181,18 @@ int main(int argc, char **argv) {
     std::vector<std::string> testcasePrefixes;
     output = new Output();
 
-#ifdef MULTINODE
+#ifdef _WIN32
+    strncpy(localHostname, getenv("COMPUTERNAME"), STRING_LENGTH - 1);
+    const char* computername = getenv("COMPUTERNAME");
+    if (computername && computername[0] != '\0') {
+        snprintf(localHostname, STRING_LENGTH, "%s", computername);
+    } else {
+        snprintf(localHostname, STRING_LENGTH, "%s", "unknown");
+    }
+#else
     ASSERT(0 == gethostname(localHostname, STRING_LENGTH - 1));
-
+#endif
+#ifdef MULTINODE
     // Set up MPI
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &worldSize);

@@ -23,7 +23,10 @@
 #include "version.h"
 
 const std::string NVB_TITLE("nvbandwidth");
+const std::string NVB_HOST_NAME("Hostname");
 const std::string NVB_CUDA_RUNTIME_VERSION("CUDA Runtime Version");
+const std::string NVB_DEVICE_INFO("GPU Device info");
+const std::string NVB_DEVICE_LIST("GPU Device list");
 const std::string NVB_DRIVER_VERSION("Driver Version");
 const std::string NVB_GIT_VERSION("git_version");
 const std::string NVB_VERSION("version");
@@ -167,6 +170,17 @@ void JsonOutput::addVersionInfo() {
 void JsonOutput::addCudaAndDriverInfo(int cudaVersion, const std::string &driverVersion) {
     m_root[NVB_TITLE][NVB_CUDA_RUNTIME_VERSION] = cudaVersion;
     m_root[NVB_TITLE][NVB_DRIVER_VERSION] = driverVersion;
+}
+
+void JsonOutput::recordDevices(int deviceCount) {
+    Json::Value deviceList;
+
+    for (int iDev = 0; iDev < deviceCount; iDev++) {
+        std::stringstream buf;
+        buf << iDev << ": " << getDeviceDisplayInfo(iDev) << ": (" << localHostname << ")";
+        deviceList.append(buf.str());
+    }
+    m_root[NVB_TITLE][NVB_DEVICE_LIST] = deviceList;
 }
 
 void JsonOutput::print() {

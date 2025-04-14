@@ -97,8 +97,9 @@ __global__ void splitWarpCopyKernel(unsigned long long loopCount, uint4 *dst, ui
     }
 }
 
-__global__ void ptrChasingKernel(struct LatencyNode *data, size_t size, unsigned int accesses) {
+__global__ void ptrChasingKernel(struct LatencyNode *data, size_t size, unsigned int accesses, unsigned int targetBlock) {
     struct LatencyNode *p = data;
+    if (blockIdx.x != targetBlock) return;
     for (auto i = 0; i < accesses; ++i) {
         p = p->next;
     }
@@ -144,7 +145,7 @@ __global__ void multicastCopyKernel(unsigned long long loopCount, unsigned int* 
     }
 }
 
-double latencyPtrChaseKernel(const int srcId, void* data, size_t size, unsigned long long loopCount) {
+double latencyPtrChaseKernel(const int srcId, void* data, size_t size, unsigned long long latencyMemAccessCnt, unsigned smCount) {
     CUstream stream;
     int device, clock_rate_khz;
     double latencySum = 0.0f, finalLatencyPerAccessNs = 0.0;
@@ -162,16 +163,16 @@ double latencyPtrChaseKernel(const int srcId, void* data, size_t size, unsigned 
     CU_ASSERT(cuCtxGetDevice(&device));
     CU_ASSERT(cuDeviceGetAttribute(&clock_rate_khz, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device));
 
-    for ( int i = 0; i < loopCount; i++ ) {
+    for (int targetBlock = 0; targetBlock < smCount; ++targetBlock) {
         CUDA_ASSERT(cudaEventRecord(start, stream));
-        ptrChasingKernel <<< 1, 1, 0, stream>>> ((struct LatencyNode*) data, size, latencyMemAccessCnt);
+        ptrChasingKernel <<< smCount, 1, 0, stream>>> ((struct LatencyNode*) data, size, latencyMemAccessCnt / smCount, targetBlock);
         CUDA_ASSERT(cudaEventRecord(end, stream));
         CUDA_ASSERT(cudaGetLastError());
         CU_ASSERT(cuStreamSynchronize(stream));
         cudaEventElapsedTime(&latencyMs, start, end);
         latencySum += (latencyMs / 1000);
     }
-    finalLatencyPerAccessNs = (latencySum * 1.0E9) / (loopCount * latencyMemAccessCnt);
+    finalLatencyPerAccessNs = (latencySum * 1.0E9) / (latencyMemAccessCnt);
 
     CUDA_ASSERT(cudaEventDestroy(start));
     CUDA_ASSERT(cudaEventDestroy(end));
@@ -196,7 +197,7 @@ size_t copyKernel(MemcpyDescriptor &desc) {
     // Please note that to achieve peak bandwidth, it is suggested to use the
     // default buffer size, which in turn triggers the use of the optimized
     // kernel.
-    if (desc.copySize < (defaultBufferSize * _MiB)) {
+    if (desc.copySize < (smallBufferThreshold * _MiB)) {
         // copy size is rounded down to 16 bytes
         unsigned int numUint4 = desc.copySize / sizeof(uint4);
         // we allow max 1024 threads per block, and then scale out the copy across multiple blocks
@@ -329,8 +330,8 @@ CUresult spinKernelMultistage(volatile int *latch1, volatile int *latch2, CUstre
     return CUDA_SUCCESS;
 }
 
-__global__ void memsetKernelDevice(CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements) {
-    unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void memsetKernelDevice(CUdeviceptr buffer, CUdeviceptr pattern, unsigned long long num_elements, unsigned int num_pattern_elements) {
+    unsigned long long idx = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int* buf = reinterpret_cast<unsigned int*>(buffer);
     unsigned int* pat = reinterpret_cast<unsigned int*>(pattern);
 
@@ -361,7 +362,7 @@ __global__ void memclearKernelByWarpParityDevice(CUdeviceptr buffer, bool clearO
     }
 }
 
-__global__ void memcmpKernelDevice(CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements, CUdeviceptr errorFlag) {
+__global__ void memcmpKernelDevice(CUdeviceptr buffer, CUdeviceptr pattern, unsigned long long num_elements, unsigned int num_pattern_elements, CUdeviceptr errorFlag) {
     unsigned long long idx = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int* buf = reinterpret_cast<unsigned int*>(buffer);
     unsigned int* pat = reinterpret_cast<unsigned int*>(pattern);
@@ -378,7 +379,7 @@ __global__ void memcmpKernelDevice(CUdeviceptr buffer, CUdeviceptr pattern, unsi
     }
 }
 
-__global__ void multicastMemcmpKernelDevice(CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements, CUdeviceptr errorFlag) {
+__global__ void multicastMemcmpKernelDevice(CUdeviceptr buffer, CUdeviceptr pattern, unsigned long long num_elements, unsigned int num_pattern_elements, CUdeviceptr errorFlag) {
     unsigned long long idx = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int* buf = reinterpret_cast<unsigned int*>(buffer);
     unsigned int* pat = reinterpret_cast<unsigned int*>(pattern);
@@ -397,9 +398,9 @@ __global__ void multicastMemcmpKernelDevice(CUdeviceptr buffer, CUdeviceptr patt
     }
 }
 
-CUresult memsetKernel(CUstream stream, CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements) {
+CUresult memsetKernel(CUstream stream, CUdeviceptr buffer, CUdeviceptr pattern, unsigned long long num_elements, unsigned int num_pattern_elements) {
     unsigned threadsPerBlock = 1024;
-    unsigned blocks = (num_elements + threadsPerBlock - 1) / threadsPerBlock;
+    unsigned long long blocks = (num_elements + threadsPerBlock - 1) / threadsPerBlock;
 
     memsetKernelDevice<<<blocks, threadsPerBlock, 0, stream>>>(buffer, pattern, num_elements, num_pattern_elements);
     CUDA_ASSERT(cudaGetLastError());
@@ -427,18 +428,18 @@ CUresult memclearKernelByWarpParity(CUstream stream, CUdeviceptr buffer, size_t 
     return CUDA_SUCCESS;
 }
 
-CUresult memcmpKernel(CUstream stream, CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements, CUdeviceptr errorFlag) {
+CUresult memcmpKernel(CUstream stream, CUdeviceptr buffer, CUdeviceptr pattern, unsigned long long num_elements, unsigned int num_pattern_elements, CUdeviceptr errorFlag) {
     unsigned threadsPerBlock = 1024;
-    unsigned blocks = (num_elements + threadsPerBlock - 1) / threadsPerBlock;
+    unsigned long long blocks = (num_elements + threadsPerBlock - 1) / threadsPerBlock;
 
     memcmpKernelDevice<<<blocks, threadsPerBlock, 0, stream>>>(buffer, pattern, num_elements, num_pattern_elements, errorFlag);
     CUDA_ASSERT(cudaGetLastError());
     return CUDA_SUCCESS;
 }
 
-CUresult multicastMemcmpKernel(CUstream stream, CUdeviceptr buffer, CUdeviceptr pattern, unsigned int num_elements, unsigned int num_pattern_elements, CUdeviceptr errorFlag) {
+CUresult multicastMemcmpKernel(CUstream stream, CUdeviceptr buffer, CUdeviceptr pattern, unsigned long long num_elements, unsigned int num_pattern_elements, CUdeviceptr errorFlag) {
     unsigned threadsPerBlock = 1024;
-    unsigned blocks = (num_elements + threadsPerBlock - 1) / threadsPerBlock;
+    unsigned long long blocks = (num_elements + threadsPerBlock - 1) / threadsPerBlock;
 
     multicastMemcmpKernelDevice<<<blocks, threadsPerBlock, 0, stream>>>(buffer, pattern, num_elements, num_pattern_elements, errorFlag);
     CUDA_ASSERT(cudaGetLastError());

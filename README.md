@@ -173,22 +173,32 @@ memcpy CE CPU(row) <-> GPU(column) bandwidth (GB/s)
 The setup for bidirectional host to device bandwidth transfer is shown below:
 ![](diagrams/HtoDBidir.png)
 
+**CE copies**  
 Stream 0 (measured stream) performs writes to the device, while the interfering stream in the opposite direction produces reads. This pattern is reversed for measuring bidirectional device to host bandwidth as shown below.
 
+
 ![](diagrams/DtoHBidir.png)
+
+**SM copies**  
+The test launches a kernel copy where alternating thread warps are copying data in alternating directions.
 
 ### Bidirectional Device <-> Device Bandwidth Tests
 The setup for bidirectional device to device transfers is shown below:
 
 ![](diagrams/DtoDBidir.png)
 
-The test launches traffic on two streams: stream 0 launched on device 0 performs writes from device 0 to device 1 while the interference stream 1 launches opposite traffic performing writes from device 1 to device 0.
+**CE copies**  
+Stream 0 (measured stream) performs writes to the device, while the interfering stream in the opposite direction produces reads. This pattern is reversed for measuring bidirectional device to host bandwidth as shown below.
 
+**SM Copies**  
+Similar to the HtoDBidir test above, the test launches a kernel where alternating thread warps copy data in alternating directions.
+
+**Bandwidth calculation**  
 CE bidirectional bandwidth tests calculate bandwidth on the measured stream:
 ```
 CE bidir. bandwidth = (size of data on measured stream) / (time on measured stream)
 ```
-However, SM bidirectional test launches memcpy kernels on source and peer GPUs as independent streams and calculates bandwidth as:
+However, SM bidirectional test launches a kernel where odd and even warps are copying data in different directions. Bandwidth is calculated as shown below:
 ```
-SM bidir. bandwidth = size/(time on stream1) + size/(time on stream2)
+SM bidir. bandwidth = size/(kernel time);
 ```

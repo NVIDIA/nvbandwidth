@@ -50,6 +50,8 @@ class JsonOutput : public Output {
 
     void printInfo();
 
+    void recordDevices(int deviceCount);
+
  private:
     bool shouldOutput;
     Json::Value m_root;

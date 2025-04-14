@@ -133,7 +133,7 @@ unsigned long long MemcpyInitiatorSMSplitWarp::getAdjustedBandwidth(unsigned lon
 }
 
 // Add this new typedef for the comparison function pointer
-typedef CUresult (*CompareKernelFunc)(CUstream, CUdeviceptr, CUdeviceptr, unsigned int, unsigned int, CUdeviceptr);
+typedef CUresult (*CompareKernelFunc)(CUstream, CUdeviceptr, CUdeviceptr, unsigned long long, unsigned int, CUdeviceptr);
 
 void memcmpPatternHelper(CUstream stream, CUdeviceptr buffer, unsigned long long size, unsigned int seed, CompareKernelFunc compareKernel, std::shared_ptr<NodeHelper> nodeHelper) {
     unsigned int* h_pattern;
@@ -552,7 +552,7 @@ size_t MemcpyInitiatorSM::getAdjustedCopySize(size_t size, CUstream stream) {
     unsigned int totalThreadCount = numSm * numThreadPerBlock;
     // We want to calculate the exact copy sizes that will be
     // used by the copy kernels.
-    if (size < (defaultBufferSize * _MiB)) {
+    if (size < (smallBufferThreshold * _MiB)) {
         // copy size is rounded down to 16 bytes
         int numUint4 = size / sizeof(uint4);
         return numUint4 * sizeof(uint4);
@@ -591,10 +591,13 @@ size_t MemcpyInitiatorSMSplitWarp::memcpyFunc(MemcpyDescriptor &desc) {
 }
 
 MemPtrChaseOperation::MemPtrChaseOperation(unsigned long long loopCount) : loopCount(loopCount) {
+    cudaDeviceProp prop;
+    CUDA_ASSERT(cudaGetDeviceProperties(&prop, 0));
+    smCount = prop.multiProcessorCount;
 }
 
 double MemPtrChaseOperation::doPtrChase(const int srcId, const MemcpyBuffer &peerBuffer) {
     double lat = 0.0;
-    lat = latencyPtrChaseKernel(srcId, (void*)peerBuffer.getBuffer(), peerBuffer.getBufferSize(), loopCount);
+    lat = latencyPtrChaseKernel(srcId, (void*)peerBuffer.getBuffer(), peerBuffer.getBufferSize(), latencyMemAccessCnt, smCount);
     return lat;
 }

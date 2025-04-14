@@ -23,7 +23,7 @@
 
 void HostDeviceLatencySM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> latencyValues(1, deviceCount, key, perfFormatter, LATENCY);
-    MemPtrChaseOperation ptrChaseOp(loopCount);
+    MemPtrChaseOperation ptrChaseOp(latencyMemAccessCnt);
 
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
         HostBuffer dataBuffer(size, deviceId);
@@ -118,7 +118,7 @@ void DeviceToDeviceReadSM::run(unsigned long long size, unsigned long long loopC
 
 void DeviceToDeviceLatencySM::run(unsigned long long size, unsigned long long loopCount) {
     PeerValueMatrix<double> latencyValues(deviceCount, deviceCount, key, perfFormatter, LATENCY);
-    MemPtrChaseOperation ptrChaseOp(loopCount);
+    MemPtrChaseOperation ptrChaseOp(latencyMemAccessCnt);
 
     for (int peerDeviceId = 0; peerDeviceId < deviceCount; peerDeviceId++) {
         DeviceBuffer peerBuffer(size, peerDeviceId);

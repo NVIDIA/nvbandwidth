@@ -76,15 +76,23 @@ bool Testcase::filterHasMultipleGPUsMultinode() {
 
 void Testcase::latencyHelper(const MemcpyBuffer &dataBuffer, bool measureDeviceToDeviceLatency) {
     uint64_t n_ptrs = dataBuffer.getBufferSize() / sizeof(struct LatencyNode);
-    struct LatencyNode *mem;
-    void *hostStagingBuffer;
-    CU_ASSERT(cuMemHostAlloc(&hostStagingBuffer, dataBuffer.getBufferSize(), CU_MEMHOSTALLOC_PORTABLE));
-    measureDeviceToDeviceLatency ? mem = (struct LatencyNode*) hostStagingBuffer : mem = (struct LatencyNode*) dataBuffer.getBuffer();
-    for ( uint64_t i = 0; i < n_ptrs; i++ ) {
-        mem[i].next = &mem[(i + strideLen) % n_ptrs];
-    }
+
     if (measureDeviceToDeviceLatency) {
-        CU_ASSERT(cuMemcpy(dataBuffer.getBuffer(), (CUdeviceptr)hostStagingBuffer, dataBuffer.getBufferSize()));
+        // For device-to-device latency, create and initialize pattern on device
+        for (uint64_t i = 0; i < n_ptrs; i++) {
+            struct LatencyNode node;
+            size_t nextOffset = ((i + strideLen) % n_ptrs) * sizeof(struct LatencyNode);
+            // Set up pattern with device addresses
+            node.next = (struct LatencyNode*)(dataBuffer.getBuffer() + nextOffset);
+            CU_ASSERT(cuMemcpyHtoD(dataBuffer.getBuffer() + i*sizeof(struct LatencyNode),
+                                 &node, sizeof(struct LatencyNode)));
+        }
+    } else {
+        // For host-device latency, initialize pattern with host addresses
+        struct LatencyNode* hostMem = (struct LatencyNode*)dataBuffer.getBuffer();
+        for (uint64_t i = 0; i < n_ptrs; i++) {
+            hostMem[i].next = &hostMem[(i + strideLen) % n_ptrs];
+        }
     }
 }
 

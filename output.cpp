@@ -76,7 +76,7 @@ void Output::listTestcases(const std::vector<Testcase*> &testcases) {
     }
 }
 
-static std::string getDeviceDisplayInfo(int deviceOrdinal) {
+std::string getDeviceDisplayInfo(int deviceOrdinal) {
     std::stringstream sstream;
     CUdevice dev;
     char name[STRING_LENGTH];
@@ -157,6 +157,7 @@ static void printGPUsMultinode(int deviceCount) {
 #endif
 
 static void printGPUs() {
+    OUTPUT << localHostname << std::endl;
     for (int iDev = 0; iDev < deviceCount; iDev++) {
         OUTPUT << "Device " << iDev << ": " << getDeviceDisplayInfo(iDev) << std::endl;
     }

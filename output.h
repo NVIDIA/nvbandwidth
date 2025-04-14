@@ -98,4 +98,6 @@ class Output {
 
 extern Output *output;
 
+std::string getDeviceDisplayInfo(int deviceOrdinal);
+
 #endif  // OUTPUT_H_

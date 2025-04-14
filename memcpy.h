@@ -246,6 +246,7 @@ class MemPtrChaseOperation : public MemoryOperation {
     double doPtrChase(const int srcId, const MemcpyBuffer &peerBuffer);
  private:
     unsigned long long loopCount;
+    unsigned int smCount;
 };
 
 #endif  // MEMCPY_H_
