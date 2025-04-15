@@ -8,7 +8,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-set(supported_archs "52" "70" "75" "80" "86" "89" "90" "100")
+if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL "13.0")
+    # 5.2 architecture not supported since CUDA 13.0
+    set(supported_archs "70" "75" "80" "86" "89" "90" "100")
+else ()
+    set(supported_archs "52" "70" "75" "80" "86" "89" "90" "100")
+endif()
 
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
     message(STATUS "Detecting underlying CUDA Arch to set CMAKE_CUDA_ARCHITECTURES")
