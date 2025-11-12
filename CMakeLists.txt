@@ -29,7 +29,7 @@ endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     file(READ "/etc/os-release" OS_RELEASE_CONTENT)
     # Skip static libs on Fedora - https://github.com/NVIDIA/nvbandwidth/issues/4
-    if(NOT OS_RELEASE_CONTENT MATCHES "ID=.*fedora")
+    if(NOT OS_RELEASE_CONTENT MATCHES "ID=.*fedora|azurelinux")
         set(Boost_USE_STATIC_LIBS ON)
     endif()
 else()
