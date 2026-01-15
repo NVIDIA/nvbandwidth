@@ -573,7 +573,7 @@ int main(int argc, char **argv) {
     output->addConfComputeInfo(gSettings.bounceBufferConfComputeEnabled);
 
     // Print GPU information
-    output->recordDevices(worldSize);
+    output->recordDevices(deviceCount);
 
     // Early CUDA runtime sanity check - test if we can create contexts and allocate memory
     // This catches driver/runtime issues before they manifest as confusing errors later

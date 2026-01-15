@@ -92,6 +92,12 @@ void PerfParserOutput::addConfComputeInfo(bool bounceBufferConfComputeEnabled) {
 
 void PerfParserOutput::recordDevices(int deviceCount) {
     if (!shouldOutput) return;
+#ifdef MULTINODE
+    if (worldSize > 1) {
+        std::cout << "Devices: " << worldSize << "\n";
+        return;
+    }
+#endif
     std::cout << "Devices: " << deviceCount << "\n";
 }
 

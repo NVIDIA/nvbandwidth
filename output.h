@@ -94,7 +94,7 @@ class Output {
 
     virtual void printInfo();
 
-    virtual void recordDevices(int worldSize);
+    virtual void recordDevices(int deviceCount);
 
     void listTestcases(const std::vector<Testcase*> &testcases);
 };
@@ -102,5 +102,8 @@ class Output {
 extern Output *output;
 
 std::string getDeviceDisplayInfo(int deviceOrdinal);
+#ifdef MULTINODE
+void exchangeDeviceInfo(int deviceCount, std::vector<char> &hostnameExchange, std::vector<char> &deviceNameExchange, std::vector<int> &localDeviceIdExchange);
+#endif
 
 #endif  // OUTPUT_H_
