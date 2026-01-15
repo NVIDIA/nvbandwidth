@@ -159,7 +159,7 @@ void JsonOutput::recordError(const std::vector<std::string> &errorParts) {
 }
 
 void JsonOutput::recordWarning(const std::string &warning) {
-    m_root[NVB_TITLE][NVB_WARNING] = warning;
+    m_root[NVB_TITLE][NVB_WARNING].append(warning);
 }
 
 void JsonOutput::addVersionInfo() {
@@ -174,12 +174,24 @@ void JsonOutput::addCudaAndDriverInfo(int cudaVersion, const std::string &driver
 
 void JsonOutput::recordDevices(int deviceCount) {
     Json::Value deviceList;
-
+#ifdef MULTINODE
+    std::vector<char> hostnameExchange(worldSize * STRING_LENGTH);
+    std::vector<char> deviceNameExchange(worldSize * STRING_LENGTH, 0);
+    std::vector<int> localDeviceIdExchange(worldSize, -1);
+    exchangeDeviceInfo(deviceCount, hostnameExchange, deviceNameExchange, localDeviceIdExchange);
+    for (int i = 0; i < worldSize; i++) {
+        char *deviceName = &deviceNameExchange[i * STRING_LENGTH];
+        std::stringstream buf;
+        buf << "Process " << getPaddedProcessId(i) << " (" << &hostnameExchange[i * STRING_LENGTH] << "): device " << localDeviceIdExchange[i] << ": " << deviceName;
+        deviceList.append(buf.str());
+    }
+#else
     for (int iDev = 0; iDev < deviceCount; iDev++) {
         std::stringstream buf;
         buf << iDev << ": " << getDeviceDisplayInfo(iDev) << ": (" << localHostname << ")";
         deviceList.append(buf.str());
     }
+#endif
     m_root[NVB_TITLE][NVB_DEVICE_LIST] = deviceList;
 }
 

@@ -99,5 +99,6 @@ class Output {
 extern Output *output;
 
 std::string getDeviceDisplayInfo(int deviceOrdinal);
+void exchangeDeviceInfo(int deviceCount, std::vector<char> &hostnameExchange, std::vector<char> &deviceNameExchange, std::vector<int> &localDeviceIdExchange);
 
 #endif  // OUTPUT_H_

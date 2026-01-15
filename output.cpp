@@ -96,17 +96,8 @@ std::string getDeviceDisplayInfo(int deviceOrdinal) {
     return sstream.str();
 }
 
-#ifdef MULTINODE
-// Exchange and print information about all devices in MPI world
-// Through this process each process learns about GPUs of other processes, as well as,
-// determines its own GPU index
-// Each process is allocated a dedicated GPU. It is advisable to initiate NUM_GPU processes per system,
-// with each process autonomously selecting a GPU to utilize. To determine this selection,
-// processes exchange their hostnames, and look for duplicates of own hostname among processes with lower value of worldRank.
-// localRank is equal to number of processes with the same hostname, but lower worldRank.
-static void printGPUsMultinode(int deviceCount) {
+void exchangeDeviceInfo(int deviceCount, std::vector<char> &hostnameExchange, std::vector<char> &deviceNameExchange, std::vector<int> &localDeviceIdExchange) {
     // Exchange hostnames
-    std::vector<char> hostnameExchange(worldSize * STRING_LENGTH);
     MPI_Allgather(localHostname, STRING_LENGTH, MPI_BYTE, &hostnameExchange[0], STRING_LENGTH, MPI_BYTE, MPI_COMM_WORLD);
 
     // Find local rank based on hostnames
@@ -140,36 +131,38 @@ static void printGPUsMultinode(int deviceCount) {
     ASSERT(localDeviceName.size() < STRING_LENGTH);
     localDeviceName.resize(STRING_LENGTH);
 
-    std::vector<char> deviceNameExchange(worldSize * STRING_LENGTH, 0);
     MPI_Allgather(&localDeviceName[0], STRING_LENGTH, MPI_BYTE, &deviceNameExchange[0], STRING_LENGTH, MPI_BYTE, MPI_COMM_WORLD);
 
     // Exchange device ids
-    std::vector<int> localDeviceIdExchange(worldSize, -1);
     MPI_Allgather(&localDevice, 1, MPI_INT, &localDeviceIdExchange[0], 1, MPI_INT, MPI_COMM_WORLD);
+}
 
+void Output::recordDevices(int deviceCount) {
+#ifdef MULTINODE
+    // Exchange and print information about all devices in MPI world
+    // Through this process each process learns about GPUs of other processes, as well as,
+    // determines its own GPU index
+    // Each process is allocated a dedicated GPU. It is advisable to initiate NUM_GPU processes per system,
+    // with each process autonomously selecting a GPU to utilize. To determine this selection,
+    // processes exchange their hostnames, and look for duplicates of own hostname among processes with lower value of worldRank.
+    // localRank is equal to number of processes with the same hostname, but lower worldRank.
+    std::vector<char> hostnameExchange(worldSize * STRING_LENGTH);
+    std::vector<char> deviceNameExchange(worldSize * STRING_LENGTH, 0);
+    std::vector<int> localDeviceIdExchange(worldSize, -1);
+    exchangeDeviceInfo(deviceCount, hostnameExchange, deviceNameExchange, localDeviceIdExchange);
     // Print gathered info
     for (int i = 0; i < worldSize; i++) {
         char *deviceName = &deviceNameExchange[i * STRING_LENGTH];
         OUTPUT << "Process " << getPaddedProcessId(i) << " (" << &hostnameExchange[i * STRING_LENGTH] << "): device " << localDeviceIdExchange[i] << ": " << deviceName << std::endl;
     }
-    OUTPUT << std::endl;
-}
-#endif
+#else
 
-static void printGPUs() {
     OUTPUT << localHostname << std::endl;
     for (int iDev = 0; iDev < deviceCount; iDev++) {
         OUTPUT << "Device " << iDev << ": " << getDeviceDisplayInfo(iDev) << std::endl;
     }
-    OUTPUT << std::endl;
-}
-
-void Output::recordDevices(int deviceCount) {
-#ifdef MULTINODE
-    printGPUsMultinode(deviceCount);
-#else
-    printGPUs();
 #endif
+    OUTPUT << std::endl;
 }
 
 void Output::addTestcase(const std::string &name, const std::string &status, const std::string &msg) {
