@@ -130,7 +130,7 @@ When running under MPI, only MPI rank 0 will output stdout to the console. Stder
 It is recommended to only run "multinode*" testcases under MPI. While any testcase will succeed, results for non multinode testcases will only come from MPI rank 0.
 
 ## Test Details
-There are two types of copies implemented, Copy Engine (CE) or Steaming Multiprocessor (SM)
+There are two types of copies implemented, Copy Engine (CE) or Streaming Multiprocessor (SM)
 
 CE copies use memcpy APIs. SM copies use kernels.
 
