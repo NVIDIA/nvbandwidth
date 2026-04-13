@@ -27,48 +27,33 @@ __global__ void simpleCopyKernel(unsigned long long loopCount, uint4 *dst, uint4
     }
 }
 
+constexpr int UNROLL_FACTOR = 12;
+
 __global__ void stridingMemcpyKernel(unsigned int totalThreadCount, unsigned long long loopCount, uint4* dst, uint4* src, size_t chunkSizeInElement) {
     unsigned long long from = blockDim.x * blockIdx.x + threadIdx.x;
-    unsigned long long bigChunkSizeInElement = chunkSizeInElement / 12;
+    unsigned long long bigChunkSizeInElement = chunkSizeInElement / UNROLL_FACTOR;
     dst += from;
     src += from;
-    uint4* dstBigEnd = dst + (bigChunkSizeInElement * 12) * totalThreadCount;
-    uint4* dstEnd = dst + chunkSizeInElement * totalThreadCount;
+    unsigned long long processedElements = bigChunkSizeInElement * UNROLL_FACTOR;
 
     for (unsigned int i = 0; i < loopCount; i++) {
-        uint4* cdst = dst;
-        uint4* csrc = src;
+        for (unsigned long long j = 0; j < bigChunkSizeInElement; j++) {
+            unsigned long long offset = j * UNROLL_FACTOR * totalThreadCount;
 
-        while (cdst < dstBigEnd) {
-            uint4 pipe_0 = *csrc; csrc += totalThreadCount;
-            uint4 pipe_1 = *csrc; csrc += totalThreadCount;
-            uint4 pipe_2 = *csrc; csrc += totalThreadCount;
-            uint4 pipe_3 = *csrc; csrc += totalThreadCount;
-            uint4 pipe_4 = *csrc; csrc += totalThreadCount;
-            uint4 pipe_5 = *csrc; csrc += totalThreadCount;
-            uint4 pipe_6 = *csrc; csrc += totalThreadCount;
-            uint4 pipe_7 = *csrc; csrc += totalThreadCount;
-            uint4 pipe_8 = *csrc; csrc += totalThreadCount;
-            uint4 pipe_9 = *csrc; csrc += totalThreadCount;
-            uint4 pipe_10 = *csrc; csrc += totalThreadCount;
-            uint4 pipe_11 = *csrc; csrc += totalThreadCount;
-
-            *cdst = pipe_0; cdst += totalThreadCount;
-            *cdst = pipe_1; cdst += totalThreadCount;
-            *cdst = pipe_2; cdst += totalThreadCount;
-            *cdst = pipe_3; cdst += totalThreadCount;
-            *cdst = pipe_4; cdst += totalThreadCount;
-            *cdst = pipe_5; cdst += totalThreadCount;
-            *cdst = pipe_6; cdst += totalThreadCount;
-            *cdst = pipe_7; cdst += totalThreadCount;
-            *cdst = pipe_8; cdst += totalThreadCount;
-            *cdst = pipe_9; cdst += totalThreadCount;
-            *cdst = pipe_10; cdst += totalThreadCount;
-            *cdst = pipe_11; cdst += totalThreadCount;
+            uint4 pipe[UNROLL_FACTOR];
+            #pragma unroll
+            for (int k = 0; k < UNROLL_FACTOR; ++k) {
+                pipe[k] = src[offset + k * totalThreadCount];
+            }
+            #pragma unroll
+            for (int k = 0; k < UNROLL_FACTOR; ++k) {
+                dst[offset + k * totalThreadCount] = {pipe[k].x, pipe[k].y, pipe[k].z, pipe[k].w};
+            }
         }
 
-        while (cdst < dstEnd) {
-            *cdst = *csrc; cdst += totalThreadCount; csrc += totalThreadCount;
+        #pragma unroll
+        for (unsigned long long j = processedElements; j < chunkSizeInElement; j++) {
+            dst[j * totalThreadCount] = src[j * totalThreadCount];
         }
     }
 }
