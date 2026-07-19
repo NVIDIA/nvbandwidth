@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,35 +15,35 @@
  * limitations under the License.
  */
 
-#include <boost/program_options.hpp>
+#include <argparse/argparse.hpp>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <nvml.h>
 #include <iostream>
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
 
+#include "cuda_version_check.h"
 #include "environment.h"
 #include "json_output.h"
+#include "perf_parser_output.h"
 #include "kernels.cuh"
+#include "nvbandwidth_version.h"
 #include "output.h"
 #include "testcase.h"
-#include "version.h"
+#include "test_settings.h"
 #include "inline_common.h"
 
-namespace opt = boost::program_options;
-int deviceCount;
-unsigned int averageLoopCount;
-unsigned long long bufferSize;
-unsigned long long loopCount;
-bool verbose;
-bool shouldOutput = true;
-bool disableAffinity;
-bool skipVerification;
-bool useMean;
-bool perfFormatter;
-bool useHugePages;
-long long targetNumPairs;
+// Global settings instance
+TestSettings gSettings;
+std::string gpuPairUuid0, gpuPairUuid1;
+int gpuPairDev0 = -1, gpuPairDev1 = -1;
 
-Verbosity VERBOSE(verbose);
+int deviceCount;
+bool shouldOutput = true;
+
+Verbosity VERBOSE(gSettings.verbose);
 Verbosity OUTPUT(shouldOutput);
 
 // Device ordinal of the GPU owned by the process
@@ -52,7 +52,6 @@ int localRank = 0;
 // Process rank within one OS
 int worldRank = 0;
 int worldSize = 0;
-bool jsonOutput;
 Output *output;
 
 std::unique_ptr<Environment> env;
@@ -63,60 +62,75 @@ std::vector<Testcase*> createNodeTestcases() {
     if (worldRank == 0 && localRank == 0) {
          tests.insert(tests.end(), {
         // Base tests that always run, by a single node/process only.
-        new HostToDeviceCE(),
-        new DeviceToHostCE(),
-        new HostToDeviceBidirCE(),
-        new DeviceToHostBidirCE(),
-        new DeviceToDeviceReadCE(),
-        new DeviceToDeviceWriteCE(),
-        new DeviceToDeviceBidirReadCE(),
-        new DeviceToDeviceBidirWriteCE(),
-        new AllToHostCE(),
-        new AllToHostBidirCE(),
-        new HostToAllCE(),
-        new HostToAllBidirCE(),
-        new AllToOneWriteCE(),
-        new AllToOneReadCE(),
-        new OneToAllWriteCE(),
-        new OneToAllReadCE(),
-        new HostToDeviceSM(),
-        new DeviceToHostSM(),
-        new HostToDeviceBidirSM(),
-        new DeviceToHostBidirSM(),
-        new DeviceToDeviceReadSM(),
-        new DeviceToDeviceWriteSM(),
-        new DeviceToDeviceBidirReadSM(),
-        new DeviceToDeviceBidirWriteSM(),
-        new AllToHostSM(),
-        new AllToHostBidirSM(),
-        new HostToAllSM(),
-        new HostToAllBidirSM(),
-        new AllToOneWriteSM(),
-        new AllToOneReadSM(),
-        new OneToAllWriteSM(),
-        new OneToAllReadSM(),
+        new HostDeviceTransfer(CopyInitiator::CE, Direction::HostToDevice),
+        new HostDeviceTransfer(CopyInitiator::CE, Direction::DeviceToHost),
+        new HostDeviceBidirTransfer(CopyInitiator::CE, Direction::HostToDevice),
+        new HostDeviceBidirTransfer(CopyInitiator::CE, Direction::DeviceToHost),
+        new DeviceToDeviceTransfer(CopyInitiator::CE, AccessType::Read),
+        new DeviceToDeviceTransfer(CopyInitiator::CE, AccessType::Write),
+        new DeviceToDeviceBidirTransfer(CopyInitiator::CE, AccessType::Read),
+        new DeviceToDeviceBidirTransfer(CopyInitiator::CE, AccessType::Write),
+        new AllToHostTransfer(CopyInitiator::CE),
+        new AllToHostBidirTransfer(CopyInitiator::CE),
+        new HostToAllTransfer(CopyInitiator::CE),
+        new HostToAllBidirTransfer(CopyInitiator::CE),
+        new AllToOneTransfer(CopyInitiator::CE, AccessType::Write),
+        new AllToOneTransfer(CopyInitiator::CE, AccessType::Read),
+        new OneToAllTransfer(CopyInitiator::CE, AccessType::Write),
+        new OneToAllTransfer(CopyInitiator::CE, AccessType::Read),
+        new HostDeviceTransfer(CopyInitiator::SM, Direction::HostToDevice),
+        new HostDeviceTransfer(CopyInitiator::SM, Direction::DeviceToHost),
+        new HostDeviceBidirTransfer(CopyInitiator::SM, Direction::HostToDevice),
+        new HostDeviceBidirTransfer(CopyInitiator::SM, Direction::DeviceToHost),
+        new DeviceToDeviceTransfer(CopyInitiator::SM, AccessType::Read),
+        new DeviceToDeviceTransfer(CopyInitiator::SM, AccessType::Write),
+        new DeviceToDeviceBidirTransfer(CopyInitiator::SM, AccessType::Read),
+        new DeviceToDeviceBidirTransfer(CopyInitiator::SM, AccessType::Write),
+        new AllToHostTransfer(CopyInitiator::SM),
+        new AllToHostBidirTransfer(CopyInitiator::SM),
+        new HostToAllTransfer(CopyInitiator::SM),
+        new HostToAllBidirTransfer(CopyInitiator::SM),
+        new AllToOneTransfer(CopyInitiator::SM, AccessType::Write),
+        new AllToOneTransfer(CopyInitiator::SM, AccessType::Read),
+        new OneToAllTransfer(CopyInitiator::SM, AccessType::Write),
+        new OneToAllTransfer(CopyInitiator::SM, AccessType::Read),
         new HostDeviceLatencySM(),
         new DeviceToDeviceLatencySM(),
-        new DeviceLocalCopy()
+        new DeviceToDeviceTransfer(CopyInitiator::TMA, AccessType::Read),
+        new DeviceToDeviceTransfer(CopyInitiator::TMA, AccessType::Write),
+        new DeviceToDeviceBidirTransfer(CopyInitiator::TMA, AccessType::Read),
+        new DeviceToDeviceBidirTransfer(CopyInitiator::TMA, AccessType::Write),
+        new DeviceLocalCopyTransfer(CopyInitiator::CE),
+        new DeviceLocalCopyTransfer(CopyInitiator::SM),
+        new DeviceLocalReadSM(),
+        new DeviceLocalWriteSM(),
+        new DeviceToDeviceLatencyTMA(),
+        new DeviceLocalCopyTransfer(CopyInitiator::TMA)
       });
     }
 #ifdef MULTINODE
     // Add multinode tests only if we're running in multinode mode
-    if (env->getSize() > 1) {  // More than one process means we're in multinode mode
+    if (env->getSize() > 1) {
         tests.insert(tests.end(), {
-            new MultinodeDeviceToDeviceReadCE(),
-            new MultinodeDeviceToDeviceWriteCE(),
-            new MultinodeDeviceToDeviceBidirReadCE(),
-            new MultinodeDeviceToDeviceBidirWriteCE(),
-            new MultinodeDeviceToDeviceReadSM(),
-            new MultinodeDeviceToDeviceWriteSM(),
-            new MultinodeDeviceToDeviceBidirReadSM(),
-            new MultinodeDeviceToDeviceBidirWriteSM(),
+            new MultinodeDeviceToDeviceTransfer(CopyInitiator::CE, AccessType::Read),
+            new MultinodeDeviceToDeviceTransfer(CopyInitiator::CE, AccessType::Write),
+            new MultinodeDeviceToDeviceBidirTransfer(CopyInitiator::CE, AccessType::Read),
+            new MultinodeDeviceToDeviceBidirTransfer(CopyInitiator::CE, AccessType::Write),
+            new MultinodeDeviceToDeviceTransfer(CopyInitiator::SM, AccessType::Read),
+            new MultinodeDeviceToDeviceTransfer(CopyInitiator::SM, AccessType::Write),
+            new MultinodeDeviceToDeviceBidirTransfer(CopyInitiator::SM, AccessType::Read),
+            new MultinodeDeviceToDeviceBidirTransfer(CopyInitiator::SM, AccessType::Write),
+            new MultinodeDeviceToDeviceTransfer(CopyInitiator::TMA, AccessType::Read),
+            new MultinodeDeviceToDeviceTransfer(CopyInitiator::TMA, AccessType::Write),
+            new MultinodeDeviceToDeviceBidirTransfer(CopyInitiator::TMA, AccessType::Read),
+            new MultinodeDeviceToDeviceBidirTransfer(CopyInitiator::TMA, AccessType::Write),
             new MultinodeAllToOneWriteSM(),
             new MultinodeAllFromOneReadSM(),
             new MultinodeBroadcastOneToAllSM(),
             new MultinodeBroadcastAllToAllSM(),
-            new MultinodeBisectWriteCE()
+            new MultinodeBisectWriteCE(),
+            new MultinodeMulticastFabricPut(CopyInitiator::SM),
+            new MultinodeMulticastFabricPut(CopyInitiator::TMA)
         });
     }
 #endif
@@ -141,6 +155,37 @@ Testcase* findTestcase(std::vector<Testcase*> &testcases, std::string id) {
     }
 }
 
+// Testcases whose device-to-device sweep is restricted (single-node) or GPU-bound (multinode) by --pair.
+static bool testcaseKeyUsesGpuPairSelection(const std::string &k) {
+    if (k == "device_to_device_latency_sm" || k == "device_to_device_latency_tma") return true;
+    static const char *const prefixes[] = {
+        "device_to_device_memcpy_",
+        "device_to_device_bidirectional_memcpy_",
+        "multinode_device_to_device_memcpy_",
+        "multinode_device_to_device_bidirectional_memcpy_",
+    };
+    for (const char *pre : prefixes) {
+        if (k.rfind(pre, 0) == 0) return true;
+    }
+    return false;
+}
+
+static bool selectedTestcasesIncludeGpuPairRelevant(std::vector<Testcase *> &testcases,
+                                                    const std::vector<std::string> &testcasesToRun) {
+    if (testcasesToRun.empty()) {
+        return true;
+    }
+    for (const std::string &id : testcasesToRun) {
+        try {
+            Testcase *t = findTestcase(testcases, id);
+            if (testcaseKeyUsesGpuPairSelection(t->testKey())) return true;
+        } catch (const std::string &) {
+            continue;
+        }
+    }
+    return false;
+}
+
 std::vector<std::string> expandTestcases(std::vector<Testcase*> &testcases, std::vector<std::string> prefixes) {
     std::vector<std::string> testcasesToRun;
     for (auto testcase : testcases) {
@@ -162,23 +207,56 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
     }
 
     try {
-        if (!test->filter()) {
-            output->addTestcase(test->testKey(), NVB_WAIVED);
+        auto filterResult = test->filter();
+        if (!filterResult) {
+            output->addTestcase(test->testKey(), NVB_WAIVED, filterResult.reason);
             return;
         }
 
         output->addTestcase(test->testKey(), NVB_RUNNING);
 
         // Run the testcase
-        if (test->testKey() == "host_device_latency_sm" || test->testKey() == "device_to_device_latency_sm") {
+        if (test->testKey().find("latency") != std::string::npos) {
             // use fixd-size buffer for latency tests
-            test->run(2 * _MiB, loopCount);
+            test->run(2 * _MiB, gSettings.loopCount);
         } else {
-            test->run(bufferSize * _MiB, loopCount);
+            test->run(gSettings.bufferSizeMiB * _MiB, gSettings.loopCount);
         }
     } catch (std::string &s) {
         output->setTestcaseStatusAndAddIfNeeded(test->testKey(), NVB_ERROR_STATUS, s);
     }
+}
+
+static bool isBounceBufferConfComputeEnabled() {
+    bool enabled = false;
+
+#ifndef _WIN32
+#ifdef NVBW_HAVE_NVML_CONF_COMPUTE_SETTINGS
+    void* sym = dlsym(RTLD_DEFAULT, "nvmlSystemGetConfComputeSettings");
+    if (sym != nullptr) {
+        auto nvmlSystemGetConfComputeSettingsFn = reinterpret_cast<nvmlReturn_t (*)(nvmlSystemConfComputeSettings_v1_t*)>(sym);
+
+        nvmlSystemConfComputeSettings_v1_t settings = {};
+        settings.version = nvmlSystemConfComputeSettings_v1;
+
+        nvmlReturn_t nvmlResult = nvmlSystemGetConfComputeSettingsFn(&settings);
+        if (nvmlResult == NVML_SUCCESS) {
+            enabled = (settings.ccFeature == NVML_CC_SYSTEM_FEATURE_ENABLED) ||
+                      (settings.multiGpuMode == NVML_CC_SYSTEM_MULTIGPU_PROTECTED_PCIE);
+        } else if (nvmlResult != NVML_ERROR_NOT_SUPPORTED) {
+            std::stringstream errmsg;
+            errmsg << "NOTE: nvmlSystemGetConfComputeSettings failed with " << nvmlResult << ": " << nvmlErrorString(nvmlResult);
+            output->recordWarning(errmsg.str());
+        }
+    } else {
+        std::stringstream errmsg;
+        errmsg << "NOTE: nvmlSystemGetConfComputeSettings is not available ( " << dlerror() << "). nvbandwidth will not be able to detect bounce-buffer CC platforms.";
+        output->recordWarning(errmsg.str());
+    }
+#endif
+#endif
+
+    return enabled;
 }
 
 int main(int argc, char **argv) {
@@ -191,94 +269,223 @@ int main(int argc, char **argv) {
     localRank = env->getLocalRank();
     // Avoid excessive output by limit output to rank 0
     shouldOutput = (worldRank == 0);
-#else
-    worldSize = deviceCount;
 #endif
 
     std::vector<Testcase*> testcases = createNodeTestcases();
     std::vector<std::string> testcasesToRun;
     std::vector<std::string> testcasePrefixes;
-    output = new Output();
-
-    // Args parsing
-    opt::options_description visible_opts("nvbandwidth CLI");
-    visible_opts.add_options()
-        ("help,h", "Produce help message")
-        ("bufferSize,b", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size in MiB")
-        ("list,l", "List available testcases")
-        ("testcase,t", opt::value<std::vector<std::string>>(&testcasesToRun)->multitoken(), "Testcase(s) to run (by name or index)")
-        ("testcasePrefixes,p", opt::value<std::vector<std::string>>(&testcasePrefixes)->multitoken(), "Testcase(s) to run (by prefix))")
-        ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output")
-        ("skipVerification,s", opt::bool_switch(&skipVerification)->default_value(false), "Skips data verification after copy")
-        ("disableAffinity,d", opt::bool_switch(&disableAffinity)->default_value(false), "Disable automatic CPU affinity control")
-        ("testSamples,i", opt::value<unsigned int>(&averageLoopCount)->default_value(defaultAverageLoopCount), "Iterations of the benchmark")
-        ("targetNumPairs,P",  opt::value<long long>(&targetNumPairs)->default_value(-1), "Target pairs for multinode device-to-device tests.")
-        ("useMean,m", opt::bool_switch(&useMean)->default_value(false), "Use mean instead of median for results")
-        ("useHugePages,H",  opt::bool_switch(&useHugePages)->default_value(false), "Use huge pages for host allocations.")
-        ("json,j", opt::bool_switch(&jsonOutput)->default_value(false), "Print output in json format instead of plain text.");
-
-    opt::options_description all_opts("");
-    all_opts.add(visible_opts);
-    all_opts.add_options()
-        ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed within a test sample")
-        ("perfFormatter", opt::bool_switch(&perfFormatter)->default_value(false), "Use perf formatter prefix (&&&& PERF) in output");
-
-    opt::variables_map vm;
-    try {
-        opt::store(opt::parse_command_line(argc, argv, all_opts), vm);
-        opt::notify(vm);
-    } catch (...) {
-        output->addVersionInfo();
-
-        std::stringstream errmsg;
-        errmsg << "ERROR: Invalid Arguments " << std::endl;
-        for (int i = 0; i < argc; i++) {
-            errmsg << argv[i] << " ";
+    // Pre-scan argv for the output format flag before full argument parsing so
+    // that the correct output handler (and its version block) is already in
+    // place if parse_args throws.  --format / -F take precedence; fall back to
+    // the legacy --json / -j flag.
+    {
+        std::string fmt = "text";
+        for (int i = 1; i < argc; i++) {
+            std::string arg(argv[i]);
+            if ((arg == "--format" || arg == "-F") && i + 1 < argc) {
+                fmt = std::string(argv[i + 1]);
+                break;
+            }
+            const std::string prefix = "--format=";
+            if (arg.substr(0, prefix.size()) == prefix) {
+                fmt = arg.substr(prefix.size());
+                break;
+            }
         }
-        std::vector<std::string> messageParts;
-        std::stringstream buf;
-        buf << visible_opts;
-        messageParts.emplace_back(errmsg.str());
-        messageParts.emplace_back(buf.str());
-        output->recordError(messageParts);
+        if (fmt == "text") {
+            for (int i = 1; i < argc; i++) {
+                std::string arg(argv[i]);
+                if (arg == "--json" || arg == "-j") {
+                    fmt = "json";
+                    break;
+                }
+            }
+        }
+        if (fmt == "json") {
+            output = new JsonOutput(shouldOutput);
+        } else if (fmt == "perf") {
+            output = new PerfParserOutput(shouldOutput);
+        } else {
+            output = new Output();
+        }
+    }
+
+    // Version info is added to the output object before any early-exit path
+    // (parse errors, --version, validation failures) so the header block is
+    // always present in the output document regardless of how we exit.
+    output->addVersionInfo();
+
+    // Args parsing - all settings stored directly into gSettings
+    argparse::ArgumentParser program("nvbandwidth");
+
+    program.add_description("A tool for bandwidth measurements on NVIDIA GPUs.");
+    program.add_epilog("Examples:\n"
+                       "  nvbandwidth                          # Run all testcases\n"
+                       "  nvbandwidth -l                       # List available testcases\n"
+                       "  nvbandwidth -t host_to_device_memcpy_ce device_to_host_memcpy_ce\n"
+                       "  nvbandwidth -p device_to_device      # Run all device_to_device* tests\n"
+                       "  nvbandwidth --format json            # Output in JSON format");
+
+    bool printVersion = false;
+    program.add_argument("--version")
+        .help("Print nvbandwidth release version and exit")
+        .flag()
+        .store_into(printVersion);
+
+    program.add_argument("-b", "--bufferSize")
+        .help("Memcpy buffer size in MiB")
+        .metavar("SIZE")
+        .default_value(kDefaultBufferSizeMiB)
+        .scan<'u', std::uint64_t>()
+        .store_into(gSettings.bufferSizeMiB);
+    program.add_argument("-l", "--list")
+        .help("List available testcases")
+        .flag();
+
+    // Testcase selection - mutually exclusive
+    auto &testcase_group = program.add_mutually_exclusive_group();
+    testcase_group.add_argument("-t", "--testcase")
+        .help("Testcase(s) to run (by name or index)")
+        .metavar("TEST")
+        .nargs(argparse::nargs_pattern::any)
+        .append()
+        .default_value(std::vector<std::string>{})
+        .store_into(testcasesToRun);
+    testcase_group.add_argument("-p", "--testcasePrefixes")
+        .help("Testcase(s) to run (by prefix)")
+        .metavar("PREFIX")
+        .append()
+        .store_into(testcasePrefixes);
+
+    program.add_argument("-v", "--verbose")
+        .help("Verbose output")
+        .flag()
+        .store_into(gSettings.verbose);
+    program.add_argument("-s", "--skipVerification")
+        .help("Skips data verification after copy")
+        .flag()
+        .store_into(gSettings.skipVerification);
+    program.add_argument("-d", "--disableAffinity")
+        .help("Disable automatic CPU affinity control")
+        .flag()
+        .store_into(gSettings.disableAffinity);
+    program.add_argument("-i", "--testSamples")
+        .help("Iterations of the benchmark")
+        .metavar("N")
+        .default_value(kDefaultAverageLoopCount)
+        .scan<'u', std::uint32_t>()
+        .store_into(gSettings.averageLoopCount);
+    program.add_argument("-P", "--targetNumPairs")
+        .help("Target pairs for multinode device-to-device tests")
+        .metavar("N")
+        .default_value(kDefaultTargetPairs)
+        .scan<'i', std::int64_t>()
+        .store_into(gSettings.targetNumPairs);
+    program.add_argument("-m", "--useMean")
+        .help("Use mean instead of median for results")
+        .flag()
+        .store_into(gSettings.useMean);
+    program.add_argument("-H", "--useHugePages")
+        .help("Use huge pages for host allocations")
+        .flag()
+        .store_into(gSettings.useHugePages);
+
+    program.add_argument("-F", "--format")
+        .help("Output format")
+        .metavar("FORMAT")
+        .default_value(std::string("text"))
+        .choices("text", "json", "perf")
+        .store_into(gSettings.outputFormat);
+    // Legacy format flag (hidden, for backward compatibility) to ensure previous
+    // existing scripts using the old format for output arguments work.
+    bool legacyJson = false;
+    program.add_argument("-j", "--json")
+        .flag()
+        .store_into(legacyJson)
+        .hidden();
+
+    // Hidden options (not shown in help)
+    program.add_argument("--loopCount")
+        .help("Iterations of memcpy to be performed within a test sample")
+        .metavar("N")
+        .default_value(kDefaultLoopCount)
+        .scan<'u', std::uint64_t>()
+        .store_into(gSettings.loopCount)
+        .hidden();
+    program.add_argument("--disablePerformanceCache")
+        .help("Disable bidirectional result cache (enabled by default)")
+        .flag()
+        .store_into(gSettings.disablePerformanceCache)
+        .hidden();
+    program.add_argument("--perfFormatter")
+        .help("Use perf formatter prefix in output")
+        .flag()
+        .store_into(gSettings.perfFormatter)
+        .hidden();
+    program.add_argument("--disableNvlinkSMScheduling")
+        .help("Disable NVLink utilization scheduling for SM tests (Blackwell+)")
+        .flag()
+        .store_into(gSettings.disableNvlinkSMScheduling)
+        .hidden();
+    std::vector<std::string> pairUuids;
+    program.add_argument("--pair")
+        .help("Run tests only between these two GPUs (by UUID). GPUs may be on the same or different nodes.")
+        .metavar("UUID")
+        .nargs(2)
+        .store_into(pairUuids);
+
+    try {
+        program.parse_args(argc, argv);
+    } catch (const std::exception& err) {
+        std::stringstream errmsg;
+        errmsg << "Error parsing command line: " << err.what();
+        output->recordError(errmsg.str());
+        output->print();
         return 1;
     }
 
-    if (jsonOutput) {
-        delete output;
-        output = new JsonOutput(shouldOutput);
+    // Handle legacy format flag (backward compatibility)
+    if (legacyJson) {
+        if (gSettings.outputFormat != "text") {
+            output->recordError("Cannot use --json with --format; use --format json instead");
+            return 1;
+        }
+        gSettings.outputFormat = "json";
     }
 
-    if (vm.count("help")) {
-        OUTPUT << visible_opts << "\n";
+    if (printVersion) {
+        // Version info is already in the tree; just flush and exit.
+        output->print();
         return 0;
     }
 
-    if (vm.count("list")) {
+    if (program.get<bool>("--list")) {
         output->listTestcases(testcases);
         return 0;
     }
 
-    if (testcasePrefixes.size() != 0 && testcasesToRun.size() != 0) {
-        output->recordError("You cannot specify both testcase and testcasePrefix options at the same time");
-        return 1;
+    // Note: -t and -p mutual exclusivity is enforced by add_mutually_exclusive_group()
+
+    if (pairUuids.size() >= 2) {
+        gpuPairUuid0 = pairUuids[0];
+        gpuPairUuid1 = pairUuids[1];
     }
 
     // Validate targetNumPairs argument
-    if (targetNumPairs < -1) {
+    if (gSettings.targetNumPairs < -1) {
         std::stringstream errmsg;
-        errmsg << "ERROR: Invalid targetNumPairs value: " << targetNumPairs
+        errmsg << "ERROR: Invalid targetNumPairs value: " << gSettings.targetNumPairs
                << ". Must be -1 (all pairs), 0 (no pairs), or a positive number.";
         output->recordError(errmsg.str());
         return 1;
     }
 #ifdef MULTINODE
     // In multinode mode, validate against maximum possible pairs
-    if (targetNumPairs > 0) {
+    if (gSettings.targetNumPairs > 0) {
         long long maxPairs = static_cast<long long>(worldSize) * (worldSize - 1);
-        if (targetNumPairs > maxPairs) {
+        if (gSettings.targetNumPairs > maxPairs) {
             std::stringstream errmsg;
-            errmsg << "ERROR: targetNumPairs (" << targetNumPairs
+            errmsg << "ERROR: targetNumPairs (" << gSettings.targetNumPairs
                    << ") exceeds maximum possible pairs (" << maxPairs
                    << ") for worldSize " << worldSize
                    << ". Use -1 for all pairs or specify a value <= " << maxPairs << ".";
@@ -288,33 +495,83 @@ int main(int argc, char **argv) {
     }
 #endif
 
+    int cudaRuntimeVersion = 0;
+    int cudaDriverApiVersion = 0;
+    if (!validateCudaRuntimeAndDriver(output, &cudaRuntimeVersion, &cudaDriverApiVersion)) {
+        return 1;
+    }
+
     CU_ASSERT(cuInit(0));
     NVML_ASSERT(nvmlInit());
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
-    if (bufferSize < defaultBufferSize) {
+#ifndef MULTINODE
+    worldSize = deviceCount;
+#endif
+
+    if (hasGpuPair()) {
+        if (normalizeUuidString(gpuPairUuid0) == normalizeUuidString(gpuPairUuid1)) {
+            output->recordError("ERROR: --pair requires two distinct GPU UUIDs, got the same UUID twice: " +
+                                gpuPairUuid0);
+            return 1;
+        }
+        int idx0 = getDeviceIndexByUuid(gpuPairUuid0, deviceCount);
+        int idx1 = getDeviceIndexByUuid(gpuPairUuid1, deviceCount);
+#ifdef MULTINODE
+        if (worldSize > 1) {
+            if (worldSize != 2) {
+                output->recordError("ERROR: --pair requires exactly 2 MPI ranks (one GPU per rank). Got worldSize=" +
+                                    std::to_string(worldSize));
+                return 1;
+            }
+            localDevice = (worldRank == 0) ? idx0 : idx1;
+            if (localDevice < 0) {
+                output->recordError("ERROR: GPU UUID not found on this node: " +
+                                    (worldRank == 0 ? gpuPairUuid0 : gpuPairUuid1));
+                return 1;
+            }
+        } else  // NOLINT(readability/braces)
+#endif
+        {
+            if (idx0 < 0 || idx1 < 0) {
+                output->recordError("ERROR: One or both GPU UUIDs not found on this machine: " +
+                                    gpuPairUuid0 + ", " + gpuPairUuid1);
+                return 1;
+            }
+            if (idx0 == idx1) {
+                output->recordError("ERROR: Both UUIDs resolved to the same device index (" +
+                                    std::to_string(idx0) + "); UUIDs: " +
+                                    gpuPairUuid0 + ", " + gpuPairUuid1);
+                return 1;
+            }
+            gpuPairDev0 = idx0;
+            gpuPairDev1 = idx1;
+        }
+    }
+
+    if (gSettings.bufferSizeMiB < kDefaultBufferSizeMiB) {
         output->recordWarning("NOTE: You have chosen a buffer size that is smaller than the default buffer size. It is suggested to use the default buffer size (512MB) to achieve maximal peak bandwidth.");
     }
 #ifdef _WIN32
-    if (useHugePages) {
+    if (gSettings.useHugePages) {
         // Disable huge pages on Windows
         output->recordWarning("NOTE: Huge pages are not supported on Windows. The option will be ignored.");
-        useHugePages = false;
+        gSettings.useHugePages = false;
     }
 #else
-    if (useHugePages && !hugePagesEnabled()) {
+    if (gSettings.useHugePages && !hugePagesEnabled()) {
         output->recordWarning("NOTE: Huge pages were requested, but Transparent Huge Pages (THP) are not enabled on this system. The option will be ignored. Enable THP with 'echo madvise > /sys/kernel/mm/transparent_hugepage/enabled' if you wish to use this feature.");
     }
 #endif
 
-    int cudaVersion;
-    CUDA_ASSERT(cudaRuntimeGetVersion(&cudaVersion));
-    CU_ASSERT(cuDriverGetVersion(&cudaVersion));
-
     char driverVersion[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE];
     NVML_ASSERT(nvmlSystemGetDriverVersion(driverVersion, NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE));
 
-    output->addVersionInfo();
-    output->addCudaAndDriverInfo(cudaVersion, driverVersion);
+    gSettings.bounceBufferConfComputeEnabled = isBounceBufferConfComputeEnabled();
+
+    output->addCudaAndDriverInfo(cudaRuntimeVersion, cudaDriverApiVersion, driverVersion);
+
+    output->addConfComputeInfo(gSettings.bounceBufferConfComputeEnabled);
+
     // Print GPU information
     output->recordDevices(worldSize);
 
@@ -352,6 +609,13 @@ int main(int argc, char **argv) {
             output->recordError("Specified list of testcase prefixes did not match any testcases");
             return 1;
         }
+    }
+
+    if (hasGpuPair() && !selectedTestcasesIncludeGpuPairRelevant(testcases, testcasesToRun)) {
+        output->recordWarning(
+            "NOTE: --pair is set but none of the selected testcases are device-to-device tests that use the "
+            "GPU pair (single-node memcpy/latency or multinode device-to-device). The pair filter has no effect "
+            "on the current selection.");
     }
 
     // This triggers the loading of all kernels on all devices, even with lazy loading enabled.

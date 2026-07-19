@@ -20,7 +20,7 @@
 
 #include "common.h"
 #include "json_output.h"
-#include "version.h"
+#include "nvbandwidth_version.h"
 
 const std::string NVB_TITLE("nvbandwidth");
 const std::string NVB_HOST_NAME("Hostname");
@@ -30,6 +30,10 @@ const std::string NVB_DEVICE_LIST("GPU Device list");
 const std::string NVB_DRIVER_VERSION("Driver Version");
 const std::string NVB_GIT_VERSION("git_version");
 const std::string NVB_VERSION("version");
+const std::string NVB_VERSION_MAJOR("Version Major");
+const std::string NVB_VERSION_MINOR("Version Minor");
+const std::string NVB_VERSION_PATCH("Version Patch");
+const std::string NVB_CUDA_DRIVER_API_VERSION("CUDA Driver API Version");
 const std::string NVB_ERROR("error");
 const std::string NVB_WARNING("warning");
 const std::string NVB_TESTCASES("testcases");
@@ -45,6 +49,7 @@ const std::string NVB_BW_AVG("average");
 const std::string NVB_BUFFER_SIZE("bufferSize");
 const std::string NVB_TEST_SAMPLES("testSamples");
 const std::string NVB_USE_MEAN("useMean");
+const std::string NVB_BOUNCE_BUFFER_CONF_COMPUTE_MODE_ENABLED("bounceBufferConfComputeEnabled");
 const std::string NVB_PASSED("Passed");
 const std::string NVB_RUNNING("Running");
 const std::string NVB_WAIVED("Waived");
@@ -89,7 +94,7 @@ void JsonOutput::addTestcaseResults(const PeerValueMatrix<double> &matrix, const
     testcase[NVB_BW_DESCRIPTION] = description;
     testcase[NVB_STATUS] = NVB_PASSED;
 
-    if (verbose) {
+    if (gSettings.verbose) {
         testcase[NVB_BW_MIN] = minVal;
         testcase[NVB_BW_MAX] = maxVal;
         testcase[NVB_BW_AVG] = count > 0 ? sum/count : 0;
@@ -100,6 +105,9 @@ void JsonOutput::addTestcase(const std::string &name, const std::string &status,
     Json::Value testcase;
     testcase[NVB_TESTCASE_NAME] = name;
     testcase[NVB_STATUS] = status;
+    if (!msg.empty() && status == NVB_WAIVED) {
+        testcase["waiver_reason"] = msg;
+    }
     m_root[NVB_TITLE][NVB_TESTCASES].append(testcase);
 }
 
@@ -164,12 +172,21 @@ void JsonOutput::recordWarning(const std::string &warning) {
 
 void JsonOutput::addVersionInfo() {
     m_root[NVB_TITLE][NVB_VERSION] = NVBANDWIDTH_VERSION;
+    m_root[NVB_TITLE][NVB_VERSION_MAJOR] = NVBANDWIDTH_VERSION_MAJOR;
+    m_root[NVB_TITLE][NVB_VERSION_MINOR] = NVBANDWIDTH_VERSION_MINOR;
+    m_root[NVB_TITLE][NVB_VERSION_PATCH] = NVBANDWIDTH_VERSION_PATCH;
     m_root[NVB_TITLE][NVB_GIT_VERSION] = GIT_VERSION;
 }
 
-void JsonOutput::addCudaAndDriverInfo(int cudaVersion, const std::string &driverVersion) {
-    m_root[NVB_TITLE][NVB_CUDA_RUNTIME_VERSION] = cudaVersion;
-    m_root[NVB_TITLE][NVB_DRIVER_VERSION] = driverVersion;
+void JsonOutput::addCudaAndDriverInfo(int cudaRuntimeVersion, int cudaDriverApiVersion,
+                                      const std::string &nvmlDriverVersion) {
+    m_root[NVB_TITLE][NVB_CUDA_RUNTIME_VERSION] = cudaRuntimeVersion;
+    m_root[NVB_TITLE][NVB_CUDA_DRIVER_API_VERSION] = cudaDriverApiVersion;
+    m_root[NVB_TITLE][NVB_DRIVER_VERSION] = nvmlDriverVersion;
+}
+
+void JsonOutput::addConfComputeInfo(bool bounceBufferConfComputeEnabled) {
+    m_root[NVB_TITLE][NVB_BOUNCE_BUFFER_CONF_COMPUTE_MODE_ENABLED] = bounceBufferConfComputeEnabled;
 }
 
 void JsonOutput::recordDevices(int deviceCount) {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,11 +20,18 @@
 
 #include <memory>
 #include "common.h"
+#include "kernels.cuh"
+
+// Helper function to enable peer access between two devices
+// Returns true if peer access was successfully enabled (or already enabled)
+// Returns false if peer access is not possible between the devices
+bool enablePeerAccessBetweenDevices(int srcDeviceId, int dstDeviceId);
 
 class MemcpyBuffer {
  protected:
     void* buffer{};
     size_t bufferSize;
+
  public:
     MemcpyBuffer(size_t bufferSize);
     virtual ~MemcpyBuffer() {}
@@ -38,6 +45,10 @@ class MemcpyBuffer {
     // For more details see https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/mpi.html#mpi-progress
     virtual CUresult streamSynchronizeWrapper(CUstream stream) const;
     virtual int getMPIRank() const;
+
+    virtual bool enablePeerAcess(const MemcpyBuffer &peerBuffer) const;
+    virtual bool supportsPeerAccess() const { return false; }
+    virtual bool isMulticastBuffer() const { return false; }
 };
 
 // Represents the host buffer abstraction
@@ -65,7 +76,8 @@ class DeviceBuffer : public MemcpyBuffer {
     CUcontext getPrimaryCtx() const override;
     virtual std::string getBufferString() const override;
 
-    bool enablePeerAcess(const DeviceBuffer &peerBuffer);
+    bool enablePeerAcess(const MemcpyBuffer &peerBuffer) const override;
+    bool supportsPeerAccess() const override { return true; }
 };
 
 // Specifies the preferred node's context to do the operation from
@@ -86,9 +98,18 @@ class MemcpyDispatchInfo {
     std::vector<CUstream> streams;
     std::vector<const MemcpyBuffer*> srcBuffers;
     std::vector<const MemcpyBuffer*> dstBuffers;
+    // Unfiltered source/destination buffers: all pairs regardless of which rank is
+    // dispatched.  Used so every rank can detect the unicast context (for the
+    // barrierAllRanks() call) and initialise buffers it owns even when it is not
+    // the dispatched copy rank for a given pair.
+    std::vector<const MemcpyBuffer*> allSrcBuffers;
+    std::vector<const MemcpyBuffer*> allDstBuffers;
+    std::vector<CUdeviceptr> verificationBuffers;  // For read-only/write-only tests
+    std::vector<size_t> verificationSizes;         // Adjusted sizes for verification
     std::vector<int> originalRanks;
     std::vector<size_t> adjustedCopySizes;
     std::shared_ptr<NodeHelper> nodeHelper;
+    unsigned long long loopCount;  // Number of iterations the kernel performs
     MemcpyDispatchInfo(std::vector<const MemcpyBuffer*> srcBuffers, std::vector<const MemcpyBuffer*> dstBuffers, std::vector<CUcontext> contexts, std::vector<int> originalRanks = {});
 };
 
@@ -103,6 +124,13 @@ class NodeHelper {
     // In MPI configuration we want to avoid using blocking functions such as cuStreamSynchronize to adhere to MPI notion of progress
     // For more details see https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/mpi.html#mpi-progress
     virtual CUresult streamSynchronizeWrapper(CUstream stream) const = 0;
+
+    // Synchronize all ranks (MPI_Barrier in multinode, no-op in single-node).
+    // Use before any cross-rank data dependency — e.g. after a source buffer is
+    // initialised by its owner rank and before the reader rank issues fabric.try_get.
+    virtual void barrierAllRanks() = 0;
+
+    static const MemcpyBuffer* selectExecutingBuffer(const MemcpyBuffer* src, const MemcpyBuffer* dst, ContextPreference ctxPreference);
 
     // stream blocking functions
     virtual void streamBlockerReset() = 0;
@@ -123,6 +151,7 @@ class NodeHelperSingle : public NodeHelper {
     std::vector<double> calculateVectorBandwidth(std::vector<double> &results, std::vector<int> originalRanks);
     void synchronizeProcess();
     CUresult streamSynchronizeWrapper(CUstream stream) const;
+    void barrierAllRanks();
 
     // stream blocking functions
     void streamBlockerReset();
@@ -132,51 +161,70 @@ class NodeHelperSingle : public NodeHelper {
 
 class MemcpyInitiator {
  public:
+    virtual ~MemcpyInitiator() = default;
+
     // Pure virtual function for implementation of the actual memcpy function
     // return actual bytes copied
     // This can vary from copySize due to SM copies truncated the copy to achieve max bandwidth
-    virtual size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor) = 0;
+    virtual size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor, MemcpyDispatchInfo* info = nullptr) = 0;
     // Calculate the truncated sizes used by copy kernels
-    virtual size_t getAdjustedCopySize(size_t size, CUstream stream) = 0;
+    virtual size_t getAdjustedCopySize(size_t src_size, size_t dst_size, CUstream stream) = 0;
     // Fill buffer with a pattern
     virtual void memsetPattern(MemcpyDispatchInfo &info) const = 0;
     // Compare buffer with a pattern
     virtual void memcmpPattern(MemcpyDispatchInfo &info) const = 0;
     // Adjust the bandwidth before final reporting
     virtual unsigned long long getAdjustedBandwidth(unsigned long long bandwidth) = 0;
+    // Get the name of the initiator for output labels
+    virtual std::string getName() const = 0;
 };
 
 class MemcpyInitiatorSM : public MemcpyInitiator {
+ protected:
+    unsigned int threadsPerBlock = 512;
  public:
-    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor);
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor, MemcpyDispatchInfo* info = nullptr);
     // Calculate the truncated sizes used by copy kernels
-    size_t getAdjustedCopySize(size_t size, CUstream stream);
+    size_t getAdjustedCopySize(size_t src_size, size_t dst_size, CUstream stream);
     // Fill buffer with a pattern
     void memsetPattern(MemcpyDispatchInfo &info) const;
     // Compare buffer with a pattern
     void memcmpPattern(MemcpyDispatchInfo &info) const;
     // Adjust the bandwidth before final reporting
     unsigned long long getAdjustedBandwidth(unsigned long long bandwidth);
+    // Get the name of the initiator for output labels
+    std::string getName() const override { return "SM"; }
 };
 
 class MemcpyInitiatorCE : public MemcpyInitiator  {
  public:
-    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor);
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor, MemcpyDispatchInfo* info = nullptr);
     // Calculate the truncated sizes used by copy kernels
-    size_t getAdjustedCopySize(size_t size, CUstream stream);
+    size_t getAdjustedCopySize(size_t src_size, size_t dst_size, CUstream stream);
     // Fill buffer with a pattern
     void memsetPattern(MemcpyDispatchInfo &info) const;
     // Compare buffer with a pattern
     void memcmpPattern(MemcpyDispatchInfo &info) const;
     // Adjust the bandwidth before final reporting
     unsigned long long getAdjustedBandwidth(unsigned long long bandwidth);
+    // Get the name of the initiator for output labels
+    std::string getName() const override { return "CE"; }
 };
 
 class MemcpyInitiatorMulticastWrite : public MemcpyInitiator {
  public:
-    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor);
-    // Calculate the truncated sizes used by copy kernels
-    size_t getAdjustedCopySize(size_t size, CUstream stream);
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor, MemcpyDispatchInfo* info = nullptr);
+    size_t getAdjustedCopySize(size_t src_size, size_t dst_size, CUstream stream);
+    void memsetPattern(MemcpyDispatchInfo &info) const;
+    void memcmpPattern(MemcpyDispatchInfo &info) const;
+    unsigned long long getAdjustedBandwidth(unsigned long long bandwidth);
+    std::string getName() const override { return "Multicast"; }
+};
+
+
+class MemcpyInitiatorSMSplitWarp : public MemcpyInitiatorSM {
+ public:
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor, MemcpyDispatchInfo* info = nullptr);
     // Fill buffer with a pattern
     void memsetPattern(MemcpyDispatchInfo &info) const;
     // Compare buffer with a pattern
@@ -185,15 +233,48 @@ class MemcpyInitiatorMulticastWrite : public MemcpyInitiator {
     unsigned long long getAdjustedBandwidth(unsigned long long bandwidth);
 };
 
-class MemcpyInitiatorSMSplitWarp : public MemcpyInitiatorSM {
+
+// TMA (Tensor Memory Accelerator) memcpy initiator
+class MemcpyInitiatorTMA : public MemcpyInitiator {
  public:
-    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor);
+    MemcpyInitiatorTMA() = default;
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor, MemcpyDispatchInfo* info = nullptr);
+    size_t getAdjustedCopySize(size_t src_size, size_t dst_size, CUstream stream);
+    void memsetPattern(MemcpyDispatchInfo &info) const;
+    void memcmpPattern(MemcpyDispatchInfo &info) const;
+    unsigned long long getAdjustedBandwidth(unsigned long long bandwidth);
+    std::string getName() const override { return "TMA"; }
+};
+
+class MemcpyInitiatorSMReadOnly : public MemcpyInitiatorSM {
+ public:
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor, MemcpyDispatchInfo* info = nullptr);
+    // Calculate the truncated sizes used by copy kernels (read-only: only src buffer is accessed)
+    size_t getAdjustedCopySize(size_t src_size, size_t dst_size, CUstream stream);
+    // Fill buffer with a pattern
+    void memsetPattern(MemcpyDispatchInfo &info) const;
+    // Compare buffer with a pattern - verifies samples
+    void memcmpPattern(MemcpyDispatchInfo &info) const;
+};
+
+class MemcpyInitiatorSMWriteOnly : public MemcpyInitiatorSM {
+ public:
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor, MemcpyDispatchInfo* info = nullptr);
+    // Calculate the truncated sizes used by copy kernels (write-only: only dst buffer is accessed)
+    size_t getAdjustedCopySize(size_t src_size, size_t dst_size, CUstream stream);
     // Fill buffer with a pattern
     void memsetPattern(MemcpyDispatchInfo &info) const;
     // Compare buffer with a pattern
     void memcmpPattern(MemcpyDispatchInfo &info) const;
-    // Adjust the bandwidth before final reporting
-    unsigned long long getAdjustedBandwidth(unsigned long long bandwidth);
+};
+
+// SM-based memcpy initiator optimized for OneToAll patterns.
+// Uses 32 threads per block instead of the default 512 to improve
+// performance characteristics for one-to-all GPU communication patterns.
+class MemcpyInitiatorSMOneToAll : public MemcpyInitiatorSM {
+ public:
+    MemcpyInitiatorSMOneToAll() { threadsPerBlock = 32; }
+    size_t memcpyFunc(MemcpyDescriptor &memcpyDescriptor, MemcpyDispatchInfo* info = nullptr);
 };
 
 // Abstraction of a memory Operation.
@@ -218,6 +299,14 @@ class MemcpyOperation : public MemoryOperation {
 
  private:
     unsigned long long loopCount;
+    bool useNvlinkUtilScheduling_ = false;
+
+    // Worst (largest) run-to-run coefficient of variation observed across all
+    // measurements performed by this operation. Each test uses a dedicated
+    // MemcpyOperation, so this tracks the least stable measurement in the test.
+    // Negative means no measurement has been recorded yet.
+    double worstCoeffOfVariation_ = -1.0;
+    void recordCoefficientOfVariation(double cv);
 
  protected:
     size_t *procMask;
@@ -231,6 +320,16 @@ class MemcpyOperation : public MemoryOperation {
     MemcpyOperation(unsigned long long loopCount, MemcpyInitiator *_memcpyInitiator, NodeHelper *_nodeHelper, ContextPreference ctxPreference = ContextPreference::PREFER_SRC_CONTEXT, BandwidthValue bandwidthValue = BandwidthValue::USE_FIRST_BW);
     virtual ~MemcpyOperation();
 
+    // Set whether to use NVLink utilization scheduling for SM kernels
+    void setUseNvlinkUtilScheduling(bool enable) {
+        useNvlinkUtilScheduling_ = enable;
+    }
+
+    // Worst run-to-run coefficient of variation across all measurements done by
+    // this operation, or a negative value if nothing has been measured. Used to
+    // report the COEFFICIENT_OF_VARIATION stability metric for a test.
+    double worstCoefficientOfVariation() const { return worstCoeffOfVariation_; }
+
     // Lists of paired nodes will be executed sumultaneously
     // context of srcBuffers is preferred (if not host) unless otherwise specified
     std::vector<double> doMemcpyCore(MemcpyDispatchInfo &info);
@@ -243,7 +342,7 @@ class MemPtrChaseOperation : public MemoryOperation {
  public:
     MemPtrChaseOperation(unsigned long long loopCount);
     ~MemPtrChaseOperation() = default;
-    double doPtrChase(const int srcId, const MemcpyBuffer &peerBuffer);
+    double doPtrChase(const int srcId, const MemcpyBuffer &peerBuffer, PtrChasingKernel kernel);
  private:
     unsigned long long loopCount;
     unsigned int smCount;

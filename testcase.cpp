@@ -20,6 +20,9 @@
 #include "testcase.h"
 #include "inline_common.h"
 
+
+std::map<std::string, std::map<std::string, std::shared_ptr<PeerValueMatrix<double>>>> Testcase::globalTestCache;
+
 Testcase::Testcase(std::string key, std::string desc) :
     key(std::move(key)), desc(std::move(desc))
 {}
@@ -27,7 +30,14 @@ Testcase::Testcase(std::string key, std::string desc) :
 std::string Testcase::testKey() { return key; }
 std::string Testcase::testDesc() { return desc; }
 
-bool Testcase::filterHasAccessiblePeerPairs() {
+FilterResult Testcase::filterHasMultipleGPUs() {
+    int n = 0;
+    CU_ASSERT(cuDeviceGetCount(&n));
+    if (n < 2) return FilterResult::waive("requires at least 2 GPUs");
+    return FilterResult::pass();
+}
+
+FilterResult Testcase::filterHasAccessiblePeerPairs() {
     int deviceCount = 0;
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
 
@@ -41,15 +51,15 @@ bool Testcase::filterHasAccessiblePeerPairs() {
 
             CU_ASSERT(cuDeviceCanAccessPeer(&canAccessPeer, currentDevice, peer));
             if (canAccessPeer) {
-                return true;
+                return FilterResult::pass();
             }
         }
     }
 
-    return false;
+    return FilterResult::waive("no accessible peer GPU pairs (P2P not supported between any devices)");
 }
 
-bool Testcase::filterSupportsMulticast() {
+FilterResult Testcase::filterSupportsMulticast() {
     int deviceCount = 0;
     CU_ASSERT(cuDeviceGetCount(&deviceCount));
 
@@ -60,134 +70,147 @@ bool Testcase::filterSupportsMulticast() {
 
         CU_ASSERT(cuDeviceGetAttribute(&supportsMulticast, CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED, dev));
         if (!supportsMulticast) {
-            return false;
+            return FilterResult::waive("multicast not supported on device " + std::to_string(currentDevice));
         }
     }
 
-    return true;
+    return FilterResult::pass();
+}
+
+FilterResult Testcase::filterSupportsTMA() {
+    int deviceCount = 0;
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
+
+    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        CUdevice dev;
+        CU_ASSERT(cuDeviceGet(&dev, currentDevice));
+        int major = 0;
+
+        CU_ASSERT(cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, dev));
+        if (major < 9) {
+            return FilterResult::waive(
+                "TMA requires compute capability 9.0+ (Hopper or later), device "
+                + std::to_string(currentDevice) + " has " + std::to_string(major) + ".x");
+        }
+    }
+
+    return FilterResult::pass();
+}
+
+
+FilterResult Testcase::filterBounceBufferConfComputeEnabled() {
+    if (gSettings.bounceBufferConfComputeEnabled) {
+        return FilterResult::waive("bounce-buffer confidential computing enabled");
+    }
+
+    return FilterResult::pass();
 }
 
 #ifdef MULTINODE
 // Each MPI rank handles one GPU, so we simply have to check if we have more than 1 process
-bool Testcase::filterHasMultipleGPUsMultinode() {
-    return worldSize > 1;
+FilterResult Testcase::filterHasMultipleGPUsMultinode() {
+    if (worldSize > 1) return FilterResult::pass();
+    return FilterResult::waive("requires multiple MPI ranks (only 1 process)");
 }
 #endif
 
+template<typename AlignedLatencyNode>
 void Testcase::latencyHelper(const MemcpyBuffer &dataBuffer, bool measureDeviceToDeviceLatency) {
-    uint64_t n_ptrs = dataBuffer.getBufferSize() / sizeof(struct LatencyNode);
+    uint64_t n_ptrs = dataBuffer.getBufferSize() / sizeof(AlignedLatencyNode);
 
     if (measureDeviceToDeviceLatency) {
         // For device-to-device latency, create and initialize pattern on device
         for (uint64_t i = 0; i < n_ptrs; i++) {
-            struct LatencyNode node;
-            size_t nextOffset = ((i + strideLen) % n_ptrs) * sizeof(struct LatencyNode);
+            AlignedLatencyNode alignedNode;
+            size_t nextOffset = ((i + strideLen) % n_ptrs) * sizeof(AlignedLatencyNode);
             // Set up pattern with device addresses
-            node.next = (struct LatencyNode*)(dataBuffer.getBuffer() + nextOffset);
-            CU_ASSERT(cuMemcpyHtoD(dataBuffer.getBuffer() + i*sizeof(struct LatencyNode),
-                                 &node, sizeof(struct LatencyNode)));
+            alignedNode.next = (AlignedLatencyNode *)(dataBuffer.getBuffer() + nextOffset);
+            CU_ASSERT(cuMemcpyHtoD(dataBuffer.getBuffer() + i*sizeof(AlignedLatencyNode),
+                                 &alignedNode, sizeof(AlignedLatencyNode)));
         }
     } else {
         // For host-device latency, initialize pattern with host addresses
-        struct LatencyNode* hostMem = (struct LatencyNode*)dataBuffer.getBuffer();
+        AlignedLatencyNode* hostMem = (AlignedLatencyNode*)dataBuffer.getBuffer();
         for (uint64_t i = 0; i < n_ptrs; i++) {
             hostMem[i].next = &hostMem[(i + strideLen) % n_ptrs];
         }
     }
 }
 
-void Testcase::allToOneHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead) {
-    std::vector<const DeviceBuffer*> allSrcBuffers;
+template void Testcase::latencyHelper<struct LatencyNode>(const MemcpyBuffer &dataBuffer, bool measureDeviceToDeviceLatency);
+template void Testcase::latencyHelper<struct TMALatencyNode>(const MemcpyBuffer &dataBuffer, bool measureDeviceToDeviceLatency);
 
-    // allocate all src nodes up front, re-use to avoid reallocation
+void Testcase::forEachAllToOneBufferPairing(unsigned long long size, allToOneOneToAllCallback callback) {
+    std::vector<const DeviceBuffer*> allBuffersPreallocated;
+
+    // allocate the all-group buffers up front, re-use to avoid reallocation
     for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        allSrcBuffers.push_back(new DeviceBuffer(size, deviceId));
+        allBuffersPreallocated.push_back(new DeviceBuffer(size, deviceId));
     }
 
-    for (int dstDeviceId = 0; dstDeviceId < deviceCount; dstDeviceId++) {
-        std::vector<const MemcpyBuffer*> dstBuffers;
-        std::vector<const MemcpyBuffer*> srcBuffers;
+    for (int oneDeviceId = 0; oneDeviceId < deviceCount; oneDeviceId++) {
+        std::vector<const MemcpyBuffer*> oneBuffers;
+        std::vector<const MemcpyBuffer*> allBuffers;
 
-        for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
-            if (srcDeviceId == dstDeviceId) {
+        for (int allDeviceId = 0; allDeviceId < deviceCount; allDeviceId++) {
+            if (allDeviceId == oneDeviceId) {
                 continue;
             }
 
-            DeviceBuffer* dstBuffer = new DeviceBuffer(size, dstDeviceId);
+            DeviceBuffer* oneBuffer = new DeviceBuffer(size, oneDeviceId);
 
-            if (!dstBuffer->enablePeerAcess(*allSrcBuffers[srcDeviceId])) {
-                delete dstBuffer;
+            if (!oneBuffer->enablePeerAcess(*allBuffersPreallocated[allDeviceId])) {
+                delete oneBuffer;
                 continue;
             }
 
-            srcBuffers.push_back(allSrcBuffers[srcDeviceId]);
-            dstBuffers.push_back(dstBuffer);
+            // Pairs a buffer on a GPU in the all group, with a buffer on a GPU in the one group
+            allBuffers.push_back(allBuffersPreallocated[allDeviceId]);
+            oneBuffers.push_back(oneBuffer);
         }
         // If no peer GPUs, skip measurements.
-        if (!srcBuffers.empty()) {
-            if (isRead) {
-                // swap dst and src for read tests
-                bandwidthValues.value(0, dstDeviceId) = memcpyInstance.doMemcpy(dstBuffers, srcBuffers);
-            } else {
-                bandwidthValues.value(0, dstDeviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
-            }
+        if (!allBuffers.empty()) {
+            callback(oneDeviceId, allBuffers, oneBuffers);
         }
 
-        for (auto node : dstBuffers) {
+        for (auto node : oneBuffers) {
             delete node;
         }
     }
 
-    for (auto node : allSrcBuffers) {
+    for (auto node : allBuffersPreallocated) {
         delete node;
     }
 }
 
-void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool isRead) {
-    std::vector<const DeviceBuffer*> allDstBuffers;
-
-    // allocate all src nodes up front, re-use to avoid reallocation
-    for (int deviceId = 0; deviceId < deviceCount; deviceId++) {
-        allDstBuffers.push_back(new DeviceBuffer(size, deviceId));
-    }
-
-    for (int srcDeviceId = 0; srcDeviceId < deviceCount; srcDeviceId++) {
-        std::vector<const MemcpyBuffer*> dstBuffers;
-        std::vector<const MemcpyBuffer*> srcBuffers;
-
-        for (int dstDeviceId = 0; dstDeviceId < deviceCount; dstDeviceId++) {
-            if (srcDeviceId == dstDeviceId) {
-                continue;
-            }
-
-            DeviceBuffer* srcBuffer = new DeviceBuffer(size, srcDeviceId);
-
-            if (!srcBuffer->enablePeerAcess(*allDstBuffers[dstDeviceId])) {
-                delete srcBuffer;
-                continue;
-            }
-
-            srcBuffers.push_back(srcBuffer);
-            dstBuffers.push_back(allDstBuffers[dstDeviceId]);
+void Testcase::allToOneHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues) {
+    forEachAllToOneBufferPairing(size, [&](int oneDeviceId,
+                                            std::vector<const MemcpyBuffer*>& allBuffers,
+                                            std::vector<const MemcpyBuffer*>& oneBuffers) {
+        if (memcpyInstance.ctxPreference == PREFER_DST_CONTEXT) {
+            // Do a read from each GPU in the all group, by reading from the one GPU
+            bandwidthValues.value(0, oneDeviceId) = memcpyInstance.doMemcpy(oneBuffers, allBuffers);
+        } else {
+            // Do a write from each GPU in the all group, by writing to the one GPU
+            bandwidthValues.value(0, oneDeviceId) = memcpyInstance.doMemcpy(allBuffers, oneBuffers);
         }
-        // If no peer GPUs, skip measurements.
-        if ( !srcBuffers.empty() ) {
-            if (isRead) {
-                // swap dst and src for read tests
-                bandwidthValues.value(0, srcDeviceId) = memcpyInstance.doMemcpy(dstBuffers, srcBuffers);
-            } else {
-                bandwidthValues.value(0, srcDeviceId) = memcpyInstance.doMemcpy(srcBuffers, dstBuffers);
-            }
-        }
+    });
+    recordStability(bandwidthValues, memcpyInstance);
+}
 
-        for (auto node : srcBuffers) {
-            delete node;
+void Testcase::oneToAllHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues) {
+    forEachAllToOneBufferPairing(size, [&](int oneDeviceId,
+                                            std::vector<const MemcpyBuffer*>& allBuffers,
+                                            std::vector<const MemcpyBuffer*>& oneBuffers) {
+        if (memcpyInstance.ctxPreference == PREFER_DST_CONTEXT) {
+            // Do a read from the GPU in the one group, by reading from each GPU in the all group
+            bandwidthValues.value(0, oneDeviceId) = memcpyInstance.doMemcpy(allBuffers, oneBuffers);
+        } else {
+            // Do a write from the GPU in the one group, by writing to each GPU in the all group
+            bandwidthValues.value(0, oneDeviceId) = memcpyInstance.doMemcpy(oneBuffers, allBuffers);
         }
-    }
-
-    for (auto node : allDstBuffers) {
-        delete node;
-    }
+    });
+    recordStability(bandwidthValues, memcpyInstance);
 }
 
 void Testcase::allHostHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost) {
@@ -222,6 +245,7 @@ void Testcase::allHostHelper(unsigned long long size, MemcpyOperation &memcpyIns
             delete node;
         }
     }
+    recordStability(bandwidthValues, memcpyInstance);
 }
 
 void Testcase::allHostBidirHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost) {
@@ -268,5 +292,5 @@ void Testcase::allHostBidirHelper(unsigned long long size, MemcpyOperation &memc
             delete node;
         }
     }
+    recordStability(bandwidthValues, memcpyInstance);
 }
-
