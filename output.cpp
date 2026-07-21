@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +15,10 @@
  * limitations under the License.
  */
 
+#include "cuda_version_check.h"
 #include "inline_common.h"
+#include "nvbandwidth_version.h"
 #include "output.h"
-#include "version.h"
 
 #include <math.h>
 
@@ -28,27 +29,36 @@
 #endif
 
 void Output::addVersionInfo() {
-    OUTPUT << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << std::endl;
-    OUTPUT << "Built from Git version: " << GIT_VERSION << std::endl << std::endl;
+    OUTPUT << "nvbandwidth Version: " << NVBANDWIDTH_VERSION << "\n";
+    OUTPUT << "Built from Git version: " << GIT_VERSION << "\n\n";
 
 #ifdef MULTINODE
     char MPIVersion[MPI_MAX_LIBRARY_VERSION_STRING];
     int MPIVersionLen;
     MPI_Get_library_version(MPIVersion, &MPIVersionLen);
 
-    OUTPUT << "MPI version: " << MPIVersion << std::endl;
+    OUTPUT << "MPI version: " << MPIVersion << "\n";
 #endif
 }
 
 void Output::printInfo() {
-    OUTPUT << "NOTE: The reported results may not reflect the full capabilities of the platform." << std::endl
-           << "Performance can vary with software drivers, hardware clocks, and system topology." << std::endl << std::endl;
+    OUTPUT << "NOTE: The reported results may not reflect the full capabilities of the platform.\n"
+           << "Performance can vary with software drivers, hardware clocks, and system topology.\n\n";
 }
 
-void Output::addCudaAndDriverInfo(int cudaVersion, const std::string &driverVersion) {
-    OUTPUT << "CUDA Runtime Version: " << cudaVersion << std::endl;
-    OUTPUT << "CUDA Driver Version: " << cudaVersion << std::endl;
-    OUTPUT << "Driver Version: " << driverVersion << std::endl << std::endl;
+void Output::addCudaAndDriverInfo(int cudaRuntimeVersion, int cudaDriverApiVersion,
+                                  const std::string &nvmlDriverVersion) {
+    OUTPUT << "CUDA Runtime Version: " << formatCudaVersionCode(cudaRuntimeVersion) << " ("
+           << cudaRuntimeVersion << ")" << "\n";
+    OUTPUT << "CUDA Driver Version (API): " << formatCudaVersionCode(cudaDriverApiVersion) << " ("
+           << cudaDriverApiVersion << ")" << "\n";
+    OUTPUT << "Driver Version: " << nvmlDriverVersion << "\n\n";
+}
+
+void Output::addConfComputeInfo(bool bounceBufferConfComputeEnabled) {
+    if (bounceBufferConfComputeEnabled) {
+        OUTPUT << "Detected platform using encrypted bounce buffers for CPU<->GPU traffic.\n\n";
+    }
 }
 
 void Output::recordError(const std::string &error) {
@@ -62,7 +72,7 @@ void Output::recordError(const std::vector<std::string> &errorParts) {
             OUTPUT << part << ":\n\n";
             first = false;
         } else {
-            OUTPUT << part << std::endl;
+            OUTPUT << part << "\n";
         }
     }
 }
@@ -71,7 +81,7 @@ void Output::listTestcases(const std::vector<Testcase*> &testcases) {
     size_t numTestcases = testcases.size();
     OUTPUT << "Index, Name:\n\tDescription\n";
     for (size_t i = 0; i < numTestcases; i++) {
-        OUTPUT << i << ", " << testcases[i]->testKey() << ":\n\t" << testcases[i]->testDesc() << std::endl;
+        OUTPUT << i << ", " << testcases[i]->testKey() << ":\n\t" << testcases[i]->testDesc() << "\n";
     }
 }
 
@@ -111,7 +121,10 @@ static void printGPUsMultinode() {
     std::vector<char> hostnameExchange(worldSize * STRING_LENGTH, 0);
     MPI_Allgather(hostname, STRING_LENGTH, MPI_BYTE, &hostnameExchange[0], STRING_LENGTH, MPI_BYTE, MPI_COMM_WORLD);
 
-    localDevice = localRank % deviceCount;
+    if (!hasGpuPair()) {
+        localDevice = localRank % deviceCount;
+    }
+    // else localDevice was already set in main from --pair UUID resolution
 
     std::vector<int> deviceCountExchange(worldSize);
     MPI_Allgather(&deviceCount, 1, MPI_INT, &deviceCountExchange[0], 1, MPI_INT, MPI_COMM_WORLD);
@@ -144,18 +157,18 @@ static void printGPUsMultinode() {
     for (int i = 0; i < worldSize; i++) {
         char *deviceName = &deviceNameExchange[i * STRING_LENGTH];
         OUTPUT << "Process " << getPaddedProcessId(i) << " (" << &hostnameExchange[i * STRING_LENGTH] << "): device "
-               << localDeviceIdExchange[i] << ": " << deviceName << std::endl;
+               << localDeviceIdExchange[i] << ": " << deviceName << "\n";
     }
-    OUTPUT << std::endl;
+    OUTPUT << "\n";
 }
 #endif
 
 static void printGPUs() {
-    OUTPUT << env->getHostname() << std::endl;
+    OUTPUT << env->getHostname() << "\n";
     for (int iDev = 0; iDev < deviceCount; iDev++) {
-        OUTPUT << "Device " << iDev << ": " << getDeviceDisplayInfo(iDev) << std::endl;
+        OUTPUT << "Device " << iDev << ": " << getDeviceDisplayInfo(iDev) << "\n";
     }
-    OUTPUT << std::endl;
+    OUTPUT << "\n";
 }
 
 void Output::recordDevices(int worldSize) {
@@ -172,18 +185,18 @@ void Output::addTestcase(const std::string &name, const std::string &status, con
     if (status == NVB_RUNNING) {
         OUTPUT << status << " " << name << ".\n";
     } else {
-        OUTPUT << status << ": " << msg << std::endl;
+        OUTPUT << status << " " << name << ": " << msg << "\n";
     }
 }
 
 void Output::setTestcaseStatusAndAddIfNeeded(const std::string &name, const std::string &status, const std::string &msg) {
     // For plain text output, the name has always been printed already and therefore isn't needed here
-    OUTPUT << status << ": " << msg << std::endl;
+    OUTPUT << status << ": " << msg << "\n";
 }
 
 void Output::addTestcaseResults(const PeerValueMatrix<double> &bandwidthValues, const std::string &description) {
-    OUTPUT << description << std::endl;
-    OUTPUT << std::fixed << std::setprecision(2) << bandwidthValues << std::endl;
+    OUTPUT << description << "\n";
+    OUTPUT << std::fixed << std::setprecision(2) << bandwidthValues << "\n";
 }
 
 void Output::print() {
@@ -191,11 +204,11 @@ void Output::print() {
 }
 
 void Output::recordErrorCurrentTest(const std::string &errorLine1, const std::string &errorLine2) {
-    OUTPUT << errorLine1 << std::endl << errorLine2 << std::endl;
+    OUTPUT << errorLine1 << "\n" << errorLine2 << "\n";
 }
 
 void Output::recordWarning(const std::string &warning) {
-    OUTPUT << warning << std::endl;
+    OUTPUT << warning << "\n";
 }
 
 void RecordError(const std::stringstream &errmsg) {

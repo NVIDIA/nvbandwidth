@@ -83,7 +83,10 @@ class Output {
 
     virtual void recordWarning(const std::string &warning);
 
-    virtual void addCudaAndDriverInfo(int cudaVersion, const std::string &driverVersion);
+    virtual void addCudaAndDriverInfo(int cudaRuntimeVersion, int cudaDriverApiVersion,
+                                      const std::string &nvmlDriverVersion);
+
+    virtual void addConfComputeInfo(bool bounceBufferConfComputeEnabled);
 
     virtual void addTestcaseResults(const PeerValueMatrix<double> &matrix, const std::string &description);
 

@@ -44,7 +44,10 @@ class JsonOutput : public Output {
 
     void addVersionInfo();
 
-    void addCudaAndDriverInfo(int cudaVersion, const std::string &driverVersion);
+    void addCudaAndDriverInfo(int cudaRuntimeVersion, int cudaDriverApiVersion,
+                              const std::string &nvmlDriverVersion);
+
+    void addConfComputeInfo(bool bounceBufferConfComputeEnabled);
 
     void addTestcaseResults(const PeerValueMatrix<double> &matrix, const std::string &description);
 

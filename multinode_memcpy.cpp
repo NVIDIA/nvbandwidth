@@ -467,6 +467,10 @@ void NodeHelperMulti::synchronizeProcess() {
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
+void NodeHelperMulti::barrierAllRanks() {
+    MPI_Barrier(MPI_COMM_WORLD);
+}
+
 CUresult NodeHelperMulti::streamSynchronizeWrapper(CUstream stream) const {
     return MPIstreamSyncHelper(stream);
 }

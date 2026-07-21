@@ -17,6 +17,7 @@
 
 #include "error_handling.h"
 #include <common.h>
+#include <cuda_runtime.h>
 #ifndef _WIN32
 #include <unistd.h>
 #endif

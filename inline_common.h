@@ -29,8 +29,12 @@ template <class T> struct PeerValueMatrix {
     std::vector<std::string> row_labels;
     bool pFormatter;
     UnitType uType;
+    // Run-to-run coefficient of variation for this test's measurements (worst
+    // cell). Populated from the measurement statistics; when set it is emitted
+    // as the COEFFICIENT_OF_VARIATION stability metric.
+    std::optional<double> coefficientOfVariation;
 
-    PeerValueMatrix(int rows, int columns, std::string key = "", bool pFormatter = perfFormatter, UnitType uType = BANDWIDTH): m_matrix(rows * columns), m_rows(rows), m_columns(columns), key(key), pFormatter(perfFormatter), uType(uType) {}
+    PeerValueMatrix(int rows, int columns, std::string key = "", bool pFormatter = gSettings.perfFormatter, UnitType uType = BANDWIDTH): m_matrix(rows * columns), m_rows(rows), m_columns(columns), key(key), pFormatter(pFormatter), uType(uType) {}
 
     std::optional <T> &value(int src, int dst) {
         ASSERT(src >= 0 && src < m_rows);
@@ -106,26 +110,13 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
     } else {
         o << "SUM " << matrix.key << " " << sum << std::endl;
     }
-    // Calculate coefficient of variation
-    if (count > 1) {
-        T mean = sum / count;
-        T variance = 0.0;
 
-        // Calculate variance
-        for (int currentDevice = 0; currentDevice < matrix.m_rows; currentDevice++) {
-            for (int peer = 0; peer < matrix.m_columns; peer++) {
-                std::optional<T> val = matrix.value(currentDevice, peer);
-                if (val && val.value() > 0) {
-                    variance += std::pow(val.value() - mean, 2);
-                }
-            }
-        }
-
-        if (mean > 0) {
-            T stdDev = std::sqrt(variance / count);
-            T cv = stdDev / mean;
-            o << "COEFFICIENT_OF_VARIATION " << matrix.key << " " << cv << std::endl;
-        }
+    // Report the run-to-run (temporal) coefficient of variation, which measures
+    // the stability of each measurement across repeated samples. Guard on a
+    // minimum sample count since the CV is unreliable with few samples.
+    if (matrix.coefficientOfVariation &&
+        gSettings.averageLoopCount >= kMinAverageLoopCountForCV) {
+        o << "COEFFICIENT_OF_VARIATION " << matrix.key << " " << matrix.coefficientOfVariation.value() << "\n";
     }
 
     VERBOSE << "MIN " << matrix.key << " " << minVal << '\n';
@@ -140,7 +131,7 @@ inline void setOptimalCpuAffinity(int cudaDeviceID) {
     // NVML doesn't support setting affinity on Windows
     return;
 #endif
-    if (disableAffinity) {
+    if (gSettings.disableAffinity) {
         return;
     }
 
@@ -176,6 +167,47 @@ inline bool isMemoryOwnedByCUDA(void *memory) {
         CU_ASSERT(status);
         return true;
     }
+}
+
+// Format CUDA device UUID as "GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" (NVML style).
+inline std::string getDeviceUuidString(int deviceOrdinal) {
+    CUdevice dev;
+    CUuuid dev_uuid;
+    CU_ASSERT(cuDeviceGet(&dev, deviceOrdinal));
+    CU_ASSERT(cuDeviceGetUuid(&dev_uuid, dev));
+    // Dash positions in the UUID hex string (before bytes 0,4,6,8,10).
+    static constexpr bool kDashBefore[16] = {1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0};
+    std::stringstream s;
+    s << "GPU";
+    for (int i = 0; i < 16; i++) {
+        if (kDashBefore[i]) s << '-';
+        s << std::hex << std::setfill('0') << std::setw(2) << (0xFF & (int)dev_uuid.bytes[i]);
+    }
+    return s.str();
+}
+
+// Normalize UUID string for comparison: strip optional "GPU-" prefix, lowercase.
+inline std::string normalizeUuidString(const std::string& u) {
+    // Strip "GPU-" prefix (case-insensitive).
+    std::size_t start = 0;
+    if (u.size() >= 4 && std::tolower((unsigned char)u[0]) == 'g' &&
+        std::tolower((unsigned char)u[1]) == 'p' &&
+        std::tolower((unsigned char)u[2]) == 'u' && u[3] == '-') {
+        start = 4;
+    }
+    std::string out(u, start);
+    std::transform(out.begin(), out.end(), out.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    return out;
+}
+
+// Return device ordinal for the GPU whose UUID matches (or -1 if not found).
+inline int getDeviceIndexByUuid(const std::string& uuid, int deviceCount) {
+    std::string want = normalizeUuidString(uuid);
+    for (int i = 0; i < deviceCount; i++) {
+        if (normalizeUuidString(getDeviceUuidString(i)) == want) return i;
+    }
+    return -1;
 }
 
 #endif  // INLINE_COMMON_H_

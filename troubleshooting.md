@@ -120,7 +120,7 @@ rm -rf CMakeCache.txt CMakeFiles
 make clean
 ```
 
-2. Set CUDA version:
+2. Set CUDA version (replace `cuda-12.8` with your installed version):
 ```bash
 export PATH=/usr/local/cuda-12.8/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH
@@ -159,20 +159,6 @@ cmake -DCMAKE_CUDA_ARCHITECTURES=sm_90
 
 </details>
 
-<details>
-<summary><strong>📦 I'm getting "No rule to make target libboost_program_options.a" error. How do I fix this?</strong></summary>
-
-**Error Message:**
-```bash
-No rule to make target '/usr/lib64/libboost_program_options.a'
-```
-
-**Solution:**
-```bash
-sudo apt-get install libboost-program-options-dev
-```
-
-</details>
 
 <details>
 <summary><strong>🔗 I'm getting "CUDA_ERROR_NVLINK_UNCORRECTABLE" error. How do I diagnose NVLink issues?</strong></summary>
@@ -214,7 +200,7 @@ Missing or improper IMEX channel setup, required for multi-node runs.
 ```bash
 $ sudo systemctl start nvidia-imex
 # Query the major number
-$ /proc/devices | grep nvidia-caps-imex-channels
+$ cat /proc/devices | grep nvidia-caps-imex-channels
 # Create the IMEX channels
 $ sudo mkdir /dev/nvidia-caps-imex-channels/
 $ sudo mknod /dev/nvidia-caps-imex-channels/channel0 c <major number> 0 
@@ -242,6 +228,7 @@ Install OpenMPI development packages (package names vary by distribution):
 **Ubuntu/Debian:**
 ```bash
 sudo apt-get install openmpi-bin libopenmpi-dev
+```
 
 **Red Hat/CentOS/Fedora:**
 ```bash

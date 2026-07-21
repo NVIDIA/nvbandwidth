@@ -4,7 +4,6 @@
 # build nvbandwidth
 
 apt install -y build-essential
-apt install -y libboost-program-options-dev
 apt install -y cmake
 output=$(cmake --version | sed -n 1p | sed 's/[^0-9]*//g')
 if [ $output -lt 3200 ]; then

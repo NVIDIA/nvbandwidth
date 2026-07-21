@@ -138,6 +138,7 @@ class NodeHelperMulti : public NodeHelper {
     std::vector<double> calculateVectorBandwidth(std::vector<double> &results, std::vector<int> originalRanks);
     void synchronizeProcess();
     CUresult streamSynchronizeWrapper(CUstream stream) const;
+    void barrierAllRanks();
 
     // stream blocking functions
     void streamBlockerReset();

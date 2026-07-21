@@ -22,10 +22,13 @@
 #include <cstdlib>
 #include <cuda.h>
 #include <nvml.h>
+#include <algorithm>
+#include <cctype>
 #include <float.h>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <ostream>
 #include <string>
 #include <sstream>
@@ -36,35 +39,31 @@
 #include <optional>
 #include <cstring>
 
+#include "test_settings.h"
+
 #define STRING_LENGTH 256
 
-// Default constants
-const unsigned long long defaultLoopCount = 16;
+// Non-settings constants
 const unsigned long long smallBufferThreshold = 64;
-const unsigned long long defaultBufferSize = 512;  // 512 MiB
-const unsigned int defaultAverageLoopCount = 3;
 const unsigned int _MiB = 1024 * 1024;
 const unsigned int _2MiB = 2 * _MiB;
 const unsigned int numThreadPerBlock = 512;
 const unsigned int strideLen = 16; /* cacheLine size 128 Bytes, 16 words */
 const unsigned long latencyMemAccessCnt = 1000000; /* 1M total read accesses to gauge latency */
+
+// Runtime state (not settings)
 extern int deviceCount;
-extern unsigned int averageLoopCount;
-extern bool disableAffinity;
-extern bool skipVerification;
-extern bool useMean;
-extern bool jsonOutput;
-// Verbosity
-extern bool verbose;
-extern bool perfFormatter;
-extern bool useHugePages;
+
+// Pairwise GPU test: run only between these two GPUs (by UUID). Same or different nodes.
+extern std::string gpuPairUuid0, gpuPairUuid1;
+extern int gpuPairDev0, gpuPairDev1;  // Resolved device indices (single-node); -1 when not set
+inline bool hasGpuPair() { return !gpuPairUuid0.empty(); }
 
 #ifdef MULTINODE
 extern int localDevice;
 extern int localRank;
 extern int worldRank;
 extern int worldSize;
-extern long long targetNumPairs;
 #endif
 
 class Verbosity {
@@ -75,13 +74,13 @@ class Verbosity {
 
     template<typename T>
     Verbosity& operator<<(T input) {
-        if (!jsonOutput && controlVariable) std::cout << input;
+        if (!gSettings.isJsonOutput() && controlVariable) std::cout << input;
         return *this;
     }
 
     using StreamType = decltype(std::cout);
     Verbosity &operator<<(StreamType &(*func)(StreamType &)) {
-        if (!jsonOutput && controlVariable) {
+        if (!gSettings.isJsonOutput() && controlVariable) {
             func(std::cout);
         }
         return *this;
@@ -184,6 +183,14 @@ class PerformanceStatistic {
         return (variance() > 0.0 ? std::sqrt(variance()) : 0.0);
     }
 
+    // Run-to-run coefficient of variation (stddev / mean) over the recorded
+    // samples. Measures temporal stability of a single measurement; returns 0
+    // when there are not enough samples or the mean is non-positive.
+    double coefficientOfVariation(void) const {
+        double m = mean();
+        return (count() > 1 && m > 0.0) ? stddev() / m : 0.0;
+    }
+
     double largest(void) const { return values.size() > 0 ? values[values.size() - 1] : 0.0; }
 
     double smallest(void) const { return values.size() > 0 ? values[0] : 0.0; }
@@ -200,7 +207,7 @@ class PerformanceStatistic {
     }
 
     double returnAppropriateMetric(void) const {
-        if (useMean) {
+        if (gSettings.useMean) {
             return mean();
         } else {
             return median();
@@ -220,6 +227,11 @@ inline std::string getPaddedProcessId(int id) {
 
 struct LatencyNode {
     struct LatencyNode *next;
+};
+
+// 16-byte aligned node for TMA use cases
+struct alignas(16) TMALatencyNode {
+    struct TMALatencyNode *next;
 };
 
 enum UnitType {
@@ -262,6 +274,8 @@ class MemcpyDescriptor {
     CUstream stream;
     size_t copySize;
     unsigned long long loopCount;
+    unsigned int threadsPerBlock = 512;
+    bool useNvlinkUtilScheduling = false;
 
     MemcpyDescriptor(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
 };
