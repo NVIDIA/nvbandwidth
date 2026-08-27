@@ -132,6 +132,35 @@ Note that output from different nodes may be interleaved; redirect per-host outp
 
 A small buffer (e.g. `-b 1`) is sufficient for quickly verifying connectivity between two GPUs. Use the default 512 MiB buffer (or omit `-b` entirely) when measuring peak bandwidth, as smaller buffers may underreport achievable throughput.
 
+### Diagnosing an NVLink pair
+
+Use `--pair` with a device-to-device test to isolate one NVLink-connected GPU
+pair before comparing it with the full matrix. First identify the pair from the
+topology reported by `nvidia-smi topo -m`, then obtain the corresponding UUIDs
+with `nvidia-smi -L`.
+
+```bash
+nvidia-smi topo -m
+nvidia-smi -L
+
+./nvbandwidth -t device_to_device_memcpy_read_sm \
+    --pair <GPU-UUID-0> <GPU-UUID-1>
+```
+
+Run the same pair in the opposite direction to expose directional asymmetry:
+
+```bash
+./nvbandwidth -t device_to_device_memcpy_read_sm \
+    --pair <GPU-UUID-1> <GPU-UUID-0>
+```
+
+The reported GB/s is measured bandwidth for the selected copy pattern, not a
+guaranteed NVLink link rate. Compare like for like: keep the testcase, buffer
+size, sample count, driver, and GPU clocks unchanged. For a concurrent
+two-direction workload, use a `device_to_device_bidirectional_memcpy_*`
+testcase; its reported value is per-direction bandwidth, not the sum of both
+directions.
+
 ### Single-node pairwise test
 
 Pass both UUIDs directly. The matrix output will show only the row/column entries for those two devices; all other pairs are skipped.
