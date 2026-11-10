@@ -19,7 +19,10 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <nvml.h>
+#include <algorithm>
+#include <cstring>
 #include <iostream>
+#include <map>
 #ifndef _WIN32
 #include <dlfcn.h>
 #endif
@@ -29,6 +32,7 @@
 #include "json_output.h"
 #include "perf_parser_output.h"
 #include "kernels.cuh"
+#include "memcpy_le.h"
 #include "nvbandwidth_version.h"
 #include "output.h"
 #include "testcase.h"
@@ -49,6 +53,8 @@ Verbosity OUTPUT(shouldOutput);
 // Device ordinal of the GPU owned by the process
 int localDevice = 0;
 int localRank = 0;
+// Number of ranks sharing this node (ranks per node)
+int ranksPerNode = 1;
 // Process rank within one OS
 int worldRank = 0;
 int worldSize = 0;
@@ -105,7 +111,8 @@ std::vector<Testcase*> createNodeTestcases() {
         new DeviceLocalReadSM(),
         new DeviceLocalWriteSM(),
         new DeviceToDeviceLatencyTMA(),
-        new DeviceLocalCopyTransfer(CopyInitiator::TMA)
+        new DeviceLocalCopyTransfer(CopyInitiator::TMA),
+        new DeviceToDeviceLatency(CountedWrite::Yes),
       });
     }
 #ifdef MULTINODE
@@ -130,7 +137,8 @@ std::vector<Testcase*> createNodeTestcases() {
             new MultinodeBroadcastAllToAllSM(),
             new MultinodeBisectWriteCE(),
             new MultinodeMulticastFabricPut(CopyInitiator::SM),
-            new MultinodeMulticastFabricPut(CopyInitiator::TMA)
+            new MultinodeMulticastFabricPut(CopyInitiator::TMA),
+            new MultinodeMultimemReduce()
         });
     }
 #endif
@@ -197,6 +205,36 @@ std::vector<std::string> expandTestcases(std::vector<Testcase*> &testcases, std:
     return testcasesToRun;
 }
 
+
+#ifdef MULTINODE
+static void addRequiredFabricCliqueTypesIfRunnable(Testcase *testcase, std::vector<FabricCliqueType> &types) {
+    if (testcase->filter()) {
+        testcase->addRequiredFabricCliqueTypes(types);
+    }
+}
+
+static std::vector<FabricCliqueType> getRequiredFabricCliqueTypesForSelectedTests(
+        std::vector<Testcase*> &testcases, const std::vector<std::string> &testcasesToRun) {
+    std::vector<FabricCliqueType> types;
+    if (testcasesToRun.empty()) {
+        for (Testcase *testcase : testcases) {
+            addRequiredFabricCliqueTypesIfRunnable(testcase, types);
+        }
+        return types;
+    }
+
+    for (const std::string &id : testcasesToRun) {
+        try {
+            Testcase *testcase = findTestcase(testcases, id);
+            addRequiredFabricCliqueTypesIfRunnable(testcase, types);
+        } catch (const std::string &) {
+            continue;
+        }
+    }
+    return types;
+}
+#endif
+
 void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseID) {
     Testcase* test{nullptr};
     try {
@@ -205,6 +243,7 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
         output->addTestcase(testcaseID, "ERROR", s);
         return;
     }
+
 
     try {
         auto filterResult = test->filter();
@@ -220,7 +259,7 @@ void runTestcase(std::vector<Testcase*> &testcases, const std::string &testcaseI
             // use fixd-size buffer for latency tests
             test->run(2 * _MiB, gSettings.loopCount);
         } else {
-            test->run(gSettings.bufferSizeMiB * _MiB, gSettings.loopCount);
+            test->run(gSettings.effectiveBufferSizeMiB(test->testKey()) * _MiB, gSettings.loopCount);
         }
     } catch (std::string &s) {
         output->setTestcaseStatusAndAddIfNeeded(test->testKey(), NVB_ERROR_STATUS, s);
@@ -259,6 +298,542 @@ static bool isBounceBufferConfComputeEnabled() {
     return enabled;
 }
 
+#ifdef MULTINODE
+enum FabricInfoProviderCapability {
+    kFabricInfoProviderCapabilityCuda = 1 << 0,
+    kFabricInfoProviderCapabilityNvml = 1 << 1,
+};
+
+static int getLocalFabricInfoProviderCapabilities() {
+    int capabilities = 0;
+#ifdef NVBW_HAVE_CUDA_FABRIC_CLIQUE_INFO
+    capabilities |= kFabricInfoProviderCapabilityCuda;
+#endif
+#ifdef NVBW_HAVE_NVML_GPU_FABRIC_INFO
+    capabilities |= kFabricInfoProviderCapabilityNvml;
+#endif
+    return capabilities;
+}
+
+static std::vector<int> getAllRankFabricInfoProviderCapabilities() {
+    int localCapabilities = getLocalFabricInfoProviderCapabilities();
+    std::vector<int> allCapabilities(worldSize);
+    MPI_Allgather(&localCapabilities, 1, MPI_INT,
+                  allCapabilities.data(), 1, MPI_INT, MPI_COMM_WORLD);
+    return allCapabilities;
+}
+
+static bool allRanksHaveFabricInfoProvider(const std::vector<int> &allCapabilities,
+                                           FabricInfoProviderCapability capability) {
+    for (int capabilities : allCapabilities) {
+        if ((capabilities & capability) == 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+class FabricInfoProvider {
+ public:
+    virtual ~FabricInfoProvider() = default;
+
+    virtual RankFabricInfoSource infoSource() const = 0;
+    virtual RankFabricInfo getLocalRankFabricInfo() const = 0;
+    virtual const char *missingRuntimeSymbolWarning() const = 0;
+    virtual const char *validationFailureHeader() const = 0;
+    virtual bool isRankValidForCliqueValidation(const RankFabricInfo &info) const = 0;
+    virtual std::string rankValidationFailure(const RankFabricInfo &info) const = 0;
+    virtual size_t clusterUuidBytes() const { return kFabricClusterUuidBytes; }
+    virtual bool fallbackRecommended(const std::vector<RankFabricInfo> &allInfo) const {
+        (void)allInfo;
+        return false;
+    }
+
+ protected:
+    RankFabricInfo makeLocalRankFabricInfo() const {
+        RankFabricInfo info = {};
+        info.rank = worldRank;
+        info.localDevice = localDevice;
+        info.infoSource = infoSource();
+        copyToFixedBuffer(info.hostname, env->getHostname());
+        return info;
+    }
+
+    template <typename CliqueInfoT>
+    void copyFabricCliques(RankFabricInfo &info,
+                           const CliqueInfoT *cliques,
+                           size_t numCliques) const {
+        info.reportedNumCliques = static_cast<unsigned long long>(numCliques);
+        info.numCliques = static_cast<unsigned int>(
+            std::min(numCliques, static_cast<size_t>(kMaxRankFabricCliques)));
+        for (unsigned int i = 0; i < info.numCliques; i++) {
+            info.cliques[i].type = static_cast<FabricCliqueType>(cliques[i].type);
+            info.cliques[i].id = cliques[i].id;
+        }
+    }
+};
+
+#ifdef NVBW_HAVE_CUDA_FABRIC_CLIQUE_INFO
+class CudaFabricInfoProvider : public FabricInfoProvider {
+ public:
+    RankFabricInfoSource infoSource() const override { return RankFabricInfoSource::CudaClique; }
+
+    RankFabricInfo getLocalRankFabricInfo() const override {
+        RankFabricInfo info = makeLocalRankFabricInfo();
+        info.queryResult = CUDA_ERROR_NOT_SUPPORTED;
+#ifndef _WIN32
+        void *uuidSym = dlsym(RTLD_DEFAULT, "cuDeviceGetFabricClusterUuid");
+        void *cliqueInfoSym = dlsym(RTLD_DEFAULT, "cuDeviceGetCliqueInfo");
+        if (uuidSym == nullptr || cliqueInfoSym == nullptr) {
+            return info;
+        }
+        info.runtimeSymbolAvailable = 1;
+
+        auto cuDeviceGetFabricClusterUuidFn =
+            reinterpret_cast<CUresult (*)(CUuuid *, CUdevice)>(uuidSym);
+        auto cuDeviceGetCliqueInfoFn =
+            reinterpret_cast<CUresult (*)(CUcliqueInfo *, size_t *, CUdevice)>(cliqueInfoSym);
+#else
+        info.runtimeSymbolAvailable = 1;
+        auto cuDeviceGetFabricClusterUuidFn = &cuDeviceGetFabricClusterUuid;
+        auto cuDeviceGetCliqueInfoFn = &cuDeviceGetCliqueInfo;
+#endif
+
+        CUdevice device;
+        CUresult cudaResult = cuDeviceGet(&device, localDevice);
+        if (cudaResult != CUDA_SUCCESS) {
+            info.queryResult = cudaResult;
+            return info;
+        }
+
+        CUuuid clusterUuid = {};
+        cudaResult = cuDeviceGetFabricClusterUuidFn(&clusterUuid, device);
+        info.queryResult = cudaResult;
+        if (cudaResult != CUDA_SUCCESS) {
+            return info;
+        }
+        std::memcpy(info.clusterUuid, clusterUuid.bytes, kFabricClusterUuidBytes);
+
+        CUcliqueInfo cliqueInfo[kMaxRankFabricCliques] = {};
+        size_t cliqueCount = kMaxRankFabricCliques;
+        cudaResult = cuDeviceGetCliqueInfoFn(cliqueInfo, &cliqueCount, device);
+        info.queryResult = cudaResult;
+        if (cudaResult != CUDA_SUCCESS) {
+            return info;
+        }
+
+        copyFabricCliques(info, cliqueInfo, cliqueCount);
+        return info;
+    }
+
+    const char *missingRuntimeSymbolWarning() const override {
+        return "NOTE: CUDA fabric clique query APIs are not available at runtime; skipping multinode fabric clique "
+               "pre-flight validation. Cross-clique runs may fail later with CUDA_ERROR_NOT_PERMITTED.";
+    }
+
+    const char *validationFailureHeader() const override {
+        return "ERROR: Multinode fabric pre-flight validation failed. All MPI ranks must be in the "
+               "same NVLink fabric clique for each selected operation type before nvbandwidth can run multinode "
+               "tests.";
+    }
+
+    bool isRankValidForCliqueValidation(const RankFabricInfo &info) const override {
+        return info.queryResult == CUDA_SUCCESS;
+    }
+
+    std::string rankValidationFailure(const RankFabricInfo &info) const override {
+        return "unable to query CUDA fabric clique info for " + formatRankFabricInfo(info);
+    }
+
+    bool fallbackRecommended(const std::vector<RankFabricInfo> &allInfo) const override {
+        for (const RankFabricInfo &info : allInfo) {
+            if (!info.runtimeSymbolAvailable ||
+                info.queryResult == CUDA_ERROR_NOT_SUPPORTED) {
+                return true;
+            }
+        }
+        return false;
+    }
+};
+#endif
+
+#ifdef NVBW_HAVE_NVML_GPU_FABRIC_INFO
+class NvmlFabricInfoProvider : public FabricInfoProvider {
+ public:
+    RankFabricInfoSource infoSource() const override { return RankFabricInfoSource::Nvml; }
+
+    RankFabricInfo getLocalRankFabricInfo() const override {
+        RankFabricInfo info = makeLocalRankFabricInfo();
+        info.queryResult = NVML_ERROR_NOT_SUPPORTED;
+        info.fabricStatus = NVML_ERROR_NOT_SUPPORTED;
+        info.state = NVML_GPU_FABRIC_STATE_NOT_SUPPORTED;
+        info.healthSummary = NVML_GPU_FABRIC_HEALTH_SUMMARY_NOT_SUPPORTED;
+#ifndef _WIN32
+        void *sym = dlsym(RTLD_DEFAULT, "nvmlDeviceGetGpuFabricInfo_v4");
+        if (sym == nullptr) {
+            return info;
+        }
+        info.runtimeSymbolAvailable = 1;
+
+        auto getGpuFabricInfoV4Fn =
+            reinterpret_cast<nvmlReturn_t (*)(nvmlDevice_t, nvmlGpuFabricInfo_v4_t *)>(sym);
+
+        nvmlDevice_t device;
+        nvmlReturn_t nvmlResult = nvmlDeviceGetHandleByUUID(getDeviceUuidString(localDevice).c_str(), &device);
+        if (nvmlResult != NVML_SUCCESS) {
+            info.queryResult = nvmlResult;
+            return info;
+        }
+
+        nvmlGpuFabricInfo_v4_t fabricInfo = {};
+        nvmlResult = getGpuFabricInfoV4Fn(device, &fabricInfo);
+        info.queryResult = nvmlResult;
+        if (nvmlResult != NVML_SUCCESS) {
+            return info;
+        }
+
+        std::memcpy(info.clusterUuid, fabricInfo.clusterUuid, NVML_GPU_FABRIC_UUID_LEN);
+        info.fabricStatus = fabricInfo.status;
+        copyFabricCliques(info, fabricInfo.cliques, fabricInfo.numCliques);
+        info.state = fabricInfo.state;
+        info.healthMask = fabricInfo.healthMask;
+        info.healthSummary = fabricInfo.healthSummary;
+#endif
+
+        return info;
+    }
+
+    const char *missingRuntimeSymbolWarning() const override {
+        return "NOTE: nvmlDeviceGetGpuFabricInfo_v4 is not available at runtime; skipping NVML v4 fabric clique "
+               "pre-flight validation. Cross-clique runs may fail later with CUDA_ERROR_NOT_PERMITTED.";
+    }
+
+    const char *validationFailureHeader() const override {
+        return "ERROR: Multinode fabric pre-flight validation failed. All MPI ranks must be in the "
+               "same completed NVLink fabric clique for each selected operation type before nvbandwidth can run "
+               "multinode tests.";
+    }
+
+    bool isRankValidForCliqueValidation(const RankFabricInfo &info) const override {
+        return info.queryResult == NVML_SUCCESS &&
+               info.state == NVML_GPU_FABRIC_STATE_COMPLETED &&
+               info.fabricStatus == NVML_SUCCESS;
+    }
+
+    std::string rankValidationFailure(const RankFabricInfo &info) const override {
+        if (info.queryResult != NVML_SUCCESS) {
+            return "unable to query fabric info for " + formatRankFabricInfo(info);
+        }
+        if (info.state != NVML_GPU_FABRIC_STATE_COMPLETED) {
+            return "fabric state is not COMPLETED for " + formatRankFabricInfo(info);
+        }
+        if (info.fabricStatus != NVML_SUCCESS) {
+            return "fabric registration status is not successful for " + formatRankFabricInfo(info);
+        }
+        return "";
+    }
+
+    size_t clusterUuidBytes() const override {
+        return std::min(static_cast<size_t>(kFabricClusterUuidBytes),
+                        static_cast<size_t>(NVML_GPU_FABRIC_UUID_LEN));
+    }
+};
+#endif
+
+static bool getFabricCliqueId(const RankFabricInfo &info, FabricCliqueType type, unsigned int *id) {
+    const unsigned int count = std::min(info.numCliques, kMaxRankFabricCliques);
+    for (unsigned int i = 0; i < count; i++) {
+        if (info.cliques[i].type == type) {
+            *id = info.cliques[i].id;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool hasTooManyFabricCliques(const RankFabricInfo &info) {
+    return info.reportedNumCliques > kMaxRankFabricCliques;
+}
+
+static std::string formatTooManyFabricCliquesFailure(const RankFabricInfo &info) {
+    return "rank reports " + std::to_string(info.reportedNumCliques) +
+           " fabric clique types, but nvbandwidth can record at most " +
+           std::to_string(kMaxRankFabricCliques) + ": " + formatRankFabricInfo(info);
+}
+
+static bool sameFabricClique(const FabricInfoProvider &provider,
+                             const RankFabricInfo &a,
+                             const RankFabricInfo &b,
+                             FabricCliqueType type) {
+    unsigned int aCliqueId = 0;
+    unsigned int bCliqueId = 0;
+    return getFabricCliqueId(a, type, &aCliqueId) &&
+           getFabricCliqueId(b, type, &bCliqueId) &&
+           aCliqueId == bCliqueId &&
+           std::memcmp(a.clusterUuid, b.clusterUuid, provider.clusterUuidBytes()) == 0;
+}
+
+static std::vector<RankFabricInfo> getAllRankFabricInfo(const FabricInfoProvider &provider) {
+    RankFabricInfo localInfo = provider.getLocalRankFabricInfo();
+    std::vector<RankFabricInfo> allInfo(worldSize);
+    MPI_Allgather(&localInfo, sizeof(RankFabricInfo), MPI_BYTE,
+                  allInfo.data(), sizeof(RankFabricInfo), MPI_BYTE, MPI_COMM_WORLD);
+    return allInfo;
+}
+
+static bool validateMultinodeFabricClique(const FabricInfoProvider &provider,
+                                          const std::vector<RankFabricInfo> &allInfo,
+                                          const std::vector<FabricCliqueType> &requiredCliqueTypes) {
+    if (worldSize <= 1) {
+        return true;
+    }
+
+    int validationFailed = 0;
+    if (worldRank == 0) {
+        bool missingInfoProvider = false;
+        bool missingRuntimeSymbol = false;
+        for (const RankFabricInfo &info : allInfo) {
+            if (info.infoSource == RankFabricInfoSource::None) {
+                missingInfoProvider = true;
+                break;
+            }
+            if (!info.runtimeSymbolAvailable) {
+                missingRuntimeSymbol = true;
+                break;
+            }
+        }
+
+        if (missingInfoProvider) {
+            output->recordWarning(
+                "NOTE: At least one MPI rank has no fabric info provider; skipping multinode fabric clique "
+                "pre-flight validation. Cross-clique runs may fail later with CUDA_ERROR_NOT_PERMITTED.");
+        } else if (missingRuntimeSymbol) {
+            output->recordWarning(provider.missingRuntimeSymbolWarning());
+        } else {
+            std::vector<std::string> failures;
+            const RankFabricInfo &rank0Info = allInfo[0];
+            const bool rank0Valid = provider.isRankValidForCliqueValidation(rank0Info) &&
+                                    !hasTooManyFabricCliques(rank0Info);
+            if (rank0Valid) {
+                for (FabricCliqueType type : requiredCliqueTypes) {
+                    unsigned int rank0CliqueId = 0;
+                    if (!getFabricCliqueId(rank0Info, type, &rank0CliqueId)) {
+                        failures.push_back("rank 0 does not report required fabric clique type " +
+                                           formatFabricCliqueType(type));
+                    }
+                }
+            }
+
+            for (const RankFabricInfo &info : allInfo) {
+                if (hasTooManyFabricCliques(info)) {
+                    failures.push_back(formatTooManyFabricCliquesFailure(info));
+                    continue;
+                }
+                if (!provider.isRankValidForCliqueValidation(info)) {
+                    failures.push_back(provider.rankValidationFailure(info));
+                    continue;
+                }
+                if (!rank0Valid) {
+                    continue;
+                }
+                for (FabricCliqueType type : requiredCliqueTypes) {
+                    unsigned int rankCliqueId = 0;
+                    if (!getFabricCliqueId(info, type, &rankCliqueId)) {
+                        failures.push_back("rank does not report required fabric clique type " +
+                                           formatFabricCliqueType(type) + ": " + formatRankFabricInfo(info));
+                        continue;
+                    }
+                    if (!sameFabricClique(provider, rank0Info, info, type)) {
+                        failures.push_back("rank is outside rank 0's " + formatFabricCliqueType(type) +
+                                           " clique: " + formatRankFabricInfo(info));
+                    }
+                }
+            }
+
+            if (!failures.empty()) {
+                validationFailed = 1;
+                std::stringstream errmsg;
+                errmsg << provider.validationFailureHeader() << "\n";
+                errmsg << "Required clique types:";
+                for (FabricCliqueType type : requiredCliqueTypes) {
+                    errmsg << " " << formatFabricCliqueType(type);
+                }
+                errmsg << "\n";
+                for (const RankFabricInfo &info : allInfo) {
+                    errmsg << "  " << formatRankFabricInfo(info) << "\n";
+                }
+                errmsg << "Failures:\n";
+                for (const std::string &failure : failures) {
+                    errmsg << "  - " << failure << "\n";
+                }
+                output->recordError(errmsg.str());
+            }
+        }
+    }
+
+    MPI_Bcast(&validationFailed, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    return validationFailed == 0;
+}
+
+#ifdef NVBW_HAVE_NVML_GPU_FABRIC_INFO
+static bool checkFabricCliquesWithNvml(const std::vector<FabricCliqueType> &requiredCliqueTypes) {
+    NvmlFabricInfoProvider provider;
+    std::vector<RankFabricInfo> allFabricInfo = getAllRankFabricInfo(provider);
+
+    output->recordGpuFabricInfo(allFabricInfo);
+    return validateMultinodeFabricClique(provider, allFabricInfo, requiredCliqueTypes);
+}
+#endif
+
+enum class FabricCliqueCheckResult {
+    Passed,
+    Failed,
+    FallBack,
+};
+
+#ifdef NVBW_HAVE_CUDA_FABRIC_CLIQUE_INFO
+static FabricCliqueCheckResult checkFabricCliquesWithCuda(
+        const std::vector<FabricCliqueType> &requiredCliqueTypes,
+        bool nvmlFallbackAvailable) {
+    CudaFabricInfoProvider provider;
+    std::vector<RankFabricInfo> allFabricInfo = getAllRankFabricInfo(provider);
+
+    if (provider.fallbackRecommended(allFabricInfo)) {
+        if (worldRank == 0) {
+            if (nvmlFallbackAvailable) {
+                output->recordWarning(
+                    "NOTE: CUDA fabric clique APIs are unavailable or not supported on at least one rank; "
+                    "trying NVML fabric-info fallback.");
+            } else {
+                output->recordWarning(
+                    "NOTE: CUDA fabric clique APIs are unavailable or not supported on at least one rank, "
+                    "and no common NVML v4 fabric-info fallback is available.");
+            }
+        }
+        return FabricCliqueCheckResult::FallBack;
+    }
+
+    output->recordGpuFabricInfo(allFabricInfo);
+    return validateMultinodeFabricClique(provider, allFabricInfo, requiredCliqueTypes)
+        ? FabricCliqueCheckResult::Passed
+        : FabricCliqueCheckResult::Failed;
+}
+#endif
+
+static bool checkMultinodeFabricCliques(const std::vector<FabricCliqueType> &requiredCliqueTypes,
+                                        bool forceNvmlFabricInfoFallback) {
+    if (worldSize <= 1) {
+        return true;
+    }
+
+    std::vector<int> providerCapabilities = getAllRankFabricInfoProviderCapabilities();
+    const bool allRanksHaveCuda =
+        allRanksHaveFabricInfoProvider(providerCapabilities, kFabricInfoProviderCapabilityCuda);
+    const bool allRanksHaveNvml =
+        allRanksHaveFabricInfoProvider(providerCapabilities, kFabricInfoProviderCapabilityNvml);
+
+#ifdef NVBW_HAVE_CUDA_FABRIC_CLIQUE_INFO
+    if (!forceNvmlFabricInfoFallback && allRanksHaveCuda) {
+        switch (checkFabricCliquesWithCuda(requiredCliqueTypes, allRanksHaveNvml)) {
+            case FabricCliqueCheckResult::Passed:
+                return true;
+            case FabricCliqueCheckResult::Failed:
+                return false;
+            case FabricCliqueCheckResult::FallBack:
+                break;
+        }
+    } else if (forceNvmlFabricInfoFallback && worldRank == 0) {
+        if (allRanksHaveNvml) {
+            output->recordWarning(
+                "NOTE: --force-nvml-fabric-info-fallback is set; skipping CUDA fabric clique APIs and using "
+                "NVML fabric-info fallback.");
+        } else {
+            output->recordWarning(
+                "NOTE: --force-nvml-fabric-info-fallback is set; skipping CUDA fabric clique APIs, "
+                "but no common NVML v4 fabric-info fallback is available.");
+        }
+    }
+#else
+    (void)forceNvmlFabricInfoFallback;
+    (void)allRanksHaveCuda;
+    (void)allRanksHaveNvml;
+#endif
+
+#ifdef NVBW_HAVE_NVML_GPU_FABRIC_INFO
+    if (allRanksHaveNvml) {
+        if (worldRank == 0) {
+            output->recordWarning(
+                "NOTE: Using NVML v4 fabric-info fallback. This validates per-operation clique types plus "
+                "fabric state and status.");
+        }
+        return checkFabricCliquesWithNvml(requiredCliqueTypes);
+    }
+#endif
+
+    if (worldRank == 0) {
+        output->recordWarning(
+            "NOTE: At least one MPI rank has no fabric info provider; skipping multinode fabric clique "
+            "pre-flight validation. Cross-clique runs may fail later with CUDA_ERROR_NOT_PERMITTED.");
+    }
+    return true;
+}
+
+static bool checkMultinodeFabricCliquesForSelectedTests(
+        std::vector<Testcase*> &testcases,
+        const std::vector<std::string> &testcasesToRun,
+        bool forceNvmlFabricInfoFallback) {
+    std::vector<FabricCliqueType> requiredFabricCliqueTypes =
+        getRequiredFabricCliqueTypesForSelectedTests(testcases, testcasesToRun);
+    return checkMultinodeFabricCliques(requiredFabricCliqueTypes, forceNvmlFabricInfoFallback);
+}
+
+// MPI exchange of each rank's assigned GPU for device listing.
+static std::vector<RankDeviceInfo> gatherRankDevices() {
+    RankDeviceInfo localInfo = {};
+    localInfo.rank = worldRank;
+    localInfo.localDevice = localDevice;
+    std::string hostname = env->getHostname();
+    ASSERT(hostname.size() < STRING_LENGTH);
+    copyToFixedBuffer(localInfo.hostname, hostname);
+    std::string deviceName = getDeviceDisplayInfo(localDevice);
+    ASSERT(deviceName.size() < STRING_LENGTH);
+    copyToFixedBuffer(localInfo.deviceName, deviceName);
+
+    std::vector<RankDeviceInfo> rankDevices(worldSize);
+    ASSERT(MPI_Allgather(&localInfo, sizeof(RankDeviceInfo), MPI_BYTE,
+                         rankDevices.data(), sizeof(RankDeviceInfo), MPI_BYTE, MPI_COMM_WORLD) == MPI_SUCCESS);
+
+    for (RankDeviceInfo &info : rankDevices) {
+        info.hostname[STRING_LENGTH - 1] = '\0';
+        info.deviceName[STRING_LENGTH - 1] = '\0';
+    }
+
+    std::vector<int> deviceCountExchange(worldSize);
+    ASSERT(MPI_Allgather(&deviceCount, 1, MPI_INT, deviceCountExchange.data(), 1, MPI_INT, MPI_COMM_WORLD) == MPI_SUCCESS);
+
+    std::map<std::string, int> gpuCounts;
+    for (int i = 0; i < worldSize; i++) {
+        std::string host(rankDevices[i].hostname);
+        gpuCounts[host]++;
+        if (gpuCounts[host] == deviceCountExchange[i] + 1) {
+            std::stringstream warning;
+            warning << "Warning: there are more processes than GPUs on " << host
+                    << ". Please reduce number of processes to match GPU count.";
+            output->recordWarning(warning.str());
+        }
+    }
+
+    return rankDevices;
+}
+
+// Rank→GPU ownership is setup, not reporting — set before any device listing.
+static void assignLocalDevice() {
+    if (!hasGpuPair()) {
+        localDevice = localRank % deviceCount;
+    }
+}
+#endif  // MULTINODE
+
 int main(int argc, char **argv) {
     env = Environment::create(argc, argv);
     env->initialize(argc, argv);
@@ -267,6 +842,7 @@ int main(int argc, char **argv) {
     worldSize = env->getSize();
     worldRank = env->getRank();
     localRank = env->getLocalRank();
+    ranksPerNode = env->getRanksPerNode();
     // Avoid excessive output by limit output to rank 0
     shouldOutput = (worldRank == 0);
 #endif
@@ -427,6 +1003,22 @@ int main(int argc, char **argv) {
         .flag()
         .store_into(gSettings.disableNvlinkSMScheduling)
         .hidden();
+    program.add_argument("--force-le-variant")
+        .help("Force Logical Endpoint (Handle) variant for TMA tests (auto-selected on future architectures). "
+              "Peer buffer is the LE; local/executing buffer is a raw device pointer "
+              "(Write: ptr->LE, Read: LE->ptr; LE-LE unsupported). CE always uses raw pointers.")
+        .flag()
+        .default_value(false);
+    program.add_argument("--force-raw-pointer")
+        .help("Force raw pointer variant for TMA tests (auto-selected on Blackwell and older)")
+        .flag()
+        .default_value(false);
+    bool forceNvmlFabricInfoFallback = false;
+    program.add_argument("--force-nvml-fabric-info-fallback")
+        .help("Force NVML fabric-info fallback for multinode fabric pre-flight validation")
+        .flag()
+        .store_into(forceNvmlFabricInfoFallback);
+
     std::vector<std::string> pairUuids;
     program.add_argument("--pair")
         .help("Run tests only between these two GPUs (by UUID). GPUs may be on the same or different nodes.")
@@ -442,6 +1034,21 @@ int main(int argc, char **argv) {
         output->recordError(errmsg.str());
         output->print();
         return 1;
+    }
+
+    gSettings.bufferSizeUserOverride = program.is_used("--bufferSize");
+
+    const bool forceLE = program.get<bool>("--force-le-variant");
+    const bool forceRaw = program.get<bool>("--force-raw-pointer");
+    if (forceLE && forceRaw) {
+        output->recordError("--force-le-variant and --force-raw-pointer are mutually exclusive");
+        output->print();
+        return 1;
+    }
+    if (forceLE) {
+        gSettings.bufferType = BufferType::LE;
+    } else if (forceRaw) {
+        gSettings.bufferType = BufferType::Pointer;
     }
 
     // Handle legacy format flag (backward compatibility)
@@ -463,6 +1070,7 @@ int main(int argc, char **argv) {
         output->listTestcases(testcases);
         return 0;
     }
+
 
     // Note: -t and -p mutual exclusivity is enforced by add_mutually_exclusive_group()
 
@@ -508,6 +1116,21 @@ int main(int argc, char **argv) {
     worldSize = deviceCount;
 #endif
 
+    if (!forceLE && !forceRaw && leBufferSupportedOnAllDevices()) {
+        bool allLeDefaultArch = (deviceCount > 0);
+        for (int i = 0; i < deviceCount && allLeDefaultArch; i++) {
+            nvmlDevice_t nvmlDev;
+            char pciBusId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE] = {};
+            nvmlDeviceArchitecture_t arch = NVML_DEVICE_ARCH_UNKNOWN;
+            if (cuDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), i) == CUDA_SUCCESS &&
+                nvmlDeviceGetHandleByPciBusId(pciBusId, &nvmlDev) == NVML_SUCCESS) {
+                nvmlDeviceGetArchitecture(nvmlDev, &arch);
+            }
+            if (arch != NVML_DEVICE_ARCH_RUBIN) allLeDefaultArch = false;
+        }
+        if (allLeDefaultArch) gSettings.bufferType = BufferType::LE;
+    }
+
     if (hasGpuPair()) {
         if (normalizeUuidString(gpuPairUuid0) == normalizeUuidString(gpuPairUuid1)) {
             output->recordError("ERROR: --pair requires two distinct GPU UUIDs, got the same UUID twice: " +
@@ -548,6 +1171,22 @@ int main(int argc, char **argv) {
         }
     }
 
+#ifdef MULTINODE
+    if (worldSize > 1) {
+        int hasDevice = deviceCount > 0 ? 1 : 0;
+        int allRanksHaveDevice = 0;
+        MPI_Allreduce(&hasDevice, &allRanksHaveDevice, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+        if (!allRanksHaveDevice) {
+            if (worldRank == 0) {
+                output->recordError("ERROR: At least one MPI rank has no CUDA device. Multinode mode requires one GPU per rank.");
+            }
+            env->finalize();
+            return 1;
+        }
+        assignLocalDevice();
+    }
+#endif
+
     if (gSettings.bufferSizeMiB < kDefaultBufferSizeMiB) {
         output->recordWarning("NOTE: You have chosen a buffer size that is smaller than the default buffer size. It is suggested to use the default buffer size (512MB) to achieve maximal peak bandwidth.");
     }
@@ -572,8 +1211,31 @@ int main(int argc, char **argv) {
 
     output->addConfComputeInfo(gSettings.bounceBufferConfComputeEnabled);
 
-    // Print GPU information
-    output->recordDevices(worldSize);
+    if (testcasePrefixes.size() > 0) {
+        testcasesToRun = expandTestcases(testcases, testcasePrefixes);
+        if (testcasesToRun.size() == 0) {
+            output->recordError("Specified list of testcase prefixes did not match any testcases");
+            return 1;
+        }
+    }
+
+#ifdef MULTINODE
+    if (worldSize > 1) {
+        output->recordMultinodeDevices(gatherRankDevices());
+    } else {
+        output->recordDevices(deviceCount);
+    }
+#else
+    output->recordDevices(deviceCount);
+#endif
+
+#ifdef MULTINODE
+    if (!checkMultinodeFabricCliquesForSelectedTests(testcases, testcasesToRun,
+                                                     forceNvmlFabricInfoFallback)) {
+        env->finalize();
+        return 1;
+    }
+#endif
 
     // Early CUDA runtime sanity check - test if we can create contexts and allocate memory
     // This catches driver/runtime issues before they manifest as confusing errors later
@@ -601,14 +1263,6 @@ int main(int argc, char **argv) {
             return 1;
         }
         cudaFree(testPtr);
-    }
-
-    if (testcasePrefixes.size() > 0) {
-        testcasesToRun = expandTestcases(testcases, testcasePrefixes);
-        if (testcasesToRun.size() == 0) {
-            output->recordError("Specified list of testcase prefixes did not match any testcases");
-            return 1;
-        }
     }
 
     if (hasGpuPair() && !selectedTestcasesIncludeGpuPairRelevant(testcases, testcasesToRun)) {

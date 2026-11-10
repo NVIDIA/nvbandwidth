@@ -28,6 +28,59 @@
 #include <functional>
 #include <utility>
 
+// Localization only helps where a single copy cannot saturate the link.
+inline bool deviceArchUsesLocalization(int deviceId) {
+    static std::map<int, bool> cache;
+    auto cached = cache.find(deviceId);
+    if (cached != cache.end()) return cached->second;
+
+    bool enabled = false;
+    char pciBusId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE] = {};
+    nvmlDevice_t nvmlDev;
+    nvmlDeviceArchitecture_t arch = NVML_DEVICE_ARCH_UNKNOWN;
+    if (cuDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), deviceId) == CUDA_SUCCESS &&
+        nvmlDeviceGetHandleByPciBusId(pciBusId, &nvmlDev) == NVML_SUCCESS &&
+        nvmlDeviceGetArchitecture(nvmlDev, &arch) == NVML_SUCCESS) {
+        enabled = (arch == NVML_DEVICE_ARCH_RUBIN);
+    }
+
+    cache[deviceId] = enabled;
+    if (!enabled) {
+        VERBOSE << "device " << deviceId << ": architecture does not localize; "
+                   "reporting non-localized bandwidth\n";
+    }
+    return enabled;
+}
+
+#ifdef NVBW_HAVE_UGPU_MEMORY_NODE_SPLIT
+// Number of locality domains the driver reports for deviceId, or 0 if the
+// query fails. Single-domain devices report 1.
+inline int memoryNodeDomainCount(int deviceId) {
+    int count = 0;
+    if (cuDeviceGetAttribute(&count, CU_DEVICE_ATTRIBUTE_LOCALITY_DOMAIN_COUNT,
+                             static_cast<CUdevice>(deviceId)) != CUDA_SUCCESS) {
+        VERBOSE << "cuDeviceGetAttribute(LOCALITY_DOMAIN_COUNT) failed for device "
+                << deviceId << "; reporting non-localized bandwidth\n";
+        return 0;
+    }
+    return count;
+}
+
+// Whether deviceId is measured with localized concurrent copies: it must report
+// more than one locality domain and be an architecture that gains from the split.
+// numDomains receives that count when true, and 0 otherwise.
+inline bool shouldLocalize(int deviceId, int &numDomains) {
+    numDomains = 0;
+    if (!deviceArchUsesLocalization(deviceId)) return false;
+
+    const int count = memoryNodeDomainCount(deviceId);
+    if (count < 2) return false;
+
+    numDomains = count;
+    return true;
+}
+#endif  // NVBW_HAVE_UGPU_MEMORY_NODE_SPLIT
+
 // ============================================================================
 // Configuration Enums for Consolidated Test Classes
 // ============================================================================
@@ -123,6 +176,237 @@ class WriteAccessStrategy : public DeviceToDeviceAccessStrategy {
     ContextPreference getContextPreference() const override { return PREFER_SRC_CONTEXT; }
 };
 
+// Factory for the access-type strategy (defined in testcases.cpp). Declared here
+// so other translation units (e.g. multinode_testcases.cpp) can construct the
+// strategy used for device-to-device buffer ordering.
+std::unique_ptr<DeviceToDeviceAccessStrategy> createDeviceToDeviceAccessStrategy(AccessType accessType);
+
+// Shown in --list generateDesc for TMA paths that use LEBufferStrategy under
+// --force-le-variant.
+inline const char* handlePeerBufferConventionNote() {
+    return "With --force-le-variant (Handle), the peer buffer is a Logical Endpoint "
+           "and the local/executing buffer is a raw device pointer. Write copies "
+           "ptr->LE; Read copies LE->ptr. LE-LE copies are unsupported.";
+}
+
+// Handle (Logical Endpoint) buffers for single-node TMA tests.
+// Auto-selected from the device architecture (see nvbandwidth.cpp) or forced
+// via --force-le-variant / --force-raw-pointer.
+//
+// CE is deliberately excluded: a CE copy against a Handle operand requires
+// cuFabricCpyBatchAsync (CUDA 13.5+), so CE stays on raw pointers here.
+inline bool initiatorUsesHandleBuffers(CopyInitiator initiator) {
+    return gSettings.bufferType == BufferType::LE &&
+           initiator == CopyInitiator::TMA;
+}
+
+// Handle (Logical Endpoint) for multinode_* TMA tests. Use this from
+// multinode_testcases.cpp instead of initiatorUsesHandleBuffers().
+inline bool multinodeInitiatorUsesHandleBuffers(CopyInitiator initiator) {
+    return gSettings.bufferType == BufferType::LE &&
+           initiator == CopyInitiator::TMA;
+}
+
+// One raw CE copy. Shared by the single-node and multinode localized concurrent
+// paths, which drive the copies themselves instead of going through
+// MemcpyOperation.
+inline void submitLocalizedCeCopy(const MemcpyBuffer& src, const MemcpyBuffer& dst,
+                                  size_t size, CUstream stream) {
+    CU_ASSERT(cuMemcpyAsync(dst.getBuffer(), src.getBuffer(), size, stream));
+}
+
+// Runs N concurrent streams and returns their aggregate bandwidth (GB/s). The
+// caller owns all buffer/context setup and supplies submit(i, stream), which must
+// enqueue exactly one `size`-byte copy for stream index i on the given stream.
+//
+// Bandwidth is total bytes over total time, as MemcpyOperation::TOTAL_BW does, so
+// streams that do not overlap cannot report more than was achieved.
+//
+// streamsPerGroup: contiguous group size to measure over, 0 for one group of every
+// stream. A group must share one device, since its span is timed on its first stream.
+// perStreamBwOut: per-stream GB/s in stream order, or null. Diagnostic only.
+// perGroupBwOut: aggregate GB/s per group, or null.
+// streamContexts: context for stream i, or null to use the caller's current context.
+// Non-null must have size >= streamCount. Stream create, blocker, and submit must run
+// with that context current.
+template <typename SubmitFn>
+inline double runConcurrentLocalizedStreams(int streamCount, unsigned long long size,
+                                            unsigned long long loopCount,
+                                            const std::string& verboseTag,
+                                            SubmitFn&& submit,
+                                            std::vector<double>* perStreamBwOut = nullptr,
+                                            const std::vector<CUcontext>* streamContexts = nullptr,
+                                            int streamsPerGroup = 0,
+                                            std::vector<double>* perGroupBwOut = nullptr) {
+    if (perStreamBwOut) perStreamBwOut->clear();
+    if (perGroupBwOut) perGroupBwOut->clear();
+    if (streamCount <= 0) return 0.0;
+
+    ASSERT(!streamContexts ||
+           static_cast<int>(streamContexts->size()) >= streamCount);
+
+    const int groupSize = (streamsPerGroup > 0) ? streamsPerGroup : streamCount;
+    ASSERT(groupSize > 0 && streamCount % groupSize == 0);
+    const int groupCount = streamCount / groupSize;
+
+    CUcontext entryCtx = nullptr;
+    CU_ASSERT(cuCtxGetCurrent(&entryCtx));
+
+    CUcontext activeCtx = entryCtx;
+    auto enterStreamCtx = [&](int i) {
+        if (!streamContexts) return;
+        CUcontext want = (*streamContexts)[i];
+        if (want != activeCtx) {
+            CU_ASSERT(cuCtxSetCurrent(want));
+            activeCtx = want;
+        }
+    };
+
+    std::vector<CUstream> streams(streamCount, nullptr);
+    std::vector<CUevent>  startEvts(streamCount, nullptr), endEvts(streamCount, nullptr),
+                          warmupEvts(streamCount, nullptr);
+    // Bound each group's span; recorded on the group's first stream.
+    std::vector<CUevent> groupStartEvts(groupCount, nullptr), groupEndEvts(groupCount, nullptr);
+    for (int i = 0; i < streamCount; i++) {
+        enterStreamCtx(i);
+        CU_ASSERT(cuStreamCreate(&streams[i], CU_STREAM_NON_BLOCKING));
+        CU_ASSERT(cuEventCreate(&startEvts[i],  CU_EVENT_DEFAULT));
+        CU_ASSERT(cuEventCreate(&endEvts[i],    CU_EVENT_DEFAULT));
+        CU_ASSERT(cuEventCreate(&warmupEvts[i], CU_EVENT_DEFAULT));
+    }
+    for (int g = 0; g < groupCount; g++) {
+        enterStreamCtx(g * groupSize);
+        CU_ASSERT(cuEventCreate(&groupStartEvts[g], CU_EVENT_DEFAULT));
+        CU_ASSERT(cuEventCreate(&groupEndEvts[g],   CU_EVENT_DEFAULT));
+    }
+
+    // Prime each stream so its copy engine is co-scheduled before the timed
+    // window. Uses the shared single-stream kWarmupCount: an A/B sweep (4..64
+    // warmup iters) showed the summed bandwidth is flat within run-to-run noise
+    // from 4 upward, so no extra priming margin is warranted here.
+    const int kWarmupIters = kWarmupCount;
+    const int kTimedCopies = static_cast<int>(loopCount);
+
+    const bool useStreamBlocker = !gSettings.bounceBufferConfComputeEnabled;
+    NodeHelperSingle nodeHelper;
+    if (useStreamBlocker) {
+        nodeHelper.streamBlockerReset();
+        for (int i = 0; i < streamCount; i++) {
+            enterStreamCtx(i);
+            nodeHelper.streamBlockerBlock(streams[i]);
+        }
+    }
+
+    // Interleaved warmup: one copy per stream per outer iteration.
+    for (int k = 0; k < kWarmupIters; k++)
+        for (int i = 0; i < streamCount; i++) {
+            enterStreamCtx(i);
+            submit(i, streams[i]);
+        }
+    for (int i = 0; i < streamCount; i++) {
+        enterStreamCtx(i);
+        CU_ASSERT(cuEventRecord(warmupEvts[i], streams[i]));
+    }
+
+    // Start only after every stream has primed, so warmup stays out of the window.
+    enterStreamCtx(0);
+    for (int i = 1; i < streamCount; i++)
+        CU_ASSERT(cuStreamWaitEvent(streams[0], warmupEvts[i], 0));
+    CU_ASSERT(cuEventRecord(groupStartEvts[0], streams[0]));
+    CU_ASSERT(cuEventRecord(startEvts[0], streams[0]));
+
+    // All groups start from that point, so they overlap in time.
+    for (int g = 1; g < groupCount; g++) {
+        const int ref = g * groupSize;
+        enterStreamCtx(ref);
+        CU_ASSERT(cuStreamWaitEvent(streams[ref], groupStartEvts[0], 0));
+        CU_ASSERT(cuEventRecord(groupStartEvts[g], streams[ref]));
+        CU_ASSERT(cuEventRecord(startEvts[ref], streams[ref]));
+    }
+    for (int g = 0; g < groupCount; g++) {
+        const int ref = g * groupSize;
+        for (int i = ref + 1; i < ref + groupSize; i++) {
+            enterStreamCtx(i);
+            CU_ASSERT(cuStreamWaitEvent(streams[i], groupStartEvts[g], 0));
+            CU_ASSERT(cuEventRecord(startEvts[i], streams[i]));
+        }
+    }
+
+    // Timed batch: interleaved one copy per stream per iteration.
+    for (int l = 0; l < kTimedCopies; l++)
+        for (int i = 0; i < streamCount; i++) {
+            enterStreamCtx(i);
+            submit(i, streams[i]);
+        }
+    for (int i = 0; i < streamCount; i++) {
+        enterStreamCtx(i);
+        CU_ASSERT(cuEventRecord(endEvts[i], streams[i]));
+    }
+
+    // Close a group's window once every stream in it has finished.
+    for (int g = 0; g < groupCount; g++) {
+        const int ref = g * groupSize;
+        enterStreamCtx(ref);
+        for (int i = ref + 1; i < ref + groupSize; i++)
+            CU_ASSERT(cuStreamWaitEvent(streams[ref], endEvts[i], 0));
+        CU_ASSERT(cuEventRecord(groupEndEvts[g], streams[ref]));
+    }
+
+    // Release the blocker; everything queued above now runs.
+    if (useStreamBlocker)
+        nodeHelper.streamBlockerRelease();
+
+    for (int i = 0; i < streamCount; i++)
+        CU_ASSERT(cuStreamSynchronize(streams[i]));
+
+    const double bytesPerStream = static_cast<double>(size) * loopCount;
+    // cuEventElapsedTime can round to 0.0 ms at its ~0.5 us resolution; clamp so the
+    // divisions below can never divide by zero.
+    auto elapsedMs = [](CUevent from, CUevent to) {
+        float ms = 0.0f;
+        CU_ASSERT(cuEventElapsedTime(&ms, from, to));
+        return static_cast<double>(std::max(ms, 1e-6f));
+    };
+
+    for (int i = 0; i < streamCount; i++) {
+        const double ms = elapsedMs(startEvts[i], endEvts[i]);
+        const double bw = bytesPerStream * 1e3 / (ms * 1e9);
+        if (perStreamBwOut) perStreamBwOut->push_back(bw);
+        if (gSettings.verbose)
+            VERBOSE << "  [" << verboseTag << "] stream" << i << "  elapsed: "
+                    << std::fixed << std::setprecision(3) << ms << " ms  -> "
+                    << std::setprecision(2) << bw << " GB/s\n";
+    }
+
+    double totalBwGBs = 0.0;
+    for (int g = 0; g < groupCount; g++) {
+        const double ms = elapsedMs(groupStartEvts[g], groupEndEvts[g]);
+        const double bw = bytesPerStream * groupSize * 1e3 / (ms * 1e9);
+        totalBwGBs += bw;
+        if (perGroupBwOut) perGroupBwOut->push_back(bw);
+        if (gSettings.verbose)
+            VERBOSE << "  [" << verboseTag << "] group" << g << "  span: "
+                    << std::fixed << std::setprecision(3) << ms << " ms  -> "
+                    << std::setprecision(2) << bw << " GB/s\n";
+    }
+    if (gSettings.verbose)
+        VERBOSE << "  [" << verboseTag << "] reported (total bytes / total time): "
+                << std::setprecision(2) << totalBwGBs << " GB/s\n";
+
+    for (int g = 0; g < groupCount; g++) {
+        if (groupStartEvts[g]) cuEventDestroy(groupStartEvts[g]);
+        if (groupEndEvts[g])   cuEventDestroy(groupEndEvts[g]);
+    }
+    for (int i = 0; i < streamCount; i++) {
+        if (startEvts[i])  cuEventDestroy(startEvts[i]);
+        if (endEvts[i])    cuEventDestroy(endEvts[i]);
+        if (warmupEvts[i]) cuEventDestroy(warmupEvts[i]);
+        if (streams[i])    cuStreamDestroy(streams[i]);
+    }
+    if (activeCtx != entryCtx) CU_ASSERT(cuCtxSetCurrent(entryCtx));
+    return totalBwGBs;
+}
+
 // ============================================================================
 // Buffer Type Strategy (for polymorphic buffer creation)
 // ============================================================================
@@ -169,10 +453,26 @@ class DeviceBufferStrategy : public BufferTypeStrategy {
     }
 
     bool enablePeerAccess(BufferPair& pair) const override {
-        return pair.src->enablePeerAcess(*pair.peer);
+        return pair.src->enablePeerAccess(*pair.peer);
     }
 
     std::string getLabel() const override { return "Device"; }
+};
+
+// Forward declaration for LEBufferStrategy (defined in memcpy_le.h)
+class LogicalEndpointBuffer;
+
+// Implementation for LogicalEndpointBuffer (LE)
+class LEBufferStrategy : public BufferTypeStrategy {
+ public:
+    bool isSupported() const override;
+
+    std::unique_ptr<BufferPair> createBufferPair(
+            size_t size, int srcDeviceId, int peerDeviceId) const override;
+
+    bool enablePeerAccess(BufferPair& pair) const override;
+
+    std::string getLabel() const override { return "Logical Endpoint"; }
 };
 
 
@@ -206,9 +506,17 @@ class Testcase {
     static FilterResult filterHasMultipleGPUs();
     static FilterResult filterSupportsMulticast();
     static FilterResult filterSupportsTMA();
+    static FilterResult filterSupportsUBLKCP();
+    static FilterResult filterSupportsLogicalEndpoint();
+    static FilterResult filterSupportsHandleCopy();
     static FilterResult filterBounceBufferConfComputeEnabled();
 #ifdef MULTINODE
+    static void addRequiredFabricCliqueType(std::vector<FabricCliqueType> &types, FabricCliqueType type);
+#endif
+#ifdef MULTINODE
     static FilterResult filterHasMultipleGPUsMultinode();
+#endif
+#ifdef NVBW_HAVE_UGPU_MEMORY_NODE_SPLIT
 #endif
 
     // helper functions
@@ -218,11 +526,32 @@ class Testcase {
     void allHostHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost);
     void allHostBidirHelper(unsigned long long size, MemcpyOperation &memcpyInstance, PeerValueMatrix<double> &bandwidthValues, bool sourceIsHost);
 
-    // Copy the worst run-to-run coefficient of variation measured by the
-    // operation onto the result matrix, so it is emitted as the test's
-    // COEFFICIENT_OF_VARIATION stability metric. No-op if nothing was measured.
-    static void recordStability(PeerValueMatrix<double> &bandwidthValues, const MemcpyOperation &memcpyInstance) {
-        double cv = memcpyInstance.worstCoefficientOfVariation();
+    // Copy the operation's worst coefficient of variation onto the result
+    // matrix for reporting. No-op if nothing was measured. When a test measures
+    // through several operations, call this for each; the worst CV wins.
+    template <typename OperationT>
+    static void recordStability(PeerValueMatrix<double> &bandwidthValues, const OperationT &operation) {
+        double cv = operation.worstCoefficientOfVariation();
+        if (cv < 0.0) {
+            return;
+        }
+        if (!bandwidthValues.coefficientOfVariation || cv > *bandwidthValues.coefficientOfVariation) {
+            bandwidthValues.coefficientOfVariation = cv;
+        }
+    }
+
+    // Same, for a test whose devices can take either of two measurement paths in
+    // one run: each path accumulates into its own MemcpyOperation, so reporting
+    // just one of them would drop the other path's samples. Keeps the worse of
+    // the two. A path with no measurements reports negative and is ignored.
+    static void recordStability(PeerValueMatrix<double> &bandwidthValues,
+                                const MemcpyOperation &firstInstance,
+                                const MemcpyOperation &secondInstance) {
+        double cv = firstInstance.worstCoefficientOfVariation();
+        const double secondCv = secondInstance.worstCoefficientOfVariation();
+        if (secondCv > cv) {
+            cv = secondCv;
+        }
         if (cv >= 0.0) {
             bandwidthValues.coefficientOfVariation = cv;
         }
@@ -320,6 +649,10 @@ class Testcase {
     // Checks if the testcase can be run on the current system
     virtual FilterResult filter() { return FilterResult::pass(); }
 
+#ifdef MULTINODE
+    virtual void addRequiredFabricCliqueTypes(std::vector<FabricCliqueType> &types) const;
+#endif
+
     // Runs the testcase
     virtual void run(unsigned long long size, unsigned long long loopCount) = 0;
 };
@@ -390,7 +723,6 @@ class DeviceToDeviceTransfer : public Testcase {
  private:
     MemcpyInitiator* createMemcpyInitiator() const;
     std::unique_ptr<BufferTypeStrategy> createBufferStrategy() const;
-    static std::unique_ptr<DeviceToDeviceAccessStrategy> createAccessStrategy(AccessType accessType);
     static std::string generateKey(CopyInitiator initiator, AccessType accessType);
     static std::string generateDesc(CopyInitiator initiator, AccessType accessType);
     std::string buildOutputLabel() const;
@@ -412,10 +744,30 @@ class DeviceToDeviceBidirTransfer : public Testcase {
  private:
     MemcpyInitiator* createMemcpyInitiator() const;
     std::unique_ptr<BufferTypeStrategy> createBufferStrategy() const;
-    static std::unique_ptr<DeviceToDeviceAccessStrategy> createAccessStrategy(AccessType accessType);
     static std::string generateKey(CopyInitiator initiator, AccessType accessType);
     static std::string generateDesc(CopyInitiator initiator, AccessType accessType);
     std::string buildOutputLabel(const std::string& suffix) const;
+};
+
+// Selects between non-counted (fabric_try_put / UBLKCP 2 put+fence) and
+// counted (put_counted+fabric_submit / UBLKCP counted) latency variants.
+enum class CountedWrite { No, Yes };
+
+// Device-to-device latency test for all local GPU pairs (single-process only).
+// LE variant (--force-le-variant): fabric_try_put[_counted] + consumer ack.
+// Raw variant (default):           UBLKCP 2 put+fence / UBLKCP counted.
+class DeviceToDeviceLatency : public Testcase {
+ public:
+    explicit DeviceToDeviceLatency(CountedWrite counted);
+    virtual ~DeviceToDeviceLatency() {}
+    void run(unsigned long long size, unsigned long long loopCount) override;
+    FilterResult filter() override;
+
+ private:
+    CountedWrite counted_;
+    std::string buildOutputLabel() const;
+    static std::string makeKey(CountedWrite counted);
+    static std::string makeDesc(CountedWrite counted);
 };
 
 // Device local copy transfer test
@@ -429,6 +781,9 @@ class DeviceLocalCopyTransfer : public Testcase {
     FilterResult filter() override;
 
  private:
+    // These tests always use raw pointers: a same-device Handle destination is an
+    // LE owned by the copying device, so the copy would leave the die and return
+    // through the switch, which is not local bandwidth.
     MemcpyInitiator* createMemcpyInitiator() const;
     static std::string generateKey(CopyInitiator initiator);
     static std::string generateDesc(CopyInitiator initiator);
@@ -551,7 +906,6 @@ class AllToOneTransfer : public Testcase {
 
  private:
     MemcpyInitiator* createMemcpyInitiator() const;
-    static std::unique_ptr<DeviceToDeviceAccessStrategy> createAccessStrategy(AccessType accessType);
     static std::string generateKey(CopyInitiator initiator, AccessType accessType);
     static std::string generateDesc(CopyInitiator initiator, AccessType accessType);
     std::string buildOutputLabel() const;
@@ -571,7 +925,6 @@ class OneToAllTransfer : public Testcase {
 
  private:
     MemcpyInitiator* createMemcpyInitiator() const;
-    static std::unique_ptr<DeviceToDeviceAccessStrategy> createAccessStrategy(AccessType accessType);
     static std::string generateKey(CopyInitiator initiator, AccessType accessType);
     static std::string generateDesc(AccessType accessType);
     std::string buildOutputLabel() const;
@@ -621,6 +974,10 @@ class DeviceToDeviceLatencyTMA: public Testcase {
     }
 };
 
+// ============================================================================
+// uGPU localization tests
+// ============================================================================
+
 #ifdef MULTINODE
 // Multinode device-to-device transfer test (CE/SM/TMA) - Read/Write
 class MultinodeDeviceToDeviceTransfer : public Testcase {
@@ -632,6 +989,7 @@ class MultinodeDeviceToDeviceTransfer : public Testcase {
     virtual ~MultinodeDeviceToDeviceTransfer() {}
     void run(unsigned long long size, unsigned long long loopCount) override;
     FilterResult filter() override;
+    void addRequiredFabricCliqueTypes(std::vector<FabricCliqueType> &types) const override;
 
  private:
     ContextPreference getContextPreference() const;
@@ -651,6 +1009,7 @@ class MultinodeDeviceToDeviceBidirTransfer : public Testcase {
     virtual ~MultinodeDeviceToDeviceBidirTransfer() {}
     void run(unsigned long long size, unsigned long long loopCount) override;
     FilterResult filter() override;
+    void addRequiredFabricCliqueTypes(std::vector<FabricCliqueType> &types) const override;
 
  private:
     ContextPreference getContextPreference() const;
@@ -669,6 +1028,7 @@ class MultinodeAllToOneWriteSM: public Testcase {
     virtual ~MultinodeAllToOneWriteSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     FilterResult filter() override { return Testcase::filterHasMultipleGPUsMultinode(); }
+    void addRequiredFabricCliqueTypes(std::vector<FabricCliqueType> &types) const override;
 };
 
 class MultinodeAllFromOneReadSM: public Testcase {
@@ -680,6 +1040,7 @@ class MultinodeAllFromOneReadSM: public Testcase {
     virtual ~MultinodeAllFromOneReadSM() {}
     void run(unsigned long long size, unsigned long long loopCount);
     FilterResult filter() override { return Testcase::filterHasMultipleGPUsMultinode(); }
+    void addRequiredFabricCliqueTypes(std::vector<FabricCliqueType> &types) const override;
 };
 
 class MultinodeBroadcastOneToAllSM: public Testcase {
@@ -695,6 +1056,7 @@ class MultinodeBroadcastOneToAllSM: public Testcase {
         if (!r) return r;
         return Testcase::filterSupportsMulticast();
     }
+    void addRequiredFabricCliqueTypes(std::vector<FabricCliqueType> &types) const override;
 };
 
 class MultinodeBroadcastAllToAllSM: public Testcase {
@@ -711,6 +1073,7 @@ class MultinodeBroadcastAllToAllSM: public Testcase {
         if (!r) return r;
         return Testcase::filterSupportsMulticast();
     }
+    void addRequiredFabricCliqueTypes(std::vector<FabricCliqueType> &types) const override;
 };
 
 // TODO(pgumienny) - add remaining combination of Read/Write CE/SM once the tooling is in
@@ -723,18 +1086,34 @@ class MultinodeBisectWriteCE: public Testcase {
     virtual ~MultinodeBisectWriteCE() {}
     void run(unsigned long long size, unsigned long long loopCount);
     FilterResult filter() override { return Testcase::filterHasMultipleGPUsMultinode(); }
+    void addRequiredFabricCliqueTypes(std::vector<FabricCliqueType> &types) const override;
 };
 
-// Multinode multicast fabric put: write to multicast memory (TMA) or raw multicast VA.
+// Multinode multicast fabric put: write to multicast LE (TMA, --force-le-variant) or raw multicast VA.
 class MultinodeMulticastFabricPut : public Testcase {
  public:
     explicit MultinodeMulticastFabricPut(CopyInitiator initiator);
     virtual ~MultinodeMulticastFabricPut() {}
     void run(unsigned long long size, unsigned long long loopCount) override;
     FilterResult filter() override;
+    void addRequiredFabricCliqueTypes(std::vector<FabricCliqueType> &types) const override;
 
  private:
     CopyInitiator initiator_;
+    std::string buildOutputLabel() const;
+};
+
+// Multinode multicast read and reduce: fabric.try_pullred via LE (--force-le-variant)
+// or multimem.ld_reduce via raw multicast VA (default / --force-raw-pointer).
+class MultinodeMultimemReduce : public Testcase {
+ public:
+    MultinodeMultimemReduce();
+    virtual ~MultinodeMultimemReduce() {}
+    void run(unsigned long long size, unsigned long long loopCount) override;
+    FilterResult filter() override;
+    void addRequiredFabricCliqueTypes(std::vector<FabricCliqueType> &types) const override;
+
+ private:
     std::string buildOutputLabel() const;
 };
 

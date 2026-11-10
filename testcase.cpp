@@ -16,10 +16,54 @@
  */
 
 #include "common.h"
+#include "memcpy_le.h"  // For LE buffer support in GenericMemcpyTest
 #include "output.h"
 #include "testcase.h"
 #include "inline_common.h"
 
+// ============================================================================
+// LEBufferStrategy Implementation
+// ============================================================================
+
+#ifdef NVBW_HAVE_LE_API
+bool LEBufferStrategy::isSupported() const {
+    return leBufferSupportedOnAllDevices();
+}
+
+std::unique_ptr<BufferPair> LEBufferStrategy::createBufferPair(
+        size_t size, int srcDeviceId, int peerDeviceId) const {
+    // Only the peer (remote) device needs an LE.  The local device uses a plain
+    // DeviceBuffer so that AccessType::Read/Write is encoded in which slot carries
+    // the LE ID — no separate direction state is needed in the initiator:
+    //   getOrderedBuffers(Read)  → src=LE(peer), dst=DeviceBuffer(src) → fabric.try_get
+    //   getOrderedBuffers(Write) → src=DeviceBuffer(src), dst=LE(peer) → fabric.try_put
+    return std::make_unique<BufferPair>(
+        std::unique_ptr<MemcpyBuffer>(new DeviceBuffer(size, srcDeviceId)),
+        std::make_unique<LogicalEndpointBuffer>(size, peerDeviceId));
+}
+
+bool LEBufferStrategy::enablePeerAccess(BufferPair& pair) const {
+    // LE on the peer side is sufficient; cross-device access is implicit in the
+    // LE binding. Skip the pair (return false) if the LE failed to create/bind,
+    // so the caller doesn't dispatch against a freed VA -> CUDA_ERROR_ILLEGAL_ADDRESS.
+    // Fabric wait runs on pair.src (the non-LE launch device); see
+    // enableLePairAccess in memcpy_le.h.
+    auto* peerLE = dynamic_cast<LogicalEndpointBuffer*>(pair.peer.get());
+    if (peerLE == nullptr) return false;
+    return enableLePairAccess(*pair.src, *peerLE);
+}
+#else
+bool LEBufferStrategy::isSupported() const { return false; }
+
+std::unique_ptr<BufferPair> LEBufferStrategy::createBufferPair(
+        size_t size, int srcDeviceId, int peerDeviceId) const {
+    return std::make_unique<BufferPair>(
+        std::unique_ptr<MemcpyBuffer>(new DeviceBuffer(size, srcDeviceId)),
+        std::unique_ptr<MemcpyBuffer>(new DeviceBuffer(size, peerDeviceId)));
+}
+
+bool LEBufferStrategy::enablePeerAccess(BufferPair& pair) const { return false; }
+#endif  // NVBW_HAVE_LE_API
 
 std::map<std::string, std::map<std::string, std::shared_ptr<PeerValueMatrix<double>>>> Testcase::globalTestCache;
 
@@ -97,6 +141,39 @@ FilterResult Testcase::filterSupportsTMA() {
     return FilterResult::pass();
 }
 
+// UBLKCP (cp.async.bulk S->G) support check: requires Blackwell (sm_100+).
+// Hopper (sm_90) supports TMA G->S but not the S->G counted/uncounted UBLKCP
+// instructions used by the device-to-device latency kernels.
+FilterResult Testcase::filterSupportsUBLKCP() {
+    int deviceCount = 0;
+    CU_ASSERT(cuDeviceGetCount(&deviceCount));
+
+    for (int currentDevice = 0; currentDevice < deviceCount; currentDevice++) {
+        CUdevice dev;
+        CU_ASSERT(cuDeviceGet(&dev, currentDevice));
+        int major = 0;
+        CU_ASSERT(cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, dev));
+        if (major < 10) {
+            return FilterResult::waive(
+                "UBLKCP (device-to-device latency) requires compute capability 10.0+ (Blackwell or later), device "
+                + std::to_string(currentDevice) + " has " + std::to_string(major) + ".x");
+        }
+    }
+
+    return FilterResult::pass();
+}
+
+// Logical Endpoint support check
+FilterResult Testcase::filterSupportsLogicalEndpoint() {
+    if (!leBufferSupportedOnAllDevices()) return FilterResult::waive("logical endpoint not supported on this system");
+    return FilterResult::pass();
+}
+
+// Prerequisites for running an initiator against Handle (LE) buffers. Only TMA
+// uses them, via fabric kernels, so LE support is the whole requirement.
+FilterResult Testcase::filterSupportsHandleCopy() {
+    return filterSupportsLogicalEndpoint();
+}
 
 FilterResult Testcase::filterBounceBufferConfComputeEnabled() {
     if (gSettings.bounceBufferConfComputeEnabled) {
@@ -107,6 +184,16 @@ FilterResult Testcase::filterBounceBufferConfComputeEnabled() {
 }
 
 #ifdef MULTINODE
+void Testcase::addRequiredFabricCliqueType(std::vector<FabricCliqueType> &types, FabricCliqueType type) {
+    if (std::find(types.begin(), types.end(), type) == types.end()) {
+        types.push_back(type);
+    }
+}
+
+void Testcase::addRequiredFabricCliqueTypes(std::vector<FabricCliqueType> &types) const {
+    (void)types;
+}
+
 // Each MPI rank handles one GPU, so we simply have to check if we have more than 1 process
 FilterResult Testcase::filterHasMultipleGPUsMultinode() {
     if (worldSize > 1) return FilterResult::pass();
@@ -159,7 +246,7 @@ void Testcase::forEachAllToOneBufferPairing(unsigned long long size, allToOneOne
 
             DeviceBuffer* oneBuffer = new DeviceBuffer(size, oneDeviceId);
 
-            if (!oneBuffer->enablePeerAcess(*allBuffersPreallocated[allDeviceId])) {
+            if (!oneBuffer->enablePeerAccess(*allBuffersPreallocated[allDeviceId])) {
                 delete oneBuffer;
                 continue;
             }

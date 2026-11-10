@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -113,12 +113,13 @@ void JsonOutput::addTestcase(const std::string &name, const std::string &status,
 
 void JsonOutput::recordErrorCurrentTest(const std::string &errorPart1, const std::string &errorPart2) {
     bool testCaseExists = false;
-    if (m_root[NVB_TESTCASES].isArray()) {
+    if (m_root[NVB_TITLE][NVB_TESTCASES].isArray()) {
         Json::Value &testcases = m_root[NVB_TITLE][NVB_TESTCASES];
         unsigned int size = testcases.size();
         if (size > 0) {
             testcases[size-1][NVB_TESTCASE_ERROR] = errorPart1 + " " + errorPart2;
             testCaseExists = true;
+            echoErrorIfSilent(shouldOutput, errorPart1 + " " + errorPart2);
         }
     }
 
@@ -132,7 +133,7 @@ void JsonOutput::recordErrorCurrentTest(const std::string &errorPart1, const std
 
 void JsonOutput::setTestcaseStatusAndAddIfNeeded(const std::string &name, const std::string &status, const std::string &msg) {
     bool testCaseExists = false;
-    if (m_root[NVB_TESTCASES].isArray()) {
+    if (m_root[NVB_TITLE][NVB_TESTCASES].isArray()) {
         Json::Value &testcases = m_root[NVB_TITLE][NVB_TESTCASES];
         unsigned int size = testcases.size();
         if (size > 0 && testcases[size-1][NVB_TESTCASE_NAME].asString() == name) {
@@ -148,6 +149,7 @@ void JsonOutput::setTestcaseStatusAndAddIfNeeded(const std::string &name, const 
 
 void JsonOutput::recordError(const std::string &error) {
     m_root[NVB_TITLE][NVB_ERROR] = error;
+    echoErrorIfSilent(shouldOutput, error);
     print();
 }
 
@@ -164,6 +166,7 @@ void JsonOutput::recordError(const std::vector<std::string> &errorParts) {
         }
     }
     m_root[NVB_TITLE][NVB_ERROR] = buf.str();
+    echoErrorIfSilent(shouldOutput, buf.str());
 }
 
 void JsonOutput::recordWarning(const std::string &warning) {
@@ -200,9 +203,20 @@ void JsonOutput::recordDevices(int deviceCount) {
     m_root[NVB_TITLE][NVB_DEVICE_LIST] = deviceList;
 }
 
+#ifdef MULTINODE
+void JsonOutput::recordMultinodeDevices(const std::vector<RankDeviceInfo> &rankDevices) {
+    Json::Value deviceList;
+
+    for (const RankDeviceInfo &info : rankDevices) {
+        deviceList.append(formatRankDeviceInfo(info));
+    }
+    m_root[NVB_TITLE][NVB_DEVICE_LIST] = deviceList;
+}
+#endif
+
 void JsonOutput::print() {
     if (shouldOutput) {
-        std::cout << m_root.toStyledString() << std::endl;
+        std::cout << m_root.toStyledString();
     }
 }
 

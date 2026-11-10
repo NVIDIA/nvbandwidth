@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,9 +29,8 @@ template <class T> struct PeerValueMatrix {
     std::vector<std::string> row_labels;
     bool pFormatter;
     UnitType uType;
-    // Run-to-run coefficient of variation for this test's measurements (worst
-    // cell). Populated from the measurement statistics; when set it is emitted
-    // as the COEFFICIENT_OF_VARIATION stability metric.
+    // Coefficient of variation of this test's least stable measurement. When
+    // set it is emitted as the COEFFICIENT_OF_VARIATION stability metric.
     std::optional<double> coefficientOfVariation;
 
     PeerValueMatrix(int rows, int columns, std::string key = "", bool pFormatter = gSettings.perfFormatter, UnitType uType = BANDWIDTH): m_matrix(rows * columns), m_rows(rows), m_columns(columns), key(key), pFormatter(pFormatter), uType(uType) {}
@@ -81,7 +80,7 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
             o << std::setw(10) << currentDevice;
         }
     }
-    o << std::endl;
+    o << "\n";
 
     for (int currentDevice = 0; currentDevice < matrix.m_rows; currentDevice++) {
         if (matrix.row_labels.size() > 0) {
@@ -102,21 +101,21 @@ std::ostream &operator<<(std::ostream &o, const PeerValueMatrix<T> &matrix) {
             minVal = std::min(minVal, val.value_or(0.0));
             if (val.value_or(0.0) > 0) count++;
         }
-        o << std::endl;
+        o << "\n";
     }
-    o << std::endl;
+    o << "\n";
     if (matrix.pFormatter) {
-        o << "&&&& PERF " << matrix.key << " " << sum << getUnitString(matrix.uType) << std::endl;
+        o << "&&&& PERF " << matrix.key << " " << sum << getUnitString(matrix.uType) << "\n";
     } else {
-        o << "SUM " << matrix.key << " " << sum << std::endl;
+        o << "SUM " << matrix.key << " " << sum << "\n";
     }
-
-    // Report the run-to-run (temporal) coefficient of variation, which measures
-    // the stability of each measurement across repeated samples. Guard on a
-    // minimum sample count since the CV is unreliable with few samples.
     if (matrix.coefficientOfVariation &&
         gSettings.averageLoopCount >= kMinAverageLoopCountForCV) {
-        o << "COEFFICIENT_OF_VARIATION " << matrix.key << " " << matrix.coefficientOfVariation.value() << "\n";
+        // The table's precision of 2 rounds well-behaved tests to 0.00; latency
+        // reproduces to ~1e-5.
+        o << "COEFFICIENT_OF_VARIATION " << matrix.key << " "
+          << std::setprecision(6) << matrix.coefficientOfVariation.value()
+          << std::setprecision(2) << "\n";
     }
 
     VERBOSE << "MIN " << matrix.key << " " << minVal << '\n';

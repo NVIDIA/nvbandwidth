@@ -55,6 +55,10 @@ class JsonOutput : public Output {
 
     void recordDevices(int deviceCount);
 
+#ifdef MULTINODE
+    void recordMultinodeDevices(const std::vector<RankDeviceInfo> &rankDevices);
+#endif
+
  private:
     bool shouldOutput;
     Json::Value m_root;

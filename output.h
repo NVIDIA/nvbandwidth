@@ -18,10 +18,18 @@
 #ifndef OUTPUT_H_
 #define OUTPUT_H_
 
+#include <iostream>
 #include <string>
 #include <vector>
 
 #include "testcase.h"
+
+// Structured outputs only emit on rank 0; mirror errors from silent ranks to stderr.
+inline void echoErrorIfSilent(bool emittingOutput, const std::string &error) {
+    if (!emittingOutput) {
+        std::cerr << error << std::endl;
+    }
+}
 
 extern const std::string NVB_TITLE;
 extern const std::string NVB_CUDA_RUNTIME_VERSION;
@@ -46,6 +54,8 @@ extern const std::string NVB_ERROR_STATUS;
 
 class Output {
  public:
+    virtual ~Output() = default;
+
     virtual void addTestcase(const std::string &name, const std::string &status, const std::string &msg = "");
 
     /*
@@ -94,7 +104,15 @@ class Output {
 
     virtual void printInfo();
 
-    virtual void recordDevices(int worldSize);
+    // Single-process local GPU listing.
+    virtual void recordDevices(int deviceCount);
+
+#ifdef MULTINODE
+    // Per-rank GPU listing for multinode runs.
+    virtual void recordMultinodeDevices(const std::vector<RankDeviceInfo> &rankDevices);
+
+    virtual void recordGpuFabricInfo(const std::vector<RankFabricInfo> &fabricInfo);
+#endif
 
     void listTestcases(const std::vector<Testcase*> &testcases);
 };
@@ -102,5 +120,10 @@ class Output {
 extern Output *output;
 
 std::string getDeviceDisplayInfo(int deviceOrdinal);
+
+#ifdef MULTINODE
+std::string formatFabricCliqueType(FabricCliqueType type);
+std::string formatRankFabricInfo(const RankFabricInfo &info);
+#endif
 
 #endif  // OUTPUT_H_
