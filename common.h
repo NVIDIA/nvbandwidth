@@ -22,6 +22,10 @@
 #include <cstdlib>
 #include <cuda.h>
 #include <nvml.h>
+// Some CI toolchains ship an nvml.h predating this enum; value matches current nvml.h.
+#ifndef NVML_DEVICE_ARCH_RUBIN
+#define NVML_DEVICE_ARCH_RUBIN 13
+#endif
 #include <algorithm>
 #include <cctype>
 #include <float.h>
@@ -38,18 +42,62 @@
 #include <limits.h>
 #include <optional>
 #include <cstring>
+#include <type_traits>
 
 #include "test_settings.h"
 
 #define STRING_LENGTH 256
 
+// Copy src into a fixed-size MPI/exchange buffer and force null-termination.
+template <size_t N>
+inline void copyToFixedBuffer(char (&dst)[N], const std::string &src) {
+    static_assert(N > 0, "fixed buffer must be non-empty");
+    std::strncpy(dst, src.c_str(), N - 1);
+    dst[N - 1] = '\0';
+}
+
 // Non-settings constants
+constexpr int kWarmupCount = 4;
 const unsigned long long smallBufferThreshold = 64;
 const unsigned int _MiB = 1024 * 1024;
 const unsigned int _2MiB = 2 * _MiB;
 const unsigned int numThreadPerBlock = 512;
 const unsigned int strideLen = 16; /* cacheLine size 128 Bytes, 16 words */
 const unsigned long latencyMemAccessCnt = 1000000; /* 1M total read accesses to gauge latency */
+// Device-to-device latency tests: fixed iteration count (independent of --loop-count).
+constexpr unsigned long long kDeviceToDeviceLatencyIterations = 10000;
+// Granularity of each fabric/UBLKCP put in the device-to-device latency kernels (bytes).
+// Must satisfy the TMA 16-byte alignment requirement.
+constexpr size_t kDeviceToDeviceLatencyPutSize = 16;
+// Device-to-device latency buffers must cover at least two put-size slots; fall back to 64 KB
+// if the caller-supplied size is smaller (e.g. when the user omits --size).
+constexpr size_t kDeviceToDeviceLatencyMinBufSize = 65536;
+// UBLKCP mailbox layout for device-to-device latency (raw-pointer path).
+// The counter offset is one put-size slot past the data payload.
+constexpr size_t kUblkcpCounterOffset = kDeviceToDeviceLatencyPutSize;
+// Non-counted: [data kDeviceToDeviceLatencyPutSize B][sequence kDeviceToDeviceLatencyPutSize B] = 2 slots.
+constexpr size_t kUblkcpMailboxBytes = 2 * kDeviceToDeviceLatencyPutSize;
+// Hardware barMem counter size for cp.async.bulk.counted (TMA-managed, 8 bytes).
+constexpr size_t kUblkcpBarMemBytes = 8;
+// Counted: [data kDeviceToDeviceLatencyPutSize B][barMem counter kUblkcpBarMemBytes B].
+constexpr size_t kUblkcpCountedMailboxBytes = kDeviceToDeviceLatencyPutSize + kUblkcpBarMemBytes;
+// Device-to-device latency ack buffer (allocated on the producer device):
+//   [0] handshake ack — producer clears to 0 each iteration; consumer writes 1
+//   [1] producer-only watchdog status — 0, or kDeviceToDeviceLatencyWatchdogTimeoutAck
+// The status word must not share storage with the handshake ack: a late consumer can still
+// observe the current sequence and write 1 after the producer has timed out. If that write
+// landed on the same word as the sentinel, runDeviceToDeviceLatency()'s post-sync host read
+// would miss the failure and report a valid latency.
+constexpr size_t kDeviceToDeviceLatencyAckHandshakeOffset = 0;
+constexpr size_t kDeviceToDeviceLatencyAckStatusOffset = sizeof(uint32_t);
+constexpr size_t kDeviceToDeviceLatencyAckBytes = 2 * sizeof(uint32_t);
+// When the producer watchdog fires it publishes this marker into the status word. The
+// launcher reads that word back and, on seeing it, returns
+// kDeviceToDeviceLatencyWatchdogFailureNs so the testcase fails instead of recording a
+// stalled run as a normal completion. The marker is distinct from the normal handshake
+// values (0 and 1); a valid latency is always >= 0.
+constexpr unsigned int kDeviceToDeviceLatencyWatchdogTimeoutAck = 0xDEADBEEFu;
+constexpr double kDeviceToDeviceLatencyWatchdogFailureNs = -1.0;
 
 // Runtime state (not settings)
 extern int deviceCount;
@@ -62,8 +110,66 @@ inline bool hasGpuPair() { return !gpuPairUuid0.empty(); }
 #ifdef MULTINODE
 extern int localDevice;
 extern int localRank;
+extern int ranksPerNode;
 extern int worldRank;
 extern int worldSize;
+#endif
+
+#ifdef MULTINODE
+// 4 clique types are currently defined, leave space for 16 for good measure
+constexpr unsigned int kMaxRankFabricCliques = 16;
+constexpr unsigned int kFabricClusterUuidBytes = 16;
+
+enum class FabricCliqueType : unsigned int {
+    UnicastPointer = 0,
+    MulticastPointer = 1,
+    UnicastLogicalEndpoint = 2,
+    MulticastLogicalEndpoint = 3,
+};
+#ifdef NVBW_HAVE_NVML_GPU_FABRIC_INFO
+static_assert(static_cast<unsigned int>(FabricCliqueType::UnicastPointer) ==
+              NVML_GPU_FABRIC_CLIQUE_TYPE_UNICAST_POINTER, "NVML clique enum drift");
+#endif
+
+// Per-rank GPU assignment, MPI_BYTE-exchanged across the world.
+struct RankDeviceInfo {
+    int rank = 0;
+    int localDevice = -1;
+    char hostname[STRING_LENGTH] = {};
+    char deviceName[STRING_LENGTH] = {};
+};
+static_assert(std::is_trivially_copyable<RankDeviceInfo>::value,
+              "RankDeviceInfo is exchanged via MPI_BYTE and must stay trivially copyable");
+
+enum class RankFabricInfoSource : int {
+    None = 0,
+    CudaClique = 1,
+    Nvml = 2,
+};
+
+struct RankFabricCliqueInfo {
+    FabricCliqueType type = FabricCliqueType::UnicastPointer;
+    unsigned int id = 0;
+};
+
+struct RankFabricInfo {
+    int rank = 0;
+    int localDevice = 0;
+    RankFabricInfoSource infoSource = RankFabricInfoSource::None;
+    int runtimeSymbolAvailable = 0;
+    int queryResult = CUDA_ERROR_NOT_SUPPORTED;
+    RankFabricCliqueInfo cliques[kMaxRankFabricCliques] = {};
+    unsigned int numCliques = 0;
+    unsigned long long reportedNumCliques = 0;
+    int fabricStatus = -1;
+    unsigned int state = 0;
+    unsigned int healthMask = 0;
+    unsigned char healthSummary = 0;
+    unsigned char clusterUuid[kFabricClusterUuidBytes] = {};
+    char hostname[STRING_LENGTH] = {};
+};
+static_assert(std::is_trivially_copyable<RankFabricInfo>::value,
+              "RankFabricInfo is exchanged via MPI_BYTE and must stay trivially copyable");
 #endif
 
 class Verbosity {
@@ -223,6 +329,13 @@ inline std::string getPaddedProcessId(int id) {
     s << std::setfill(' ') << std::setw(paddingSize) << id;
     return s.str();
 }
+
+inline std::string formatRankDeviceInfo(const RankDeviceInfo &info) {
+    std::stringstream s;
+    s << "Process " << getPaddedProcessId(info.rank) << " (" << info.hostname << "): device "
+      << info.localDevice << ": " << info.deviceName;
+    return s.str();
+}
 #endif
 
 struct LatencyNode {
@@ -274,10 +387,13 @@ class MemcpyDescriptor {
     CUstream stream;
     size_t copySize;
     unsigned long long loopCount;
-    unsigned int threadsPerBlock = 512;
     bool useNvlinkUtilScheduling = false;
+    unsigned int threadsPerBlock = 512;
+    uint32_t srcLeId = ~0u;  // LE ID of the src buffer, or ~0u if not an LE (matches MemcpyBuffer::LE_ID_NONE)
+    uint32_t dstLeId = ~0u;  // LE ID of the dst buffer, or ~0u if not an LE
 
-    MemcpyDescriptor(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize, unsigned long long loopCount);
+    MemcpyDescriptor(CUdeviceptr dst, CUdeviceptr src, CUstream stream, size_t copySize,
+                     unsigned long long loopCount, uint32_t srcLeId = ~0u, uint32_t dstLeId = ~0u);
 };
 
 

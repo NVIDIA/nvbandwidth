@@ -58,12 +58,27 @@ void MultiNodeEnv::initialize(int argc, char** argv) {
     gethostname(host, sizeof(host));
     hostname = host;
 
-    // Get local rank
+    // Get local rank and ranks-per-node (rank/count within this node). ranksPerNode
+    // determines how many distinct local GPUs are needed per node, and localRank
+    // determines which one each rank maps to (localDevice = localRank % deviceCount).
     const char* localRankStr = getenv("OMPI_COMM_WORLD_LOCAL_RANK");
-    if (localRankStr) {
+    const char* localSizeStr = getenv("OMPI_COMM_WORLD_LOCAL_SIZE");
+
+    if (localRankStr && localSizeStr) {
         localRank = atoi(localRankStr);
+        ranksPerNode = atoi(localSizeStr);
     } else {
-        localRank = rank;
+        // Portable fallback for MPI stacks that do not export the OMPI_* vars:
+        // derive both values from the node-local (shared-memory) communicator so
+        // GPU mapping stays correct instead of falling back to the global rank.
+        MPI_Comm localComm;
+        MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, rank, MPI_INFO_NULL, &localComm);
+        int commLocalRank, commRanksPerNode;
+        MPI_Comm_rank(localComm, &commLocalRank);
+        MPI_Comm_size(localComm, &commRanksPerNode);
+        MPI_Comm_free(&localComm);
+        localRank = localRankStr ? atoi(localRankStr) : commLocalRank;
+        ranksPerNode = localSizeStr ? atoi(localSizeStr) : commRanksPerNode;
     }
 }
 

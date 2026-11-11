@@ -11,8 +11,8 @@ Linux is the primary documented platform. Windows builds are possible but may re
 The following components are required:
 
 - **CUDA Toolkit** (version 11.x or above). Multinode version requires 12.3 toolkit and 550 driver or above.
-- **C++17 compiler**. GCC 7.x or above on Linux; MSVC 2019 or above on Windows.
-- **CMake** (version 3.20 or above). CMake version 3.24 or newer is encouraged.
+- **C++17 compiler**. GCC 8.3 or above on Linux (required by argparse); MSVC 2019 or above on Windows.
+- **CMake** (version 3.20 or above). CMake version 3.24 or newer is encouraged. Note that `-DCMAKE_CUDA_ARCHITECTURES=native` requires CMake 3.24+ (the `native` keyword is unsupported on older versions); on CMake 3.20–3.23, pass an explicit architecture such as `-DCMAKE_CUDA_ARCHITECTURES=100` instead.
 
 On Linux, ensure the path to the `nvcc` binary (installed via the CUDA Toolkit) is available in `$PATH`.
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,10 +23,44 @@
 #include <unistd.h>
 
 #include "kernels.cuh"
+#include "memcpy_le.h"
 #include "multinode_memcpy.h"
 
+// ============================================================================
+// Timing and retry constants
+// ============================================================================
+static constexpr int kFabricMaxRetries                     = 1000;
+static constexpr auto kFabricRetryDelay                    = std::chrono::milliseconds(5);
+static constexpr auto kLeUnicastReadyTimeout               = std::chrono::seconds(15);
+static constexpr auto kLeMulticastReadyTimeout             = std::chrono::seconds(30);
+
+// fabric route programming is asynchronous — the driver returns before the switch is
+// done, and kernel launches during that window fail with cudaErrorDevicesUnavailable.
+// Call this helper (once, after the final MPI_Barrier of any fabric setup sequence)
+// to spin until the device accepts work.
+//
+// Failure model: this asserts (aborts the run) on a persistent stall, unlike the
+// single-node LogicalEndpointBuffer path (memcpy_le.h) which soft-waives the LE path
+// and keeps running. That is intentional — every rank calls this in lockstep after a
+// collective barrier, so one rank can't unilaterally waive without deadlocking the
+// others; a soft path here would need a collective agreement on the outcome first.
+static void waitForFabricProgramming() {
+    CUdeviceptr scratch = 0;
+    CU_ASSERT(cuMemAlloc(&scratch, sizeof(int)));
+    cudaError_t err = cudaErrorDevicesUnavailable;
+    for (int i = 0; i < kFabricMaxRetries && err == cudaErrorDevicesUnavailable; ++i) {
+        cudaGetLastError();
+        err = cudaMemset(reinterpret_cast<void*>(scratch), 0, sizeof(int));
+        if (err == cudaErrorDevicesUnavailable)
+            std::this_thread::sleep_for(kFabricRetryDelay);
+    }
+    CU_ASSERT(cuMemFree(scratch));
+    if (err != cudaSuccess)
+        CUDA_ASSERT(err);
+}
+
 MultinodeMemoryAllocation::MultinodeMemoryAllocation(size_t bufferSize, int MPI_rank): bufferSize(bufferSize), MPI_rank(MPI_rank) {
-    cudaSetDevice(localDevice);
+    CUDA_ASSERT(cudaSetDevice(localDevice));
 }
 
 static CUresult MPIstreamSyncHelper(CUstream stream) {
@@ -80,6 +114,7 @@ MultinodeMemoryAllocationUnicast::MultinodeMemoryAllocationUnicast(size_t buffer
 
     // Make sure that everyone is done with mapping the fabric allocation
     MPI_Barrier(MPI_COMM_WORLD);
+    waitForFabricProgramming();
 }
 
 MultinodeMemoryAllocationUnicast::~MultinodeMemoryAllocationUnicast() {
@@ -90,6 +125,62 @@ MultinodeMemoryAllocationUnicast::~MultinodeMemoryAllocationUnicast() {
     CU_ASSERT(cuMemRelease(handle));
     CU_ASSERT(cuMemAddressFree((CUdeviceptr) buffer, roundedUpAllocationSize));
 }
+
+#ifdef NVBW_HAVE_UGPU_MEMORY_NODE_SPLIT
+MultinodeLocalizedMemoryAllocationUnicast::MultinodeLocalizedMemoryAllocationUnicast(
+        size_t bufferSize, int MPI_rank, unsigned int memoryNodeId)
+    : MultinodeMemoryAllocation(bufferSize, MPI_rank) {
+    constexpr CUmemAllocationHandleType handleType = CU_MEM_HANDLE_TYPE_FABRIC;
+
+    CUmemAllocationProp prop = {};
+    prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+    prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE_LOCALITY_DOMAIN;
+    prop.location.localized.deviceId         = static_cast<unsigned char>(localDevice);
+    prop.location.localized.localityDomainId = static_cast<unsigned char>(memoryNodeId);
+    prop.requestedHandleTypes = handleType;
+
+    size_t granularity = 0;
+    CU_ASSERT(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
+    roundedUpAllocationSize_ = ROUND_UP(bufferSize, granularity);
+
+    if (MPI_rank == worldRank) {
+        CU_ASSERT(cuMemCreate(&handle_, roundedUpAllocationSize_, &prop, 0));
+        CU_ASSERT(cuMemExportToShareableHandle(&fh_, handle_, handleType, 0));
+    }
+
+    MPI_Bcast(&fh_, sizeof(fh_), MPI_BYTE, MPI_rank, MPI_COMM_WORLD);
+
+    if (MPI_rank != worldRank) {
+        CU_ASSERT(cuMemImportFromShareableHandle(&handle_, (void*)&fh_, handleType));
+    }
+
+    CU_ASSERT(cuMemAddressReserve((CUdeviceptr*)&buffer, roundedUpAllocationSize_, 0, 0, 0));
+    CU_ASSERT(cuMemMap((CUdeviceptr)buffer, roundedUpAllocationSize_, 0, handle_, 0));
+
+    CUmemAccessDesc desc = {};
+    desc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    desc.location.id   = localDevice;
+    desc.flags         = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+    CU_ASSERT(cuMemSetAccess((CUdeviceptr)buffer, roundedUpAllocationSize_, &desc, 1));
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    waitForFabricProgramming();
+}
+
+MultinodeLocalizedMemoryAllocationUnicast::~MultinodeLocalizedMemoryAllocationUnicast() {
+    MPI_Barrier(MPI_COMM_WORLD);
+    CU_ASSERT(cuMemUnmap((CUdeviceptr)buffer, roundedUpAllocationSize_));
+    CU_ASSERT(cuMemRelease(handle_));
+    CU_ASSERT(cuMemAddressFree((CUdeviceptr)buffer, roundedUpAllocationSize_));
+}
+
+MultinodeLocalizedDeviceBufferUnicast::MultinodeLocalizedDeviceBufferUnicast(
+        size_t bufferSize, int MPI_rank, unsigned int memoryNodeId)
+    : MultinodeDeviceBuffer(bufferSize, MPI_rank)
+    , alloc_(bufferSize, MPI_rank, memoryNodeId) {
+    buffer = alloc_.getBuffer();
+}
+#endif  // NVBW_HAVE_UGPU_MEMORY_NODE_SPLIT
 
 MultinodeMemoryAllocationMulticast::MultinodeMemoryAllocationMulticast(size_t bufferSize, int MPI_rank): MultinodeMemoryAllocation(bufferSize, MPI_rank) {
     handleType = CU_MEM_HANDLE_TYPE_FABRIC;
@@ -141,6 +232,7 @@ MultinodeMemoryAllocationMulticast::MultinodeMemoryAllocationMulticast(size_t bu
 
     // Make sure that everyone is done with mapping the fabric allocation
     MPI_Barrier(MPI_COMM_WORLD);
+    waitForFabricProgramming();
 }
 
 MultinodeMemoryAllocationMulticast::~MultinodeMemoryAllocationMulticast() {
@@ -163,8 +255,7 @@ MultinodeDeviceBuffer::MultinodeDeviceBuffer(size_t bufferSize, int MPI_rank):
 }
 
 int MultinodeDeviceBuffer::getBufferIdx() const {
-    // only single-GPU supported for now
-    return 0;
+    return localDevice;
 }
 
 std::string MultinodeDeviceBuffer::getBufferString() const {
@@ -186,6 +277,352 @@ MultinodeDeviceBufferUnicast::MultinodeDeviceBufferUnicast(size_t bufferSize, in
     MemoryAllocation(bufferSize, MPI_rank) {
     buffer = MemoryAllocation.getBuffer();
 }
+
+// ============================================================================
+// MultinodeLEBufferUnicast / MultinodeLEBufferMulticast  (LE API required)
+// ============================================================================
+#ifdef NVBW_HAVE_LE_API
+
+// NOTE: LE buffer constructors use output->recordError() rather than CU_ASSERT/CUDA_ASSERT.
+// CU_ASSERT calls exit() which kills one MPI rank while others block on MPI_Barrier,
+// causing a deadlock.  Every error path here must reach its corresponding MPI_Barrier
+// so all ranks can fail and clean up symmetrically.
+MultinodeLEBufferUnicast::MultinodeLEBufferUnicast(size_t bufferSize, int MPI_rank,
+                                                   int memoryNodeId)
+    : MultinodeDeviceBuffer(bufferSize, MPI_rank)
+    , leId_(0)
+    , devicePtr_(0)
+    , cuDevice_(0)
+    , primaryCtx_(nullptr)
+    , memHandle_(0)
+    , mappedSize_(0)
+    , isOwner_(MPI_rank == worldRank)
+    , isCreated_(false)
+    , memoryNodeId_(memoryNodeId) {
+    CUDA_ASSERT(cudaSetDevice(localDevice));
+    CU_ASSERT(cuDeviceGet(&cuDevice_, localDevice));
+    CU_ASSERT(cuDevicePrimaryCtxRetain(&primaryCtx_, cuDevice_));
+
+    if (isOwner_) {
+        devicePtr_ = allocateAndMapMemory(&memHandle_, bufferSize, localDevice, true,
+                                          &mappedSize_, memoryNodeId_);
+        buffer = (void*)devicePtr_;
+
+        CUlogicalEndpointProp prop = {};
+        prop.type = CU_LOGICAL_ENDPOINT_TYPE_UNICAST;
+        // Size the LE with the granularity-aligned mappedSize_; a sub-granularity
+        // size (e.g. 64KB < 2MB) fails the bind with CUDA_ERROR_INVALID_VALUE and
+        // cascades into every importer timing out in waitLeReadyWithTimeout().
+        prop.size = mappedSize_;
+        prop.unicast.device = cuDevice_;
+        prop.ipcHandleTypes = CU_LOGICAL_ENDPOINT_IPC_HANDLE_TYPE_FABRIC;
+        prop.flags = CU_LOGICAL_ENDPOINT_FLAG_NONE;
+
+        CUlogicalEndpointFabricHandle leFh = {};
+        bool leCreated = false, leBound = false;
+
+        CU_ASSERT(cuLogicalEndpointIdReserve(&leId_, 1));
+
+        if (cuLogicalEndpointCreate(leId_, &prop) != CUDA_SUCCESS) {
+            output->recordError("MultinodeLEBufferUnicast: cuLogicalEndpointCreate failed");
+            goto owner_cleanup;
+        }
+        leCreated = true;
+
+        // Query the endpoint to the ready state before binding memory to it.
+        if (!waitLeReadyWithTimeout(leId_, kLeUnicastReadyTimeout)) {
+            output->recordError("MultinodeLEBufferUnicast: owner LE did not become ready within timeout");
+            goto owner_cleanup;
+        }
+
+        if (cuLogicalEndpointBindMem(leId_, cuDevice_, 0, memHandle_, 0, mappedSize_, 0) != CUDA_SUCCESS) {
+            output->recordError("MultinodeLEBufferUnicast: cuLogicalEndpointBindMem failed");
+            goto owner_cleanup;
+        }
+        leBound = true;
+
+        if (cuLogicalEndpointExport(&leFh, leId_, CU_LOGICAL_ENDPOINT_IPC_HANDLE_TYPE_FABRIC) != CUDA_SUCCESS) {
+            output->recordError("MultinodeLEBufferUnicast: cuLogicalEndpointExport failed");
+            goto owner_cleanup;
+        }
+
+        isCreated_ = true;
+        goto owner_broadcast;
+
+    owner_cleanup:
+        if (leBound) {
+            cuLogicalEndpointUnbind(leId_, cuDevice_, 0, mappedSize_);
+        }
+        if (leCreated) {
+            cuLogicalEndpointDestroy(leId_);
+        }
+        cuLogicalEndpointIdRelease(leId_, 1);
+        unmapAndFreeMemory(devicePtr_, memHandle_, mappedSize_);
+        // Clear the base buffer pointer so a failed buffer (which reports
+        // getLeId()==LE_ID_NONE) can't be memset against freed VA.
+        devicePtr_ = 0; memHandle_ = 0; buffer = nullptr;
+
+    owner_broadcast:
+        // Broadcast real handle on success, zero handle on failure so importers don't deadlock.
+        MPI_Bcast(&leFh, sizeof(leFh), MPI_BYTE, MPI_rank, MPI_COMM_WORLD);
+    } else {
+        CUlogicalEndpointFabricHandle leFh = {};
+        MPI_Bcast(&leFh, sizeof(leFh), MPI_BYTE, MPI_rank, MPI_COMM_WORLD);
+
+        CU_ASSERT(cuLogicalEndpointIdReserve(&leId_, 1));
+        CUresult res = cuLogicalEndpointImport(leId_, &leFh, CU_LOGICAL_ENDPOINT_IPC_HANDLE_TYPE_FABRIC);
+        if (res != CUDA_SUCCESS) {
+            output->recordError("MultinodeLEBufferUnicast: importer failed to import LE fabric handle");
+            cuLogicalEndpointIdRelease(leId_, 1);
+            // Fall through to MPI_Barrier so other ranks don't deadlock.
+        } else {
+            bool ready = waitLeReadyWithTimeout(leId_, kLeUnicastReadyTimeout);
+            if (!ready) {
+                output->recordError("MultinodeLEBufferUnicast: importer LE did not become ready within timeout");
+                cuLogicalEndpointDestroy(leId_);
+                cuLogicalEndpointIdRelease(leId_, 1);
+                // Fall through to MPI_Barrier so other ranks don't deadlock.
+            } else {
+                buffer = nullptr;
+                isCreated_ = true;
+            }
+        }
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    waitForFabricProgramming();
+}
+
+MultinodeLEBufferUnicast::~MultinodeLEBufferUnicast() {
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    if (isCreated_ && isOwner_) {
+        cuLogicalEndpointUnbind(leId_, cuDevice_, 0, mappedSize_);
+        cuLogicalEndpointDestroy(leId_);
+        cuLogicalEndpointIdRelease(leId_, 1);
+        unmapAndFreeMemory(devicePtr_, memHandle_, mappedSize_);
+    } else if (isCreated_ && !isOwner_) {
+        cuLogicalEndpointDestroy(leId_);
+        cuLogicalEndpointIdRelease(leId_, 1);
+    }
+
+    if (primaryCtx_) {
+        releaseContext(localDevice);
+    }
+}
+
+uint32_t MultinodeLEBufferUnicast::getLeId() const {
+    return isCreated_ ? leId_ : LE_ID_NONE;
+}
+
+CUdeviceptr MultinodeLEBufferUnicast::getDevicePtr() const {
+    return devicePtr_;
+}
+
+// ============================================================================
+// MultinodeLEBufferMulticast
+// ============================================================================
+
+// Lifecycle mirrors the single-node multicast flow and the canonical LE IPC reference:
+//   Create (rank 0) → Export/Import → AddDevice → cuMemCreate → poll ready → BindMem
+//   → wait for NVSwitch programming → kernels
+// No VA mapping (cuMemMap/cuMemSetAccess) is done: kernels write and read via leId only.
+MultinodeLEBufferMulticast::MultinodeLEBufferMulticast(size_t bufferSize, int /*deviceCount*/)
+    : MultinodeDeviceBuffer(bufferSize, worldRank)
+    , leId_(0)
+    , cuDevice_(0)
+    , primaryCtx_(nullptr)
+    , memHandle_(0)
+    , mappedSize_(0)
+    , numRanks_(worldSize)
+    , isCreated_(false) {
+    CUDA_ASSERT(cudaSetDevice(localDevice));
+    CU_ASSERT(cuDeviceGet(&cuDevice_, localDevice));
+    CU_ASSERT(cuDevicePrimaryCtxRetain(&primaryCtx_, cuDevice_));
+    CU_ASSERT(cuCtxSetCurrent(primaryCtx_));
+
+    // Granularity-align the LE/allocation size up front so the owner's multicast LE
+    // create, every rank's cuMemCreate, and the bind all use the same size; a
+    // sub-granularity size fails the bind with CUDA_ERROR_INVALID_VALUE (the unicast
+    // path hit the same root cause).
+    {
+        CUmemAllocationProp gprop = {};
+        gprop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+        gprop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+        gprop.location.id = localDevice;
+        gprop.requestedHandleTypes = CU_MEM_HANDLE_TYPE_FABRIC;
+        size_t granularity = 0;
+        if (cuMemGetAllocationGranularity(&granularity, &gprop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED) == CUDA_SUCCESS
+                && granularity > 0) {
+            mappedSize_ = ((bufferSize + granularity - 1) / granularity) * granularity;
+        } else {
+            mappedSize_ = bufferSize;
+        }
+    }
+
+    const bool isOwner = (worldRank == 0);
+    CUlogicalEndpointFabricHandle leFh = {};
+    CU_ASSERT(cuLogicalEndpointIdReserve(&leId_, 1));
+
+    // Track teardown state so the single cleanup block at the bottom
+    // knows exactly what to undo.
+    bool leHandleOk = false;  // LE object created (owner) or imported (non-owner)
+    bool leAdded    = false;  // cuLogicalEndpointAddDevice succeeded
+    bool memAlloced = false;  // cuMemCreate succeeded
+    bool leBound    = false;  // cuLogicalEndpointBindMem succeeded
+
+    // ---- Owner/non-owner setup: create+export or import the LE handle ----
+    // MPI_Bcast is always called by both sides so neither blocks the other.
+    if (isOwner) {
+        CUlogicalEndpointProp prop = {};
+        prop.type = CU_LOGICAL_ENDPOINT_TYPE_MULTICAST;
+        prop.size = mappedSize_;
+        prop.multicast.numDevices = (unsigned int)worldSize;
+        prop.ipcHandleTypes = CU_LOGICAL_ENDPOINT_IPC_HANDLE_TYPE_FABRIC;
+        prop.flags = CU_LOGICAL_ENDPOINT_FLAG_NONE;
+
+        bool leCreated = false;
+        CUresult res = cuLogicalEndpointCreate(leId_, &prop);
+        if (res != CUDA_SUCCESS) {
+            output->recordError("MultinodeLEBufferMulticast: cuLogicalEndpointCreate failed");
+            goto owner_bcast;
+        }
+        leCreated = true;
+
+        res = cuLogicalEndpointExport(&leFh, leId_, CU_LOGICAL_ENDPOINT_IPC_HANDLE_TYPE_FABRIC);
+        if (res != CUDA_SUCCESS) {
+            output->recordError("MultinodeLEBufferMulticast: cuLogicalEndpointExport failed");
+            goto owner_bcast;
+        }
+        leHandleOk = true;
+
+    owner_bcast:
+        // Broadcast real handle on success, zero handle on failure so importers don't deadlock.
+        MPI_Bcast(&leFh, sizeof(leFh), MPI_BYTE, 0, MPI_COMM_WORLD);
+        if (!leHandleOk && leCreated) {
+            cuLogicalEndpointDestroy(leId_);
+        }
+    } else {
+        MPI_Bcast(&leFh, sizeof(leFh), MPI_BYTE, 0, MPI_COMM_WORLD);
+
+        const CUlogicalEndpointFabricHandle zeroFh = {};
+        if (memcmp(&leFh, &zeroFh, sizeof(leFh)) == 0) {
+            output->recordError("MultinodeLEBufferMulticast: owner broadcast zero handle, aborting");
+        } else {
+            CUresult res = cuLogicalEndpointImport(leId_, &leFh, CU_LOGICAL_ENDPOINT_IPC_HANDLE_TYPE_FABRIC);
+            if (res != CUDA_SUCCESS) {
+                output->recordError("MultinodeLEBufferMulticast: cuLogicalEndpointImport failed");
+            } else {
+                leHandleOk = true;
+            }
+        }
+    }
+
+    // ---- Shared phase: AddDevice → alloc → ready-poll → BindMem ----
+    // Every rank calls every MPI_Barrier regardless of failure so no rank
+    // deadlocks waiting for a peer that already returned early.
+
+    if (leHandleOk) {
+        CUresult res = cuLogicalEndpointAddDevice(leId_, cuDevice_);
+        if (res != CUDA_SUCCESS) {
+            output->recordError("MultinodeLEBufferMulticast: cuLogicalEndpointAddDevice failed");
+        } else {
+            leAdded = true;
+        }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);  // all ranks must have called AddDevice before any polls
+
+    if (leAdded) {
+        CUmemAllocationProp prop = {};
+        prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+        prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+        prop.location.id = localDevice;
+        prop.requestedHandleTypes = CU_MEM_HANDLE_TYPE_FABRIC;
+        // mappedSize_ was granularity-aligned up front (shared with prop.size and bind).
+        CUresult res = cuMemCreate(&memHandle_, mappedSize_, &prop, 0);
+        if (res != CUDA_SUCCESS) {
+            output->recordError("MultinodeLEBufferMulticast: cuMemCreate failed");
+        } else {
+            memAlloced = true;
+        }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);  // all ranks must have allocated before any binds
+
+    bool leReady = false;
+    if (memAlloced) {
+        bool ready = waitLeReadyWithTimeout(leId_, kLeMulticastReadyTimeout);
+        if (!ready) {
+            output->recordError("MultinodeLEBufferMulticast: LE not ready after AddDevice (timeout)");
+        } else {
+            leReady = true;
+        }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);  // all ranks must be ready before binding
+
+    if (leReady) {
+        CUresult res = cuLogicalEndpointBindMem(leId_, cuDevice_, 0, memHandle_, 0, mappedSize_, 0);
+        if (res != CUDA_SUCCESS) {
+            output->recordError("MultinodeLEBufferMulticast: cuLogicalEndpointBindMem failed");
+        } else {
+            leBound = true;
+        }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);  // all ranks must have finished BindMem before any proceeds
+
+    if (leBound) {
+        waitForFabricProgramming();
+        buffer = (void*)(uintptr_t)leId_;
+        isCreated_ = true;
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // ---- Single cleanup point on any failure ----
+    if (!isCreated_) {
+        if (leBound)    cuLogicalEndpointUnbind(leId_, cuDevice_, 0, mappedSize_);
+        if (leHandleOk) cuLogicalEndpointDestroy(leId_);
+        if (memAlloced) cuMemRelease(memHandle_);
+        cuLogicalEndpointIdRelease(leId_, 1);
+        leId_ = 0;
+        memHandle_ = 0;
+    }
+}
+
+MultinodeLEBufferMulticast::~MultinodeLEBufferMulticast() {
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (isCreated_) {
+        cuLogicalEndpointUnbind(leId_, cuDevice_, 0, mappedSize_);
+        cuLogicalEndpointDestroy(leId_);
+        cuLogicalEndpointIdRelease(leId_, 1);
+        if (memHandle_) cuMemRelease(memHandle_);
+    } else if (leId_ != 0) {
+        cuLogicalEndpointIdRelease(leId_, 1);
+    }
+    if (primaryCtx_) {
+        releaseContext(localDevice);
+    }
+}
+
+bool MultinodeLEBufferMulticast::isMulticastBuffer() const {
+    return isCreated_;
+}
+
+uint32_t MultinodeLEBufferMulticast::getLeId() const {
+    return isCreated_ ? leId_ : LE_ID_NONE;
+}
+
+uint32_t MultinodeLEBufferMulticast::getNumBackingMemories() const {
+    return isCreated_ ? (uint32_t)numRanks_ : 1;
+}
+
+int MultinodeLEBufferMulticast::getMPIRank() const {
+    return isCreated_ ? worldRank : -1;
+}
+
+bool MultinodeLEBufferMulticast::isCreationSuccess() const {
+    return isCreated_;
+}
+
+#endif  // NVBW_HAVE_LE_API
 
 MultinodeDeviceBufferMulticast::MultinodeDeviceBufferMulticast(size_t bufferSize, int MPI_rank):
     MultinodeDeviceBuffer(bufferSize, MPI_rank),
@@ -388,14 +825,11 @@ MemcpyDispatchInfo NodeHelperMulti::dispatchMemcpy(const std::vector<const Memcp
     std::vector<CUcontext> contexts;
 
     for (int i = 0; i < srcNodesUnfiltered.size(); i++) {
-        // prefer source context
-        // determine which ranks executes given operation
-        if (ctxPreference == PREFER_SRC_CONTEXT && srcNodesUnfiltered[i]->getPrimaryCtx() != nullptr) {
-            contextsUnfiltered[i] = srcNodesUnfiltered[i]->getPrimaryCtx();
-            ranksUnfiltered[i] = srcNodesUnfiltered[i]->getMPIRank();
-        } else if (dstNodesUnfiltered[i]->getPrimaryCtx() != nullptr) {
-            contextsUnfiltered[i] = dstNodesUnfiltered[i]->getPrimaryCtx();
-            ranksUnfiltered[i] = dstNodesUnfiltered[i]->getMPIRank();
+        const MemcpyBuffer* exec = NodeHelper::selectExecutingBuffer(
+            srcNodesUnfiltered[i], dstNodesUnfiltered[i], ctxPreference);
+        if (exec) {
+            contextsUnfiltered[i] = exec->getPrimaryCtx();
+            ranksUnfiltered[i]    = exec->getMPIRank();
         }
     }
 
@@ -412,7 +846,10 @@ MemcpyDispatchInfo NodeHelperMulti::dispatchMemcpy(const std::vector<const Memcp
         rankOfFirstMemcpy = ranksUnfiltered[0];
     }
 
-    return MemcpyDispatchInfo(srcNodes, dstNodes, contexts, ranksUnfiltered);
+    MemcpyDispatchInfo info(srcNodes, dstNodes, contexts, ranksUnfiltered);
+    info.allSrcBuffers = srcNodesUnfiltered;
+    info.allDstBuffers = dstNodesUnfiltered;
+    return info;
 }
 
 double NodeHelperMulti::calculateTotalBandwidth(double totalTime, double totalSize, size_t loopCount) {
@@ -467,12 +904,12 @@ void NodeHelperMulti::synchronizeProcess() {
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
-void NodeHelperMulti::barrierAllRanks() {
-    MPI_Barrier(MPI_COMM_WORLD);
-}
-
 CUresult NodeHelperMulti::streamSynchronizeWrapper(CUstream stream) const {
     return MPIstreamSyncHelper(stream);
+}
+
+void NodeHelperMulti::barrierAllRanks() {
+    MPI_Barrier(MPI_COMM_WORLD);
 }
 
 void NodeHelperMulti::streamBlockerReset() {

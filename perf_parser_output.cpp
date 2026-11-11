@@ -95,23 +95,37 @@ void PerfParserOutput::recordDevices(int deviceCount) {
     std::cout << "Devices: " << deviceCount << "\n";
 }
 
+#ifdef MULTINODE
+void PerfParserOutput::recordMultinodeDevices(const std::vector<RankDeviceInfo> &rankDevices) {
+    if (!shouldOutput) return;
+    for (const RankDeviceInfo &info : rankDevices) {
+        std::cout << formatRankDeviceInfo(info) << "\n";
+    }
+    std::cout << "\n";
+}
+#endif
+
 void PerfParserOutput::recordError(const std::string &error) {
     testFailed = true;
     if (shouldOutput) {
         std::cout << "ERROR: " << error << "\n";
     }
-    // Mirror JsonOutput::recordError: flush immediately so the "&&&& ... FAILED"
-    // sentinel is emitted even when the caller returns without calling print().
+    echoErrorIfSilent(shouldOutput, error);
+    // Flush immediately so the "&&&& ... FAILED" sentinel is emitted even when
+    // the caller returns without calling print().
     print();
 }
 
 void PerfParserOutput::recordError(const std::vector<std::string> &errorParts) {
     testFailed = true;
-    if (shouldOutput) {
-        for (const auto& part : errorParts) {
+    std::stringstream buf;
+    for (const auto& part : errorParts) {
+        if (shouldOutput) {
             std::cout << part << "\n";
         }
+        buf << part << "\n";
     }
+    echoErrorIfSilent(shouldOutput, buf.str());
     print();
 }
 
@@ -120,6 +134,7 @@ void PerfParserOutput::recordErrorCurrentTest(const std::string &errorPart1, con
     if (shouldOutput) {
         std::cout << errorPart1 << " " << errorPart2 << "\n";
     }
+    echoErrorIfSilent(shouldOutput, errorPart1 + " " + errorPart2);
 }
 
 void PerfParserOutput::recordWarning(const std::string &warning) {

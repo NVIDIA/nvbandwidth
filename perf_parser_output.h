@@ -54,6 +54,10 @@ class PerfParserOutput : public Output {
 
     void recordDevices(int deviceCount);
 
+#ifdef MULTINODE
+    void recordMultinodeDevices(const std::vector<RankDeviceInfo> &rankDevices);
+#endif
+
     void listTestcases(const std::vector<Testcase*> &testcases);
 
  private:

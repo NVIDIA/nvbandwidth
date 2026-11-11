@@ -24,6 +24,10 @@
 
 const unsigned long long DEFAULT_SPIN_KERNEL_TIMEOUT_MS = 10000ULL;   // 10 seconds
 
+// SM count available to work launched on `stream`. For green-context streams this
+// is the provisioned SM partition; for ordinary streams it is the full device.
+int smCountForStream(CUstream stream);
+
 size_t copyKernel(MemcpyDescriptor &desc);
 size_t copyKernelSplitWarp(MemcpyDescriptor &desc);
 size_t copyKernelTMA(MemcpyDescriptor &desc);

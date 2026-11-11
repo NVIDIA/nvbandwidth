@@ -16,6 +16,7 @@
  */
 
 #include "kernels.cuh"
+#include "multimem_ptx.cuh"
 #if __CUDA_ARCH__ >= 900
 // Compile-time compute capability checks fail without this
 #include <cuda_awbarrier_primitives.h>  // __mbarrier_*
@@ -265,12 +266,14 @@ __global__ void ptrChasingKernelSM(void *data, size_t size, unsigned int accesse
     }
 }
 
-static __device__ __noinline__
-void mc_st_u32(unsigned int *dst, unsigned int v) {
+
 #if __CUDA_ARCH__ >= 900
-    asm volatile ("multimem.st.u32 [%0], %1;" :: "l"(dst), "r" (v));
-#endif
+/** Store 4 consecutive u32s to multicast VA as a single 16-byte multimem.st. */
+static __device__ __forceinline__
+void mc_st_128(unsigned int *dst, const unsigned int *src) {
+    multimem_st_128(dst, src[0], src[1], src[2], src[3]);
 }
+#endif
 
 static __device__ __noinline__
 void mc_ld_u32(unsigned int *dst, const unsigned int *src) {
@@ -279,24 +282,24 @@ void mc_ld_u32(unsigned int *dst, const unsigned int *src) {
 #endif
 }
 
-// Writes from regular memory to multicast memory
-__global__ void multicastCopyKernel(unsigned long long loopCount, unsigned int* __restrict__ dst, unsigned int* __restrict__ src, size_t nElems) {
+// Writes from regular memory to multicast memory in 16-byte units. sizeBytes must be a multiple of 16.
+__global__ void multicastCopyKernel(unsigned long long loopCount, unsigned int* __restrict__ dst, unsigned int* __restrict__ src, size_t sizeBytes) {
     const size_t totalThreadCount = blockDim.x * gridDim.x;
-    const size_t offset = blockDim.x * blockIdx.x + threadIdx.x;
-    unsigned int* const enddst = dst + nElems;
-    dst += offset;
-    src += offset;
+    const size_t offset = blockDim.x * blockIdx.x + threadIdx.x;  // thread index in 16-byte units
+    const size_t nElems128 = sizeBytes / 16u;
 
     for (unsigned long long i = 0; i < loopCount; i++) {
-        // Reset pointers to src and dst chunks.
-        unsigned int* cur_src_ptr = src;
-        unsigned int* cur_dst_ptr = dst;
-        #pragma unroll(12)
-        while (cur_dst_ptr < enddst) {
-            mc_st_u32(cur_dst_ptr, *cur_src_ptr);
-            cur_dst_ptr += totalThreadCount;
-            cur_src_ptr += totalThreadCount;
+        unsigned int* cur_dst_ptr = dst + offset * 4u;
+        unsigned int* cur_src_ptr = src + offset * 4u;
+        unsigned int* const enddst128 = dst + nElems128 * 4u;
+#if __CUDA_ARCH__ >= 900
+        #pragma unroll 12
+        while (cur_dst_ptr < enddst128) {
+            mc_st_128(cur_dst_ptr, cur_src_ptr);
+            cur_dst_ptr += totalThreadCount * 4;
+            cur_src_ptr += totalThreadCount * 4;
         }
+#endif
     }
 }
 
@@ -347,15 +350,25 @@ double latencyPtrChaseKernel(const int srcId, void* data, size_t size, unsigned 
     return finalLatencyPerAccessNs;
 }
 
-size_t copyKernel(MemcpyDescriptor &desc) {
-    CUdevice dev;
-    CUcontext ctx;
-
-    CU_ASSERT(cuStreamGetCtx(desc.stream, &ctx));
+int smCountForStream(CUstream stream) {
+#ifdef NVBW_HAVE_UGPU_MEMORY_NODE_SPLIT
+    CUdevResource resource = {};
+    if (cuStreamGetDevResource(stream, &resource, CU_DEV_RESOURCE_TYPE_SM) == CUDA_SUCCESS &&
+        resource.sm.smCount > 0) {
+        return static_cast<int>(resource.sm.smCount);
+    }
+#endif
+    CUdevice dev = 0;
+    CUcontext ctx = nullptr;
+    CU_ASSERT(cuStreamGetCtx(stream, &ctx));
     CU_ASSERT(cuCtxGetDevice(&dev));
-
-    int numSm;
+    int numSm = 0;
     CU_ASSERT(cuDeviceGetAttribute(&numSm, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, dev));
+    return numSm;
+}
+
+size_t copyKernel(MemcpyDescriptor &desc) {
+    int numSm = smCountForStream(desc.stream);
     unsigned int totalThreadCount = numSm * desc.threadsPerBlock;
 
     // If the user provided buffer size is samller than default buffer size,
@@ -414,16 +427,10 @@ size_t copyKernel(MemcpyDescriptor &desc) {
     return sizeInElement * sizeof(uint4);
 }
 
+
 size_t readOnlyKernel(MemcpyDescriptor &desc, CUdeviceptr* d_crc_out) {
-    CUdevice dev;
-    CUcontext ctx;
-
-    CU_ASSERT(cuStreamGetCtx(desc.stream, &ctx));
-    CU_ASSERT(cuCtxGetDevice(&dev));
-
-    int numSm;
-    CU_ASSERT(cuDeviceGetAttribute(&numSm, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, dev));
-    unsigned int totalThreadCount = numSm * numThreadPerBlock;
+    int numSm = smCountForStream(desc.stream);
+    unsigned int totalThreadCount = numSm * desc.threadsPerBlock;
 
     // adjust size to elements (size is multiple of MB, so no truncation here)
     size_t sizeInElement = desc.copySize / sizeof(uint4);
@@ -433,7 +440,7 @@ size_t readOnlyKernel(MemcpyDescriptor &desc, CUdeviceptr* d_crc_out) {
     size_t chunkSizeInElement = sizeInElement / totalThreadCount;
 
     dim3 gridDim(numSm, 1, 1);
-    dim3 blockDim(numThreadPerBlock, 1, 1);
+    dim3 blockDim(desc.threadsPerBlock, 1, 1);
 
     // Allocate verification buffer only if caller wants it
     // We need 4 uint4 elements: [0]=first sample, [1]=middle sample, [2]=last sample, [3]=accumulator
@@ -456,15 +463,8 @@ size_t readOnlyKernel(MemcpyDescriptor &desc, CUdeviceptr* d_crc_out) {
 }
 
 size_t writeOnlyKernel(MemcpyDescriptor &desc) {
-    CUdevice dev;
-    CUcontext ctx;
-
-    CU_ASSERT(cuStreamGetCtx(desc.stream, &ctx));
-    CU_ASSERT(cuCtxGetDevice(&dev));
-
-    int numSm;
-    CU_ASSERT(cuDeviceGetAttribute(&numSm, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, dev));
-    unsigned int totalThreadCount = numSm * numThreadPerBlock;
+    int numSm = smCountForStream(desc.stream);
+    unsigned int totalThreadCount = numSm * desc.threadsPerBlock;
 
     // adjust size to elements (size is multiple of MB, so no truncation here)
     size_t sizeInElement = desc.copySize / sizeof(uint4);
@@ -474,7 +474,7 @@ size_t writeOnlyKernel(MemcpyDescriptor &desc) {
     size_t chunkSizeInElement = sizeInElement / totalThreadCount;
 
     dim3 gridDim(numSm, 1, 1);
-    dim3 blockDim(numThreadPerBlock, 1, 1);
+    dim3 blockDim(desc.threadsPerBlock, 1, 1);
     stridingWriteOnlyKernel<<<gridDim, blockDim, 0, desc.stream>>> (totalThreadCount, desc.loopCount, (uint4 *)desc.dst, chunkSizeInElement);
 
     return sizeInElement * sizeof(uint4);
@@ -484,15 +484,8 @@ size_t writeOnlyKernel(MemcpyDescriptor &desc) {
 CUresult verifyWriteOnlyKernel(CUstream stream, CUdeviceptr dstBuffer, size_t numElements,
                                 unsigned int numThreadPerBlock, unsigned int expectedIteration,
                                 CUdeviceptr d_errorCount) {
-    CUdevice dev;
-    CUcontext ctx;
-    CU_ASSERT(cuStreamGetCtx(stream, &ctx));
-    CU_ASSERT(cuCtxGetDevice(&dev));
-
-    int numSm;
-    CU_ASSERT(cuDeviceGetAttribute(&numSm, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, dev));
-
-    // Calculate totalThreadCount used by the write kernel
+    // Must match writeOnlyKernel's stream-local SM count so pattern checks agree.
+    int numSm = smCountForStream(stream);
     unsigned int totalThreadCount = numSm * numThreadPerBlock;
 
     dim3 gridDim(numSm * 4, 1, 1);  // Use more blocks for better coverage
@@ -542,6 +535,10 @@ size_t copyKernelSplitWarp(MemcpyDescriptor &desc) {
     return numUint4 * sizeof(uint4);
 }
 
+// Optimal launch config for multicast (matches multicastReadBulkKernel for comparability).
+static const int MULTICAST_THREADS    = 128;
+static const int MULTICAST_BLK_PER_SM = 4;
+
 size_t multicastCopy(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, CUstream stream, unsigned long long loopCount) {
     CUdevice dev;
     CUcontext ctx;
@@ -551,13 +548,12 @@ size_t multicastCopy(CUdeviceptr dstBuffer, CUdeviceptr srcBuffer, size_t size, 
 
     int numSm;
     CU_ASSERT(cuDeviceGetAttribute(&numSm, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, dev));
-    // adjust size to elements (size is multiple of MB, so no truncation here)
-    size_t sizeInElement = size / sizeof(unsigned);
-    dim3 gridDim(numSm, 1, 1);
-    dim3 blockDim(numThreadPerBlock, 1, 1);
-    multicastCopyKernel<<<gridDim, blockDim, 0, stream>>> (loopCount, (unsigned *)dstBuffer, (unsigned *)srcBuffer, sizeInElement);
-    return sizeInElement * sizeof(unsigned);
+    dim3 gridDim(numSm * MULTICAST_BLK_PER_SM, 1, 1);
+    dim3 blockDim(MULTICAST_THREADS, 1, 1);
+    multicastCopyKernel<<<gridDim, blockDim, 0, stream>>> (loopCount, (unsigned *)dstBuffer, (unsigned *)srcBuffer, size);
+    return size;
 }
+
 
 __global__ void spinKernelDevice(volatile int *latch, const unsigned long long timeoutClocks) {
     register unsigned long long endTime = clock64() + timeoutClocks;
@@ -827,7 +823,6 @@ inline __device__ void cp_async_bulk_wait_all_read() {
 }
 #endif  // __CUDA_ARCH__ >= 900
 
-constexpr size_t smem_chunk_size = 32768;
 #if __CUDA_ARCH__ >= 900
 template <int chunk_size_bytes>
 struct SMEMPIPE {
@@ -836,37 +831,56 @@ struct SMEMPIPE {
 };
 #endif
 
-__global__ void tma_memcpy_kernel(char* dest, char *src, int steps, int loopCount) {
+static constexpr int WARP_SIZE = 32;
+
+// Warp-pipelined TMA copy constants, matching LE kernel occupancy.
+static constexpr int TMA_COPY_WARPS      = 4;
+static constexpr int TMA_COPY_THREADS    = TMA_COPY_WARPS * WARP_SIZE;
+static constexpr int TMA_COPY_BLK_PER_SM = 2;
+static constexpr size_t TMA_COPY_CHUNK   = 28672;                  // 28 KB per warp
+
+// cp.async.bulk needs 128-byte alignment of its shared memory operand for the best performance.
+static constexpr size_t TMA_SMEM_ALIGN   = 128;
+
 #if __CUDA_ARCH__ >= 900
+template <int chunk_size_bytes, int warps>
+struct SMEMPIPE2D {
+    alignas(16) char buf[warps][chunk_size_bytes];
+};
+#endif
 
-    __shared__ SMEMPIPE<smem_chunk_size> smem;
-    __mbarrier_init(&smem.bar, 1);
+__global__ void tma_memcpy_kernel(char* dest, char *src, size_t num_bytes, unsigned long long loopCount, size_t chunkSize) {
+#if __CUDA_ARCH__ >= 900
+    extern __shared__ char smem_bytes[];
 
-    // We assume one thread per block here
-    size_t block_stride = smem_chunk_size * size_t(blockIdx.x);
-    size_t grid_stride = size_t(gridDim.x) * smem_chunk_size;
+    __shared__ __mbarrier_t load_bar[TMA_COPY_WARPS];
+
+    const int lane = threadIdx.x % WARP_SIZE;
+    const int warp = threadIdx.x / WARP_SIZE;
+
+    char* smem_aligned = (char*)(((size_t)smem_bytes + TMA_SMEM_ALIGN - 1) & ~(TMA_SMEM_ALIGN - 1));
+    char* warp_buf = smem_aligned + warp * chunkSize;
+
+    if (lane == 0) {
+        __mbarrier_init(&load_bar[warp], 1);
+    }
+
+    size_t warp_offset = (size_t)(blockIdx.x * TMA_COPY_WARPS + warp) * chunkSize;
+    size_t grid_stride = (size_t)gridDim.x * TMA_COPY_WARPS * chunkSize;
 
     for (unsigned long long loop = 0; loop < loopCount; loop++) {
-        for (int step = 0; step < steps; step++) {
-            // Thread bounds check
-            size_t i = block_stride + step * grid_stride;
-            if (i / smem_chunk_size >= steps) {
-                break;
+        #pragma unroll 4
+        for (size_t offset = warp_offset; offset < num_bytes; offset += grid_stride) {
+            size_t chunk = min(chunkSize, num_bytes - offset);
+            if (lane == 0) {
+                cp_async_bulk_global_to_shared(warp_buf, src + offset, &load_bar[warp], (int)chunk);
+                __mbarrier_token_t token = barrier_arrive1_tx(&load_bar[warp], (uint32_t)chunk);
+                while (!barrier_try_wait_token(&load_bar[warp], token)) {}
+                cp_async_bulk_shared_to_global(dest + offset, warp_buf, (int)chunk);
+                cp_async_bulk_commit_group();
+                cp_async_bulk_wait_all_read();
             }
-
-             // TMA load
-            cp_async_bulk_global_to_shared(&smem.buf[0], src + i, &smem.bar, smem_chunk_size);
-            __mbarrier_token_t token = barrier_arrive1_tx(&smem.bar, smem_chunk_size);
-            while (!barrier_try_wait_token(&smem.bar, token)) {}
-            // Data in smem_buf is ready.
-
-            // TMA store
-            cp_async_bulk_shared_to_global(dest + i, &smem.buf[0], smem_chunk_size);
-            cp_async_bulk_commit_group();
-            cp_async_bulk_wait_all_read();
         }
-
-        // This kernel doesn't provide any guarantee of dest. Explicit membar.sys + signal/wait based sync is needed to guarantee dest buffer readiness before consumption.
     }
 #endif
 }
@@ -898,31 +912,33 @@ __global__ void ptrChasingKernelTMA(void *data, size_t size, unsigned int access
 }
 
 size_t copyKernelTMA(MemcpyDescriptor &desc) {
-    CUdevice dev;
-    CUcontext ctx;
-
-    CU_ASSERT(cuStreamGetCtx(desc.stream, &ctx));
-    CU_ASSERT(cuCtxGetDevice(&dev));
-
-    int numSm;
-    CU_ASSERT(cuDeviceGetAttribute(&numSm, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, dev));
+    int numSm = smCountForStream(desc.stream);
 
     // TMA works with 16-byte-sized chunks and 16-byte aligned addresses, check for this
     if (desc.copySize % 16 != 0 || (size_t) desc.src % 16 != 0 || (size_t) desc.dst % 16 != 0) {
-        // Log error and return 0 to indicate failure
         std::cerr << "ERROR: TMA copy requires 16-byte alignment. copySize=" << desc.copySize
                   << " src=" << desc.src << " dst=" << desc.dst << std::endl;
         return 0;
     }
 
-    // Calculate how many steps we need based on shared memory chunk size
-    size_t totalSteps = (desc.copySize + smem_chunk_size - 1) / smem_chunk_size;
+    cudaFuncAttributes attrs = {};
+    CUDA_ASSERT(cudaFuncGetAttributes(&attrs, tma_memcpy_kernel));
 
-    tma_memcpy_kernel<<<numSm, 1, 0, desc.stream>>>(
-        (char*)desc.dst,
-        (char*)desc.src,
-        totalSteps,
-        desc.loopCount);
+    // Fit the per-warp chunk into this kernel's shared memory ceiling. The chunk
+    // doubles as the per-warp stride, so rounding it to TMA_SMEM_ALIGN is what keeps
+    // warps above the first aligned, and holding back one TMA_SMEM_ALIGN covers the
+    // bytes the kernel skips when it aligns the base of the window up.
+    size_t effectiveChunk = min((size_t)TMA_COPY_CHUNK,
+                                (((size_t)attrs.maxDynamicSharedSizeBytes - TMA_SMEM_ALIGN) / TMA_COPY_WARPS) & ~(TMA_SMEM_ALIGN - 1));
+    size_t effectiveSmem = TMA_COPY_WARPS * effectiveChunk + TMA_SMEM_ALIGN;
+
+    CUDA_ASSERT(cudaFuncSetAttribute(tma_memcpy_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)effectiveSmem));
+
+    size_t numChunks = (desc.copySize + effectiveChunk - 1) / effectiveChunk;
+    int numBlocks = min((int)numChunks, numSm * TMA_COPY_BLK_PER_SM);
+    if (numBlocks < 1) numBlocks = 1;
+    tma_memcpy_kernel<<<numBlocks, TMA_COPY_THREADS, effectiveSmem, desc.stream>>>(
+        (char*)desc.dst, (char*)desc.src, desc.copySize, desc.loopCount, effectiveChunk);
 
     return desc.copySize;
 }
