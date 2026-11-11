@@ -1,0 +1,5 @@
+{
+  "dependencies": [
+    "boost-program-options"
+  ]
+}
