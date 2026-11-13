@@ -703,6 +703,17 @@ __global__ void ublkcpGSDeviceToDeviceProducerKernel(char *src_gmem, char *mailb
 __global__ void ublkcpGSDeviceToDeviceConsumerKernel(char *mailbox_gmem, uint64_t ack_ptr, unsigned long long num_iterations) {}
 __global__ void ublkcpGSCountedDeviceToDeviceProducerKernel(char *src_gmem, char *mailbox_gmem, uint64_t sequence_ptr, uint64_t ack_ptr, unsigned long long num_iterations) {}
 __global__ void ublkcpGSCountedDeviceToDeviceConsumerKernel(char *mailbox_gmem, uint64_t sequence_ptr, uint64_t ack_ptr, unsigned long long num_iterations) {}
+// The fabric/multimem kernels must also be defined for every arch: nvcc generates the host-side
+// launch stubs from the last arch in the list, so e.g. sm_100+sm_89 would fail to link otherwise.
+__global__ void leFabricWriteKernel(char *, uint32_t, size_t, unsigned long long) {}
+__global__ void leFabricWriteMulticastKernel(char *, uint32_t, size_t, unsigned long long) {}
+__global__ void leFabricReadKernel(uint32_t, char *, size_t, unsigned long long) {}
+__global__ void leFabricReduceMulticastKernel(uint32_t, char *, size_t, unsigned long long) {}
+__global__ void leFabricMemsetKernel(uint32_t, unsigned int, size_t) {}
+__global__ void multimemWriteKernel(char *, char *, size_t, unsigned long long) {}
+__global__ void leFabricDeviceToDeviceConsumerMultimemKernel(char *, uint32_t, uint64_t, unsigned long long) {}
+__global__ void leFabricDeviceToDeviceProducerUnicastKernel(char *, uint32_t, uint64_t, unsigned long long) {}
+__global__ void leFabricDeviceToDeviceProducerUnicastCountedKernel(char *, uint32_t, uint64_t, unsigned long long) {}
 #endif  // __CUDA_ARCH__ >= 1000
 
 // ============================================================================
